@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
-contract VaultManager {}
+/**
+ * @title Vault Manager
+ */
+contract VaultManager {
+
+}
