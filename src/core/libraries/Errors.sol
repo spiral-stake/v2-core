@@ -2,5 +2,17 @@
 pragma solidity 0.8.30;
 
 library Errors {
+    /////////////////////////
+    // SPIUSD
+
     error SPIUSD__CallerNotAManagerAddress();
+
+    /////////////////////////
+    // VaultManager
+
+    error VaultManager__ValueCannotBeZero();
+    error VaultManager__UnsupportedCollateralToken();
+    error VaultManager__MintExceedsMaxLTV();
+    error VaultManager__HealthFactorIsBroken();
+    error VaultManager__HealthFactorIsNotBroken();
 }

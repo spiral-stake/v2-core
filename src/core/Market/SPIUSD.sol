@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import {ISPIUSD} from "../../interfaces/ISPIUSD.sol";
 import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Errors} from "../libraries/Errors.sol";
 
 /**
@@ -34,7 +34,7 @@ contract SPIUSD is ISPIUSD, ERC20Permit, Ownable {
         address _owner
     ) Ownable(_owner) ERC20(_NAME, _SYMBOL) ERC20Permit(_NAME) {}
 
-    /////////////////////////
+    /////////////////////
     // External Functions
 
     function setManagerAddresses(
@@ -44,21 +44,21 @@ contract SPIUSD is ISPIUSD, ERC20Permit, Ownable {
         emit VaultManagerAddressUpdated(_vaultManagerAddress);
     }
 
-    function mint(address _account, uint256 _amount) external override {
+    function mint(address account, uint256 amount) external override {
         require(
             msg.sender == vaultManagerAddress,
             Errors.SPIUSD__CallerNotAManagerAddress()
         );
 
-        _mint(_account, _amount);
+        _mint(account, amount);
     }
 
-    function burn(address _account, uint256 _amount) external override {
+    function burn(address account, uint256 amount) external override {
         require(
             msg.sender == vaultManagerAddress,
             Errors.SPIUSD__CallerNotAManagerAddress()
         );
 
-        _burn(_account, _amount);
+        _burn(account, amount);
     }
 }
