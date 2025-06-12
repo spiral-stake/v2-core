@@ -30,9 +30,11 @@ contract SPIUSD is ISPIUSD, ERC20Permit, Ownable {
 
     event VaultManagerAddressUpdated(address newVaultManagerAddress);
 
-    constructor(
-        address _owner
-    ) Ownable(_owner) ERC20(_NAME, _SYMBOL) ERC20Permit(_NAME) {}
+    constructor()
+        Ownable(msg.sender)
+        ERC20(_NAME, _SYMBOL)
+        ERC20Permit(_NAME)
+    {}
 
     /////////////////////
     // External Functions

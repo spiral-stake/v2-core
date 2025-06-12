@@ -221,22 +221,29 @@ contract VaultManager is IVaultManager, Ownable2Step, TokenHelper {
      * @param priceFeedAddress Price feed address. Use address(0) to remove support.
      */
     function setCollateralTokenSupport(
-        address collateralToken,
-        address priceFeedAddress
+        address[] memory collateralToken,
+        address[] memory priceFeedAddress
     ) external onlyOwner {
         require(
-            collateralToken != address(0),
-            Errors.VaultManager__InvalidTokenAddress()
+            collateralToken.length == priceFeedAddress.length,
+            "Length Mismatch"
         );
 
-        if (priceFeedAddress != address(0)) {
+        for (uint256 i = 0; i < collateralToken.length; i++) {
             require(
-                AggregatorV3Interface(priceFeedAddress).decimals() > 0,
-                Errors.VaultManager__InvalidPriceFeedAddress()
+                collateralToken[i] != address(0),
+                Errors.VaultManager__InvalidTokenAddress()
             );
-        }
 
-        s_priceFeeds[collateralToken] = priceFeedAddress;
+            if (priceFeedAddress[i] != address(0)) {
+                require(
+                    AggregatorV3Interface(priceFeedAddress[i]).decimals() > 0,
+                    Errors.VaultManager__InvalidPriceFeedAddress()
+                );
+            }
+
+            s_priceFeeds[collateralToken[i]] = priceFeedAddress[i];
+        }
     }
 
     /**
