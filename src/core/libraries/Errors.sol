@@ -13,6 +13,8 @@ library Errors {
     error VaultManager__ValueCannotBeZero();
     error VaultManager__UnsupportedCollateralToken();
     error VaultManager__MintExceedsMaxLTV();
-    error VaultManager__HealthFactorIsBroken();
-    error VaultManager__HealthFactorIsNotBroken();
+    error VaultManager__IsUnderLiqLTV();
+    error VaultManager__HealthFactorIsOK();
+    error VaultManager__InvalidTokenAddress();
+    error VaultManager__InvalidPriceFeedAddress();
 }

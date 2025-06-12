@@ -30,7 +30,7 @@ interface IVaultManager {
 
     function liquidate(address user, address collateralToken) external;
 
-    function getHealthFactor(
+    function getUserVaultLTV(
         address user,
         address collateralToken
     ) external returns (uint256);
