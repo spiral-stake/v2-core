@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 interface ISPIUSD {
-    function setManagerAddresses(address _vaultManagerAddress) external;
+    function setManagerAddresses(address _positionManagerAddress) external;
 
     function mint(address _account, uint256 _amount) external;
 

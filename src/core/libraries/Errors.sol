@@ -8,13 +8,13 @@ library Errors {
     error SPIUSD__CallerNotAManagerAddress();
 
     /////////////////////////
-    // VaultManager
+    // PositionManager
 
-    error VaultManager__ValueCannotBeZero();
-    error VaultManager__UnsupportedCollateralToken();
-    error VaultManager__MintExceedsMaxLTV();
-    error VaultManager__IsUnderLiqLTV();
-    error VaultManager__HealthFactorIsOK();
-    error VaultManager__InvalidTokenAddress();
-    error VaultManager__InvalidPriceFeedAddress();
+    error PositionManager__ValueCannotBeZero();
+    error PositionManager__UnsupportedCollateralToken();
+    error PositionManager__MintExceedsMaxLTV();
+    error PositionManager__IsUnderLiqLTV();
+    error PositionManager__HealthFactorIsOK();
+    error PositionManager__InvalidTokenAddress();
+    error PositionManager__InvalidPriceFeedAddress();
 }

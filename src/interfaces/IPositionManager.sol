@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
-interface IVaultManager {
+interface IPositionManager {
     function depositCollateralAndMintSPIUSD(
         address collateralToken,
         uint256 amountCollateral,
@@ -30,7 +30,7 @@ interface IVaultManager {
 
     function liquidate(address user, address collateralToken) external;
 
-    function getUserVaultLTV(
+    function getUserPositionLTV(
         address user,
         address collateralToken
     ) external returns (uint256);

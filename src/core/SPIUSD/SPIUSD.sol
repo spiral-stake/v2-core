@@ -14,7 +14,7 @@ import {Errors} from "../libraries/Errors.sol";
  *      2. Overcollateralized exogenously (Staked stablecoins and their PTs)
  *      3. Minted and burned Algorithmically
  *      4. Borrow/Mint Rate - Comes through the dual lending mechanism of spiral stake protocol
- * @notice This contract is purely governed by the VaultManager contract
+ * @notice This contract is purely governed by the PositionManager contract
  */
 contract SPIUSD is ISPIUSD, ERC20Permit, Ownable {
     string internal constant _NAME = "Spiral Stake USD";
@@ -23,12 +23,12 @@ contract SPIUSD is ISPIUSD, ERC20Permit, Ownable {
     /////////////////////////
     // Manager Addresses
 
-    address public vaultManagerAddress;
+    address public positionManagerAddress;
 
     /////////////////////////
     // Events
 
-    event VaultManagerAddressUpdated(address newVaultManagerAddress);
+    event PositionManagerAddressUpdated(address newPositionManagerAddress);
 
     constructor()
         Ownable(msg.sender)
@@ -40,15 +40,15 @@ contract SPIUSD is ISPIUSD, ERC20Permit, Ownable {
     // External Functions
 
     function setManagerAddresses(
-        address _vaultManagerAddress
+        address _positionManagerAddress
     ) external override onlyOwner {
-        vaultManagerAddress = _vaultManagerAddress;
-        emit VaultManagerAddressUpdated(_vaultManagerAddress);
+        positionManagerAddress = _positionManagerAddress;
+        emit PositionManagerAddressUpdated(_positionManagerAddress);
     }
 
     function mint(address account, uint256 amount) external override {
         require(
-            msg.sender == vaultManagerAddress,
+            msg.sender == positionManagerAddress,
             Errors.SPIUSD__CallerNotAManagerAddress()
         );
 
@@ -57,7 +57,7 @@ contract SPIUSD is ISPIUSD, ERC20Permit, Ownable {
 
     function burn(address account, uint256 amount) external override {
         require(
-            msg.sender == vaultManagerAddress,
+            msg.sender == positionManagerAddress,
             Errors.SPIUSD__CallerNotAManagerAddress()
         );
 

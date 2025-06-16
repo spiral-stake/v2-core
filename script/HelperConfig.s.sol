@@ -66,9 +66,7 @@ contract HelperConfig is Script {
             );
 
             // frxUSD for SPIUSD/frxUSD pair
-            chain.frxUSD = chain.collateralTokens[0] = address(
-                new ERC20Mock("frxUSD", "frxUSD")
-            );
+            chain.frxUSD = address(new ERC20Mock("frxUSD", "frxUSD"));
         } else {}
 
         vm.stopBroadcast();
