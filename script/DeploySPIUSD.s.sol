@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import {Script} from "forge-std/Script.sol";
-import {SPIUSD} from "../src/core/SPIUSD/SPIUSD.sol";
+import {SPIUSD, ISPIUSD} from "../src/core/SPIUSD/SPIUSD.sol";
 import {PositionManager} from "../src/core/SPIUSD/PositionManager.sol";
 
 contract DeploySPIUSD is Script {
@@ -16,6 +16,9 @@ contract DeploySPIUSD is Script {
         positionManagerAddress = address(
             new PositionManager(address(spiUsdAddress), treasury)
         );
+
+        // Setting Position manager as SPIUSD minter
+        ISPIUSD(spiUsdAddress).setManagerAddresses(positionManagerAddress);
 
         // Adding supported collateral tokens
         PositionManager(positionManagerAddress).addSupportedCollateralToken(

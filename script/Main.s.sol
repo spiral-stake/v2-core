@@ -6,7 +6,16 @@ import {HelperConfig, ChainConfig} from "./HelperConfig.s.sol";
 import {DeploySPIUSD} from "./DeploySPIUSD.s.sol";
 import {WriteAddressesToJson} from "./WriteAddresses.s.sol";
 
+interface IERC20Mock {
+    function mint(address account, uint256 amount) external;
+}
+
 contract Main is Script {
+    address payable private user =
+        payable(0x08675879B01177a9Bc80A7FC58c032cFA2Bb7742);
+    uint256 private constant AMOUNT_COLLATERAL_TOKEN = 100000000e18;
+    uint256 private constant AMOUNT_NATIVE = 100e18;
+
     function run() external {
         HelperConfig helperConfig = new HelperConfig();
         ChainConfig memory chain = helperConfig.deployIfNeededAndGetConfig();
@@ -21,5 +30,35 @@ contract Main is Script {
             positionManagerAddress,
             chain.collateralTokens
         );
+
+        _mintCollateralTokens(
+            user,
+            chain.collateralTokens,
+            AMOUNT_COLLATERAL_TOKEN
+        );
+
+        _mintNative(user, AMOUNT_NATIVE);
+    }
+
+    function _mintCollateralTokens(
+        address _user,
+        address[] memory collateralTokens,
+        uint256 amountToken
+    ) private {
+        for (uint256 j = 0; j < collateralTokens.length; j++) {
+            address collateralToken = collateralTokens[j];
+
+            vm.startBroadcast();
+
+            IERC20Mock(collateralToken).mint(_user, amountToken);
+
+            vm.stopBroadcast();
+        }
+    }
+
+    function _mintNative(address payable _user, uint256 amountNative) private {
+        vm.startBroadcast();
+        _user.transfer(amountNative);
+        vm.stopBroadcast();
     }
 }

@@ -50,11 +50,15 @@ contract WriteAddressesToJson is Script {
                 vm.toString(token.decimals())
             );
 
-            vm.serializeString(collateralTokensObj, token.symbol(), tokenObj);
+            vm.serializeString(
+                collateralTokensObj,
+                vm.toString(address(token)),
+                tokenObj
+            );
             if (i == collateralTokens.length - 1) {
                 collateralTokensObj = vm.serializeString(
                     collateralTokensObj,
-                    token.symbol(),
+                    vm.toString(address(token)),
                     tokenObj
                 );
             }
@@ -71,6 +75,15 @@ contract WriteAddressesToJson is Script {
             obj,
             string.concat(
                 "../client-v1/src/addresses/",
+                vm.toString(block.chainid),
+                ".json"
+            )
+        );
+
+        vm.writeJson(
+            obj,
+            string.concat(
+                "../temp-server-v1/addresses/",
                 vm.toString(block.chainid),
                 ".json"
             )

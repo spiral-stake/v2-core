@@ -3,6 +3,8 @@ pragma solidity 0.8.30;
 
 import {IPositionManager} from "../../interfaces/IPositionManager.sol";
 import {ISPIUSD} from "../../interfaces/ISPIUSD.sol";
+import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
+import {IERC3156FlashLender} from "@openzeppelin/contracts/interfaces/IERC3156FlashLender.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
@@ -16,7 +18,7 @@ import {Position} from "../structs/Position.sol";
  * @notice Manages user positions that mint SPIUSD against supported collateral tokens.
  * @dev Implements core CDP logic including collateral deposits, SPIUSD minting, LTV checks, and liquidations.
  */
-contract PositionManager is Ownable2Step, TokenHelper {
+contract PositionManager is Ownable2Step, TokenHelper, IERC3156FlashLender {
     using Math for uint256;
 
     /////////////////////////
@@ -27,6 +29,10 @@ contract PositionManager is Ownable2Step, TokenHelper {
 
     /// @notice Additional precision multiplier for price feeds
     uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10;
+
+    // ERC3156 Flash Loan constants
+    bytes32 public constant CALLBACK_SUCCESS =
+        keccak256("ERC3156FlashBorrower.onFlashLoan");
 
     /// @notice Liquidation threshold LTV (91.5% in 1e18 precision)
     uint256 public constant LIQ_LTV = 915e15;
@@ -258,6 +264,42 @@ contract PositionManager is Ownable2Step, TokenHelper {
         }
     }
 
+    function flashLoan(
+        IERC3156FlashBorrower receiver,
+        address token,
+        uint256 amount,
+        bytes calldata data
+    ) external override returns (bool success) {
+        require(
+            address(receiver) != address(0),
+            Errors.SPIUSD__InvalidReceiverAddress()
+        );
+        require(amount > 0, Errors.SPIUSD__AmountCannotBeZero());
+
+        uint256 initialBalance = SPIUSD.balanceOf(address(this));
+
+        SPIUSD.mint(address(receiver), amount);
+
+        require(
+            receiver.onFlashLoan(
+                msg.sender,
+                address(SPIUSD),
+                amount,
+                0, // Zero fees temporarily
+                data
+            ) == CALLBACK_SUCCESS,
+            Errors.PositionManager__FlashMintCallbackFailed()
+        );
+
+        uint256 finalBalance = SPIUSD.balanceOf(address(this));
+        require(
+            finalBalance >= initialBalance + amount,
+            Errors.PositionManager__FlashMintNotRepaid()
+        );
+
+        SPIUSD.burn(address(this), amount);
+    }
+
     /**
      * @notice Updates the treasury address.
      * @param newTreasuryAddress New treasury address.
@@ -376,5 +418,18 @@ contract PositionManager is Ownable2Step, TokenHelper {
 
         return
             ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / Math.ONE;
+    }
+
+    function flashFee(
+        address token,
+        uint256 amount
+    ) external view override returns (uint256) {
+        return 0; // Flash fee is 0 for now
+    }
+
+    function maxFlashLoan(
+        address token
+    ) external view override returns (uint256) {
+        return type(uint256).max;
     }
 }
