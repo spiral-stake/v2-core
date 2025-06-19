@@ -13,26 +13,24 @@ import {Errors} from "../libraries/Errors.sol";
 import {Math} from "../libraries/Math.sol";
 import {Position} from "../structs/Position.sol";
 
+import {console} from "forge-std/console.sol";
+
 /**
  * @title PositionManager
  * @notice Manages user positions that mint SPIUSD against supported collateral tokens.
  * @dev Implements core CDP logic including collateral deposits, SPIUSD minting, LTV checks, and liquidations.
  */
-contract PositionManager is Ownable2Step, TokenHelper, IERC3156FlashLender {
+contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     using Math for uint256;
 
     /////////////////////////
     // Constants and Immutables
 
     /// @notice Reference to the SPIUSD stablecoin contract
-    ISPIUSD public immutable SPIUSD;
+    ISPIUSD private immutable SPIUSD;
 
     /// @notice Additional precision multiplier for price feeds
     uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10;
-
-    // ERC3156 Flash Loan constants
-    bytes32 public constant CALLBACK_SUCCESS =
-        keccak256("ERC3156FlashBorrower.onFlashLoan");
 
     /// @notice Liquidation threshold LTV (91.5% in 1e18 precision)
     uint256 public constant LIQ_LTV = 915e15;
@@ -41,6 +39,10 @@ contract PositionManager is Ownable2Step, TokenHelper, IERC3156FlashLender {
     uint256 public constant MAX_LTV = 900e15;
 
     uint256 public constant MAX_LOAN = 90 days;
+
+    // ERC3156 Flash Loan constants
+    bytes32 public constant FLASHLOAN_SUCCESS_CALLBACK =
+        keccak256("ERC3156FlashBorrower.onFlashLoan");
 
     /////////////////////////
     // Storage
@@ -93,14 +95,19 @@ contract PositionManager is Ownable2Step, TokenHelper, IERC3156FlashLender {
      * @param collateralToken Address of the collateral token to deposit.
      * @param amountCollateral Amount of collateral to deposit.
      * @param amountToMint Amount of SPIUSD to mint.
+     * @return positionId id of the position created
      */
     function openPosition(
         address collateralToken,
         uint256 amountCollateral,
         uint256 amountToMint
-    ) external isSupportedCollateralToken(collateralToken) {
+    )
+        external
+        isSupportedCollateralToken(collateralToken)
+        returns (uint256 positionId)
+    {
         address _msgSender = msg.sender;
-        uint256 positionId = s_totalPositions;
+        positionId = s_totalPositions;
 
         Position memory newPosition = Position({
             owner: _msgSender,
@@ -233,12 +240,59 @@ contract PositionManager is Ownable2Step, TokenHelper, IERC3156FlashLender {
         _burnSPIUSD(_msgSender, positionId, debtToCover);
     }
 
+    /// @notice Initiates a flash loan in SPIUSD to the specified receiver.
+    /// @dev Assumes zero fee for the flash loan. Expects repayment plus amount before function completes.
+    /// @param receiver The contract implementing `onFlashLoan`, which will receive the funds.
+    /// @param loanToken Must be SPIUSD; flash loans are only supported for this token.
+    /// @param amountLoan The amount of SPIUSD to loan.
+    /// @param data Arbitrary data to pass to the receiver's `onFlashLoan` callback.
+    /// @return success Boolean indicating success of flash loan execution.
+    function flashLoan(
+        IERC3156FlashBorrower receiver,
+        address loanToken,
+        uint256 amountLoan,
+        bytes calldata data
+    ) external override isGreaterThanZero(amountLoan) returns (bool success) {
+        require(
+            loanToken == address(SPIUSD),
+            Errors.PositionManager__InvalidFlashLoanToken()
+        );
+        require(
+            address(receiver) != address(0),
+            Errors.PositionManager__InvalidReceiverAddress()
+        );
+
+        uint256 initialBalance = SPIUSD.balanceOf(address(this));
+        SPIUSD.mint(address(receiver), amountLoan);
+
+        require(
+            receiver.onFlashLoan(
+                msg.sender,
+                address(SPIUSD),
+                amountLoan,
+                0, // Zero fees temporarily
+                data
+            ) == FLASHLOAN_SUCCESS_CALLBACK,
+            Errors.PositionManager__FlashMintCallbackFailed()
+        );
+
+        uint256 finalBalance = SPIUSD.balanceOf(address(this));
+
+        require(
+            finalBalance >= initialBalance + amountLoan,
+            Errors.PositionManager__FlashMintNotRepaid()
+        );
+
+        SPIUSD.burn(address(this), amountLoan);
+        return true;
+    }
+
     /**
      * @notice Adds or removes support for collateral tokens.
      * @param collateralTokens List of collateral token addresses.
      * @param priceFeedAddress Corresponding Chainlink price feed addresses. Use address(0) to remove support.
      */
-    function addSupportedCollateralToken(
+    function addSupportedCollateralTokens(
         address[] memory collateralTokens,
         address[] memory priceFeedAddress
     ) external onlyOwner {
@@ -262,42 +316,6 @@ contract PositionManager is Ownable2Step, TokenHelper, IERC3156FlashLender {
 
             s_priceFeeds[collateralTokens[i]] = priceFeedAddress[i];
         }
-    }
-
-    function flashLoan(
-        IERC3156FlashBorrower receiver,
-        address token,
-        uint256 amount,
-        bytes calldata data
-    ) external override returns (bool success) {
-        require(
-            address(receiver) != address(0),
-            Errors.SPIUSD__InvalidReceiverAddress()
-        );
-        require(amount > 0, Errors.SPIUSD__AmountCannotBeZero());
-
-        uint256 initialBalance = SPIUSD.balanceOf(address(this));
-
-        SPIUSD.mint(address(receiver), amount);
-
-        require(
-            receiver.onFlashLoan(
-                msg.sender,
-                address(SPIUSD),
-                amount,
-                0, // Zero fees temporarily
-                data
-            ) == CALLBACK_SUCCESS,
-            Errors.PositionManager__FlashMintCallbackFailed()
-        );
-
-        uint256 finalBalance = SPIUSD.balanceOf(address(this));
-        require(
-            finalBalance >= initialBalance + amount,
-            Errors.PositionManager__FlashMintNotRepaid()
-        );
-
-        SPIUSD.burn(address(this), amount);
     }
 
     /**
@@ -353,12 +371,22 @@ contract PositionManager is Ownable2Step, TokenHelper, IERC3156FlashLender {
             positionId
         );
 
+        if (totalSPIUSDMinted == 0) return 0;
+
         return totalSPIUSDMinted.divDown(totalCollateralValueInUsd);
     }
 
     /////////////////////////
     // External View Functions
 
+    /// @notice Returns the address of the SPIUSD token
+    function getSPIUSD() external view override returns (address) {
+        return address(SPIUSD);
+    }
+
+    /// @notice Returns an array of position IDs associated with a given user.
+    /// @param user The address of the user whose position IDs are being queried.
+    /// @return An array of position IDs owned or created by the user.
     function getUserPositionIds(
         address user
     ) external view returns (uint256[] memory) {
@@ -411,6 +439,8 @@ contract PositionManager is Ownable2Step, TokenHelper, IERC3156FlashLender {
         address token,
         uint256 amount
     ) public view returns (uint256) {
+        if (amount == 0) return 0;
+
         AggregatorV3Interface priceFeed = AggregatorV3Interface(
             s_priceFeeds[token]
         );

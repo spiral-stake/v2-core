@@ -31,9 +31,7 @@ contract HelperConfig is Script {
         if (block.chainid == 31337) {
             chain.isLocal = true;
             chain.deployerKey = DEFAULT_ANVIL_PRIVATE_KEY;
-        }
 
-        if (block.chainid == 31337 || block.chainid == 2522) {
             // Staked Stablecoins for collateral tokens
             chain.collateralTokens = new address[](3);
             chain.collateralTokens[0] = address(
@@ -67,8 +65,8 @@ contract HelperConfig is Script {
 
             // frxUSD for SPIUSD/frxUSD pair
             chain.frxUSD = address(new ERC20Mock("frxUSD", "frxUSD"));
-        } else {}
 
-        vm.stopBroadcast();
+            vm.stopBroadcast();
+        }
     }
 }

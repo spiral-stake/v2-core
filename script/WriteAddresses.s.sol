@@ -9,7 +9,8 @@ contract WriteAddressesToJson is Script {
     function _writeAddressesToJson(
         address spiUsdAddress,
         address positionManagerAddress,
-        address[] memory collateralTokens
+        address[] memory collateralTokens,
+        address frxUSD
     ) external {
         string memory obj = "obj";
 
@@ -18,6 +19,8 @@ contract WriteAddressesToJson is Script {
             "positionManagerAddress",
             positionManagerAddress
         );
+
+        vm.serializeAddress(obj, "frxUSD", frxUSD);
 
         // SPIUSD
         string memory spiUsdObj = "spiUsdObj";

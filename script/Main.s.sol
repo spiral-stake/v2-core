@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {Script} from "forge-std/Script.sol";
 import {HelperConfig, ChainConfig} from "./HelperConfig.s.sol";
 import {DeploySPIUSD} from "./DeploySPIUSD.s.sol";
+import {DeployPositionManager} from "./DeployPositionManager.s.sol";
 import {WriteAddressesToJson} from "./WriteAddresses.s.sol";
 
 interface IERC20Mock {
@@ -20,24 +21,31 @@ contract Main is Script {
         HelperConfig helperConfig = new HelperConfig();
         ChainConfig memory chain = helperConfig.deployIfNeededAndGetConfig();
 
-        // Deploying SPIUSD
-        (address spiUsdAddress, address positionManagerAddress) = (
-            new DeploySPIUSD()
-        ).run(chain.collateralTokens, chain.priceFeeds, chain.treasury);
+        if (chain.isLocal) {
+            address spiUsdAddress = (new DeploySPIUSD()).run();
 
-        (new WriteAddressesToJson())._writeAddressesToJson(
-            spiUsdAddress,
-            positionManagerAddress,
-            chain.collateralTokens
-        );
+            address positionManagerAddress = (new DeployPositionManager()).run(
+                spiUsdAddress,
+                chain.collateralTokens,
+                chain.priceFeeds,
+                chain.treasury
+            );
 
-        _mintCollateralTokens(
-            user,
-            chain.collateralTokens,
-            AMOUNT_COLLATERAL_TOKEN
-        );
+            (new WriteAddressesToJson())._writeAddressesToJson(
+                spiUsdAddress,
+                positionManagerAddress,
+                chain.collateralTokens,
+                chain.frxUSD
+            );
 
-        _mintNative(user, AMOUNT_NATIVE);
+            _mintCollateralTokens(
+                user,
+                chain.collateralTokens,
+                AMOUNT_COLLATERAL_TOKEN
+            );
+
+            _mintNative(user, AMOUNT_NATIVE);
+        }
     }
 
     function _mintCollateralTokens(
