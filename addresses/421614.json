@@ -12,6 +12,24 @@
       "name": "Staked USDe",
       "symbol": "sUSDe"
     },
+    "0x3d3aF2eCfaa71343B15aCf5D64d6fbBC2B22AD26": {
+      "address": "0x3d3aF2eCfaa71343B15aCf5D64d6fbBC2B22AD26",
+      "decimals": "18",
+      "name": "PT-slvlUSD-25SEP2025",
+      "symbol": "PT-slvlUSD"
+    },
+    "0x1b922B45fd00D1d1E524538B45c963bC0C325189": {
+      "address": "0x1b922B45fd00D1d1E524538B45c963bC0C325189",
+      "decimals": "18",
+      "name": "PT-sUSDE-25SEP2025",
+      "symbol": "PT-sUSDE"
+    },
+    "0xb97e2Eaff562b702cB744352Da05646b6e9DD65F": {
+      "address": "0xb97e2Eaff562b702cB744352Da05646b6e9DD65F",
+      "decimals": "18",
+      "name": "PT-csUSDL-31JUL2025",
+      "symbol": "PT-csUSDL"
+    },
     "0xE4408cECD1eC5D8336b16998f010cf4f8497AB23": {
       "address": "0xE4408cECD1eC5D8336b16998f010cf4f8497AB23",
       "decimals": "18",
@@ -26,5 +44,6 @@
     }
   },
   "frxUSD": "0x226E23821aCaa0c2c0ea567f8d59e343e145AaC2",
-  "positionManagerAddress": "0x5f9ed0e41672e0833A2897DA457052CE42EACdC4"
+  "positionManagerAddress": "0x3fCb2803A9Dbb57acBB87fD07c96A859C4a60CEa",
+  "flashLeverageAddress": "0x068bF5704cE3b666daa324d33472C5687b10f98d"
 }

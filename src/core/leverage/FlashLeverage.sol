@@ -6,12 +6,13 @@ import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156
 import {IPositionManager} from "../../interfaces/IPositionManager.sol";
 import {Errors} from "../libraries/Errors.sol";
 import {Math} from "../libraries/Math.sol";
-import {console} from "forge-std/console.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {ICurveCryptoSwap} from "../../interfaces/ICurveCryptoSwap.sol";
 import {Position} from "../structs/Position.sol"; // Debt Positions from PositionManager
 import {LeveragePosition} from "../structs/LeveragePosition.sol";
+
+import {console} from "forge-std/console.sol";
 
 /**
  * @title FlashLeverage
@@ -26,22 +27,29 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
         UNLEVERAGE
     }
 
+    /////////////////////////
+    // Constants and Immutables
+
+    /// @notice SPIUSD stablecoin contract used for CDP-based leveraging
+    ISPIUSD private immutable SPIUSD;
+
     /// @notice PositionManager contract that handles debt positions for SPIUSD
     IPositionManager private immutable i_positionManager; // Is also the lender of SPIUSD flash loan
 
-    /// @notice Mapping of supported collateral tokens to their associated Curve pools for SPIUSD swaps
+    // 80% max LTV gives upto 5x leverage, for optimal returns
+    uint256 public constant MAX_LEVERAGE_LTV = 800e15;
+
+    /////////////////////////
+    // Storage
+
     mapping(address collateralToken => address curvePool) private s_curvePools;
 
-    /// @notice SPIUSD stablecoin contract used for CDP-based leveraging
-    ISPIUSD public immutable SPIUSD;
-
-    // 80% max LTV gives upto 5x leverage, for optimal returns
-    uint256 private constant MAX_LEVERAGE_LTV = 800e15;
-
-    /// @notice Address that receives protocol revenue or seized collateral during liquidation
     address private s_treasury;
 
     mapping(address user => LeveragePosition[]) private s_userLeveragePositions;
+
+    /////////////////////////
+    // Modifiers
 
     modifier isSupportedCollateralToken(address token) {
         require(
@@ -93,96 +101,108 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
         Action action = abi.decode(data, (Action));
 
         if (action == Action.LEVERAGE) {
-            (
-                ,
-                address user,
-                address collateralToken,
-                uint256 userCollateralAmount
-            ) = abi.decode(data, (Action, address, address, uint256));
-
-            ICurveCryptoSwap curvePool = ICurveCryptoSwap(
-                s_curvePools[collateralToken]
-            );
-
-            SPIUSD.approve(address(curvePool), amountLoan);
-            uint256 flashSwappedCollateral = curvePool.exchange(
-                1,
-                0,
-                amountLoan,
-                0,
-                address(this)
-            ); // 1: SPIUSD, 0: Collateral
-
-            uint256 totalCollateral = userCollateralAmount +
-                flashSwappedCollateral;
-
-            IERC20(collateralToken).approve(
-                address(i_positionManager),
-                totalCollateral
-            );
-            uint256 positionId = i_positionManager.openPosition(
-                collateralToken,
-                totalCollateral,
-                amountLoan + fee
-            );
-
-            SPIUSD.transfer(address(i_positionManager), amountLoan + fee);
-
-            s_userLeveragePositions[user].push(
-                LeveragePosition({
-                    debtPositionId: positionId,
-                    userCollateralDeposited: userCollateralAmount
-                })
-            );
+            _handleLeverage(amountLoan, fee, data);
         } else {
-            (
-                ,
-                address user,
-                uint256 debtPositionId,
-                address collateralToken,
-                uint256 totalCollateralDeposited
-            ) = abi.decode(data, (Action, address, uint256, address, uint256));
-            i_positionManager.redeemCollateralAndBurnSPIUSD(
-                debtPositionId,
-                totalCollateralDeposited,
-                amountLoan
-            );
-
-            ICurveCryptoSwap curvePool = ICurveCryptoSwap(
-                s_curvePools[collateralToken]
-            );
-
-            IERC20(collateralToken).approve(
-                address(curvePool),
-                totalCollateralDeposited
-            );
-            uint256 spiUsdReceived = curvePool.exchange(
-                0, // 0: collateral
-                1, // 1: SPIUSD
-                totalCollateralDeposited,
-                0,
-                address(this)
-            );
-
-            require(
-                spiUsdReceived >= amountLoan + fee,
-                Errors.FlashLeverage__InsufficientCollateralToUnleverage()
-            );
-
-            // Repay flashloan
-            SPIUSD.transfer(address(i_positionManager), amountLoan + fee);
-
-            // Swap excess SPIUSD to collateralToken return to user
-            if (spiUsdReceived > amountLoan + fee) {
-                uint256 amountRemainingSpiUsd = spiUsdReceived -
-                    (amountLoan + fee);
-
-                SPIUSD.approve(address(curvePool), amountRemainingSpiUsd);
-                curvePool.exchange(1, 0, amountRemainingSpiUsd, 0, user);
-            }
+            _handleUnleverage(amountLoan, fee, data);
         }
 
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
+    }
+
+    function _handleLeverage(
+        uint256 amountLoan,
+        uint256 fee,
+        bytes calldata data
+    ) internal {
+        (
+            ,
+            address user,
+            address collateralToken,
+            uint256 userCollateralAmount
+        ) = abi.decode(data, (Action, address, address, uint256));
+
+        ICurveCryptoSwap curvePool = ICurveCryptoSwap(
+            s_curvePools[collateralToken]
+        );
+
+        SPIUSD.approve(address(curvePool), amountLoan);
+        uint256 flashSwappedCollateral = curvePool.exchange(
+            1,
+            0,
+            amountLoan,
+            0,
+            address(this)
+        );
+
+        uint256 totalCollateral = userCollateralAmount + flashSwappedCollateral;
+
+        IERC20(collateralToken).approve(
+            address(i_positionManager),
+            totalCollateral
+        );
+        uint256 positionId = i_positionManager.openPosition(
+            collateralToken,
+            totalCollateral,
+            amountLoan + fee
+        );
+
+        SPIUSD.transfer(address(i_positionManager), amountLoan + fee);
+
+        s_userLeveragePositions[user].push(
+            LeveragePosition({
+                debtPositionId: positionId,
+                userCollateralDeposited: userCollateralAmount
+            })
+        );
+    }
+
+    function _handleUnleverage(
+        uint256 amountLoan,
+        uint256 fee,
+        bytes calldata data
+    ) internal {
+        (
+            ,
+            address user,
+            uint256 debtPositionId,
+            address collateralToken,
+            uint256 totalCollateralDeposited
+        ) = abi.decode(data, (Action, address, uint256, address, uint256));
+
+        i_positionManager.redeemCollateralAndBurnSPIUSD(
+            debtPositionId,
+            totalCollateralDeposited,
+            amountLoan
+        );
+
+        ICurveCryptoSwap curvePool = ICurveCryptoSwap(
+            s_curvePools[collateralToken]
+        );
+
+        IERC20(collateralToken).approve(
+            address(curvePool),
+            totalCollateralDeposited
+        );
+        uint256 spiUsdReceived = curvePool.exchange(
+            0,
+            1,
+            totalCollateralDeposited,
+            0,
+            address(this)
+        );
+
+        require(
+            spiUsdReceived >= amountLoan + fee,
+            Errors.FlashLeverage__InsufficientCollateralToUnleverage()
+        );
+
+        SPIUSD.transfer(address(i_positionManager), amountLoan + fee);
+
+        if (spiUsdReceived > amountLoan + fee) {
+            uint256 amountRemainingSpiUsd = spiUsdReceived - (amountLoan + fee);
+            SPIUSD.approve(address(curvePool), amountRemainingSpiUsd);
+            curvePool.exchange(1, 0, amountRemainingSpiUsd, 0, user);
+        }
     }
 
     /**
@@ -195,7 +215,7 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
         address collateralToken,
         uint256 userCollateralAmount,
         uint256 desiredLtv
-    ) public isSupportedCollateralToken(collateralToken) {
+    ) external isSupportedCollateralToken(collateralToken) {
         require(
             desiredLtv <= MAX_LEVERAGE_LTV,
             Errors.FlashLeverage__ExceedsMaxLeverageLTV()
@@ -332,5 +352,14 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
             effectiveLtv <= i_positionManager.MAX_LTV(),
             Errors.FlashLeverage__ExceedsMaxLTV()
         );
+    }
+
+    /////////////////////////
+    // Constants and Immutables
+
+    function getUserLeveragePositions(
+        address user
+    ) external view returns (LeveragePosition[] memory) {
+        return s_userLeveragePositions[user];
     }
 }

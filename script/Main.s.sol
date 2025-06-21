@@ -6,6 +6,7 @@ import {HelperConfig, ChainConfig} from "./HelperConfig.s.sol";
 import {DeploySPIUSD} from "./DeploySPIUSD.s.sol";
 import {DeployPositionManager} from "./DeployPositionManager.s.sol";
 import {WriteAddressesToJson} from "./WriteAddresses.s.sol";
+import {DeployFlashLeverage} from "./DeployFlashLeverage.s.sol";
 
 interface IERC20Mock {
     function mint(address account, uint256 amount) external;
@@ -31,9 +32,19 @@ contract Main is Script {
                 chain.treasury
             );
 
+            address flashLeverageAddress = (
+                new DeployFlashLeverage().run(
+                    positionManagerAddress,
+                    new address[](0),
+                    new address[](0),
+                    chain.treasury
+                )
+            );
+
             (new WriteAddressesToJson())._writeAddressesToJson(
                 spiUsdAddress,
                 positionManagerAddress,
+                flashLeverageAddress,
                 chain.collateralTokens,
                 chain.frxUSD
             );
