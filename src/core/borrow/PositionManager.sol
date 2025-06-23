@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import {IPositionManager} from "../../interfaces/IPositionManager.sol";
-import {ISPIUSD} from "../../interfaces/ISPIUSD.sol";
+import {IStblUSD} from "../../interfaces/IStblUSD.sol";
 import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
 import {IERC3156FlashLender} from "@openzeppelin/contracts/interfaces/IERC3156FlashLender.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
@@ -17,8 +17,8 @@ import {console} from "forge-std/console.sol";
 
 /**
  * @title PositionManager
- * @notice Manages user positions that mint SPIUSD against supported collateral tokens.
- * @dev Implements core CDP logic including collateral deposits, SPIUSD minting, LTV checks, and liquidations.
+ * @notice Manages user positions that mint StblUSD against supported collateral tokens.
+ * @dev Implements core CDP logic including collateral deposits, StblUSD minting, LTV checks, and liquidations.
  */
 contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     using Math for uint256;
@@ -26,8 +26,8 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     /////////////////////////
     // Constants and Immutables
 
-    /// @notice Reference to the SPIUSD stablecoin contract
-    ISPIUSD private immutable SPIUSD;
+    /// @notice Reference to the StblUSD stablecoin contract
+    IStblUSD private immutable StblUSD;
 
     /// @notice Additional precision multiplier for price feeds
     uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10;
@@ -35,7 +35,7 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     /// @notice Liquidation threshold LTV (91.5% in 1e18 precision)
     uint256 public constant LIQ_LTV = 915e15;
 
-    /// @notice Maximum allowed LTV for minting SPIUSD (90% in 1e18 precision)
+    /// @notice Maximum allowed LTV for minting StblUSD (90% in 1e18 precision)
     uint256 public constant MAX_LTV = 900e15;
 
     uint256 public constant MAX_LOAN = 90 days;
@@ -79,11 +79,11 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     // Constructor
 
     /**
-     * @param _SPIUSD Address of the SPIUSD token
+     * @param _StblUSD Address of the StblUSD token
      * @param treasury Address of the treasury
      */
-    constructor(address _SPIUSD, address treasury) Ownable(msg.sender) {
-        SPIUSD = ISPIUSD(_SPIUSD);
+    constructor(address _StblUSD, address treasury) Ownable(msg.sender) {
+        StblUSD = IStblUSD(_StblUSD);
         s_treasury = treasury;
     }
 
@@ -91,10 +91,10 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     // External Functions
 
     /**
-     * @notice Opens a new position with specified collateral and mints SPIUSD.
+     * @notice Opens a new position with specified collateral and mints StblUSD.
      * @param collateralToken Address of the collateral token to deposit.
      * @param amountCollateral Amount of collateral to deposit.
-     * @param amountToMint Amount of SPIUSD to mint.
+     * @param amountToMint Amount of StblUSD to mint.
      * @return positionId id of the position created
      */
     function openPosition(
@@ -113,12 +113,12 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
             owner: _msgSender,
             collateralToken: collateralToken,
             collateralDeposited: 0,
-            SPIUSDMinted: 0
+            StblUSDMinted: 0
         });
 
         s_positions[positionId] = newPosition;
 
-        depositCollateralAndMintSPIUSD(
+        depositCollateralAndMintStblUSD(
             positionId,
             amountCollateral,
             amountToMint
@@ -129,18 +129,18 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     }
 
     /**
-     * @notice Deposits collateral and mints SPIUSD in a single transaction.
+     * @notice Deposits collateral and mints StblUSD in a single transaction.
      * @param positionId ID of the position to modify.
      * @param amountCollateral Amount of collateral to deposit.
-     * @param amountToMint Amount of SPIUSD to mint.
+     * @param amountToMint Amount of StblUSD to mint.
      */
-    function depositCollateralAndMintSPIUSD(
+    function depositCollateralAndMintStblUSD(
         uint256 positionId,
         uint256 amountCollateral,
         uint256 amountToMint
     ) public {
         depositCollateral(positionId, amountCollateral);
-        mintSPIUSD(positionId, amountToMint);
+        mintStblUSD(positionId, amountToMint);
     }
 
     /**
@@ -161,36 +161,36 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     }
 
     /**
-     * @notice Mints SPIUSD against a position's deposited collateral.
+     * @notice Mints StblUSD against a position's deposited collateral.
      * @dev Reverts if resulting LTV exceeds MAX_LTV.
-     * @param positionId ID of the position to mint SPIUSD from.
-     * @param amountToMint Amount of SPIUSD to mint.
+     * @param positionId ID of the position to mint StblUSD from.
+     * @param amountToMint Amount of StblUSD to mint.
      */
-    function mintSPIUSD(
+    function mintStblUSD(
         uint256 positionId,
         uint256 amountToMint
     ) public isGreaterThanZero(amountToMint) {
         Position storage position = s_positions[positionId];
         require(msg.sender == position.owner);
 
-        position.SPIUSDMinted += amountToMint;
+        position.StblUSDMinted += amountToMint;
 
         _revertIfExceedsMaxLTV(positionId);
-        SPIUSD.mint(position.owner, amountToMint);
+        StblUSD.mint(position.owner, amountToMint);
     }
 
     /**
-     * @notice Burns SPIUSD and redeems corresponding collateral in one transaction.
+     * @notice Burns StblUSD and redeems corresponding collateral in one transaction.
      * @param positionId ID of the position to update.
      * @param amountCollateral Amount of collateral to redeem.
-     * @param amountToBurn Amount of SPIUSD to burn.
+     * @param amountToBurn Amount of StblUSD to burn.
      */
-    function redeemCollateralAndBurnSPIUSD(
+    function redeemCollateralAndBurnStblUSD(
         uint256 positionId,
         uint256 amountCollateral,
         uint256 amountToBurn
     ) external {
-        burnSPIUSD(positionId, amountToBurn);
+        burnStblUSD(positionId, amountToBurn);
         redeemCollateral(positionId, amountCollateral);
     }
 
@@ -208,15 +208,15 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     }
 
     /**
-     * @notice Burns SPIUSD from sender and updates the position state.
+     * @notice Burns StblUSD from sender and updates the position state.
      * @param positionId ID of the position to update.
-     * @param amountToBurn Amount of SPIUSD to burn.
+     * @param amountToBurn Amount of StblUSD to burn.
      */
-    function burnSPIUSD(
+    function burnStblUSD(
         uint256 positionId,
         uint256 amountToBurn
     ) public isGreaterThanZero(amountToBurn) {
-        _burnSPIUSD(msg.sender, positionId, amountToBurn);
+        _burnStblUSD(msg.sender, positionId, amountToBurn);
     }
 
     /**
@@ -233,18 +233,18 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
         );
 
         Position storage position = s_positions[positionId];
-        uint256 debtToCover = position.SPIUSDMinted;
+        uint256 debtToCover = position.StblUSDMinted;
         uint256 amountCollateralSeized = position.collateralDeposited;
 
         _redeemCollateral(_msgSender, positionId, amountCollateralSeized);
-        _burnSPIUSD(_msgSender, positionId, debtToCover);
+        _burnStblUSD(_msgSender, positionId, debtToCover);
     }
 
-    /// @notice Initiates a flash loan in SPIUSD to the specified receiver.
+    /// @notice Initiates a flash loan in StblUSD to the specified receiver.
     /// @dev Assumes zero fee for the flash loan. Expects repayment plus amount before function completes.
     /// @param receiver The contract implementing `onFlashLoan`, which will receive the funds.
-    /// @param loanToken Must be SPIUSD; flash loans are only supported for this token.
-    /// @param amountLoan The amount of SPIUSD to loan.
+    /// @param loanToken Must be StblUSD; flash loans are only supported for this token.
+    /// @param amountLoan The amount of StblUSD to loan.
     /// @param data Arbitrary data to pass to the receiver's `onFlashLoan` callback.
     /// @return success Boolean indicating success of flash loan execution.
     function flashLoan(
@@ -254,7 +254,7 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
         bytes calldata data
     ) external override isGreaterThanZero(amountLoan) returns (bool success) {
         require(
-            loanToken == address(SPIUSD),
+            loanToken == address(StblUSD),
             Errors.PositionManager__InvalidFlashLoanToken()
         );
         require(
@@ -262,13 +262,13 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
             Errors.PositionManager__InvalidReceiverAddress()
         );
 
-        uint256 initialBalance = SPIUSD.balanceOf(address(this));
-        SPIUSD.mint(address(receiver), amountLoan);
+        uint256 initialBalance = StblUSD.balanceOf(address(this));
+        StblUSD.mint(address(receiver), amountLoan);
 
         require(
             receiver.onFlashLoan(
                 msg.sender,
-                address(SPIUSD),
+                address(StblUSD),
                 amountLoan,
                 0, // Zero fees temporarily
                 data
@@ -276,14 +276,14 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
             Errors.PositionManager__FlashMintCallbackFailed()
         );
 
-        uint256 finalBalance = SPIUSD.balanceOf(address(this));
+        uint256 finalBalance = StblUSD.balanceOf(address(this));
 
         require(
             finalBalance >= initialBalance + amountLoan,
             Errors.PositionManager__FlashMintNotRepaid()
         );
 
-        SPIUSD.burn(address(this), amountLoan);
+        StblUSD.burn(address(this), amountLoan);
         return true;
     }
 
@@ -347,15 +347,15 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
         _transferOut(position.collateralToken, to, amountCollateral);
     }
 
-    function _burnSPIUSD(
+    function _burnStblUSD(
         address burnFrom,
         uint256 positionId,
         uint256 amountToBurn
     ) private {
         Position storage position = s_positions[positionId];
-        position.SPIUSDMinted -= amountToBurn;
+        position.StblUSDMinted -= amountToBurn;
 
-        SPIUSD.burn(burnFrom, amountToBurn);
+        StblUSD.burn(burnFrom, amountToBurn);
     }
 
     function _revertIfExceedsMaxLTV(uint256 positionId) internal view {
@@ -366,22 +366,22 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     }
 
     function _calcLTV(uint256 positionId) internal view returns (uint256) {
-        uint256 totalSPIUSDMinted = s_positions[positionId].SPIUSDMinted;
+        uint256 totalStblUSDMinted = s_positions[positionId].StblUSDMinted;
         uint256 totalCollateralValueInUsd = getPositionCollateralValue(
             positionId
         );
 
-        if (totalSPIUSDMinted == 0) return 0;
+        if (totalStblUSDMinted == 0) return 0;
 
-        return totalSPIUSDMinted.divDown(totalCollateralValueInUsd);
+        return totalStblUSDMinted.divDown(totalCollateralValueInUsd);
     }
 
     /////////////////////////
     // External View Functions
 
-    /// @notice Returns the address of the SPIUSD token
-    function getSPIUSD() external view override returns (address) {
-        return address(SPIUSD);
+    /// @notice Returns the address of the StblUSD token
+    function getStblUSD() external view override returns (address) {
+        return address(StblUSD);
     }
 
     /// @notice Returns an array of position IDs associated with a given user.

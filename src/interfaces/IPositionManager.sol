@@ -18,7 +18,7 @@ interface IPositionManager is IERC3156FlashLender {
         uint256 amountToMint
     ) external returns (uint256 positionId);
 
-    function depositCollateralAndMintSPIUSD(
+    function depositCollateralAndMintStblUSD(
         uint256 positionId,
         uint256 amountCollateral,
         uint256 amountToMint
@@ -29,9 +29,9 @@ interface IPositionManager is IERC3156FlashLender {
         uint256 amountCollateral
     ) external;
 
-    function mintSPIUSD(uint256 positionId, uint256 amountToMint) external;
+    function mintStblUSD(uint256 positionId, uint256 amountToMint) external;
 
-    function redeemCollateralAndBurnSPIUSD(
+    function redeemCollateralAndBurnStblUSD(
         uint256 positionId,
         uint256 amountCollateral,
         uint256 amountToBurn
@@ -42,7 +42,7 @@ interface IPositionManager is IERC3156FlashLender {
         uint256 amountCollateral
     ) external;
 
-    function burnSPIUSD(uint256 positionId, uint256 amountToBurn) external;
+    function burnStblUSD(uint256 positionId, uint256 amountToBurn) external;
 
     function liquidate(uint256 positionId) external;
 
@@ -73,7 +73,7 @@ interface IPositionManager is IERC3156FlashLender {
 
     // --- View Functions ---
 
-    function getSPIUSD() external view returns (address);
+    function getStblUSD() external view returns (address);
 
     function MAX_LTV() external view returns (uint256);
 

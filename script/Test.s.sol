@@ -6,7 +6,7 @@ import {DeployFlashLeverage, FlashLeverage} from "./DeployFlashLeverage.s.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 import {MockV3Aggregator} from "@chainlink/contracts/src/v0.8/shared/mocks/MockV3Aggregator.sol";
 import {ERC20Mock} from "../src/mocks/ERC20Mock.sol";
-import {DeploySPIUSD, PositionManager} from "../script/DeploySPIUSD.s.sol";
+import {DeployStblUSD, PositionManager} from "../script/DeployStblUSD.s.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 
 import {console} from "forge-std/console.sol";

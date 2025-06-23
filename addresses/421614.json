@@ -6,12 +6,6 @@
     "symbol": "SPIUSD"
   },
   "collateralTokens": {
-    "0x26b8fAb1a8179822a3D8df35A063f38913904614": {
-      "address": "0x26b8fAb1a8179822a3D8df35A063f38913904614",
-      "decimals": "18",
-      "name": "Staked USDe",
-      "symbol": "sUSDe"
-    },
     "0x3d3aF2eCfaa71343B15aCf5D64d6fbBC2B22AD26": {
       "address": "0x3d3aF2eCfaa71343B15aCf5D64d6fbBC2B22AD26",
       "decimals": "18",

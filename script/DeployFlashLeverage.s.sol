@@ -5,7 +5,7 @@ import {Script} from "forge-std/Script.sol";
 import {HelperConfig, ChainConfig} from "./HelperConfig.s.sol";
 import {IERC20Mock} from "../src/interfaces/IERC20Mock.sol";
 import {FlashLeverage} from "../src/core/leverage/FlashLeverage.sol";
-import {DeploySPIUSD, PositionManager} from "../script/DeploySPIUSD.s.sol";
+import {DeployStblUSD, PositionManager} from "../script/DeployStblUSD.s.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
 contract DeployFlashLeverage is Script {

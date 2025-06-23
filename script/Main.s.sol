@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {Script} from "forge-std/Script.sol";
 import {HelperConfig, ChainConfig} from "./HelperConfig.s.sol";
-import {DeploySPIUSD} from "./DeploySPIUSD.s.sol";
+import {DeployStblUSD} from "./DeployStblUSD.s.sol";
 import {DeployPositionManager} from "./DeployPositionManager.s.sol";
 import {WriteAddressesToJson} from "./WriteAddresses.s.sol";
 import {DeployFlashLeverage} from "./DeployFlashLeverage.s.sol";
@@ -23,10 +23,10 @@ contract Main is Script {
         ChainConfig memory chain = helperConfig.deployIfNeededAndGetConfig();
 
         if (chain.isLocal) {
-            address spiUsdAddress = (new DeploySPIUSD()).run();
+            address stblUSDAddress = (new DeployStblUSD()).run();
 
             address positionManagerAddress = (new DeployPositionManager()).run(
-                spiUsdAddress,
+                stblUSDAddress,
                 chain.collateralTokens,
                 chain.priceFeeds,
                 chain.treasury
@@ -42,7 +42,7 @@ contract Main is Script {
             );
 
             (new WriteAddressesToJson())._writeAddressesToJson(
-                spiUsdAddress,
+                stblUSDAddress,
                 positionManagerAddress,
                 flashLeverageAddress,
                 chain.collateralTokens,

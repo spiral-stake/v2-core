@@ -83,7 +83,7 @@ contract HelperConfig is Script {
                 new MockV3Aggregator(PRICE_FEED_DECIMALS, SUSDF_PRICE)
             );
 
-            // frxUSD for SPIUSD/frxUSD pair
+            // frxUSD for StblUSD/frxUSD pair
             chain.frxUSD = address(new ERC20Mock("frxUSD", "frxUSD"));
 
             vm.stopBroadcast();

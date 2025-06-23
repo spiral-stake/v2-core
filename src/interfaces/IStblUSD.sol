@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
-interface ISPIUSD is IERC20 {
+interface IStblUSD is IERC20 {
     function setManagerAddresses(address _positionManagerAddress) external;
 
     function mint(address _account, uint256 _amount) external;

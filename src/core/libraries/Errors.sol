@@ -3,9 +3,9 @@ pragma solidity 0.8.30;
 
 library Errors {
     /////////////////////////
-    // SPIUSD
+    // StblUSD
 
-    error SPIUSD__CallerNotAManagerAddress();
+    error StblUSD__CallerNotAManagerAddress();
 
     /////////////////////////
     // PositionManager

@@ -2,12 +2,12 @@
 pragma solidity 0.8.30;
 
 import {Script} from "forge-std/Script.sol";
-import {SPIUSD, ISPIUSD} from "../src/core/SPIUSD/SPIUSD.sol";
-import {PositionManager} from "../src/core/SPIUSD/PositionManager.sol";
+import {StblUSD, IStblUSD} from "../src/core/borrow/StblUSD.sol";
+import {PositionManager} from "../src/core/borrow/PositionManager.sol";
 
 contract DeployPositionManager is Script {
     function run(
-        address spiUsdAddress,
+        address stblUSDAddress,
         address[] memory collateralTokens,
         address[] memory priceFeeds,
         address treasury
@@ -15,11 +15,11 @@ contract DeployPositionManager is Script {
         vm.startBroadcast();
 
         positionManagerAddress = address(
-            new PositionManager(address(spiUsdAddress), treasury)
+            new PositionManager(address(stblUSDAddress), treasury)
         );
 
-        // Setting Position manager as SPIUSD minter
-        ISPIUSD(spiUsdAddress).setManagerAddresses(positionManagerAddress);
+        // Setting Position manager as StblUSD minter
+        IStblUSD(stblUSDAddress).setManagerAddresses(positionManagerAddress);
 
         // Adding supported collateral tokens
         PositionManager(positionManagerAddress).addSupportedCollateralTokens(
@@ -27,13 +27,13 @@ contract DeployPositionManager is Script {
             priceFeeds
         );
 
-        // address spiUsdAddress = 0xdBcEA9CE3997479C7434D5F20EA4428Bb29cB865;
+        // address stblUSDAddress = 0xdBcEA9CE3997479C7434D5F20EA4428Bb29cB865;
         // positionManagerAddress = address(
-        //     new PositionManager(spiUsdAddress, makeAddr("treasury"))
+        //     new PositionManager(stblUSDAddress, makeAddr("treasury"))
         // );
 
-        // // Setting Position manager as SPIUSD minter
-        // ISPIUSD(spiUsdAddress).setManagerAddresses(positionManagerAddress);
+        // // Setting Position manager as StblUSD minter
+        // IStblUSD(stblUSDAddress).setManagerAddresses(positionManagerAddress);
 
         // address[] memory collateralTokens = new address[](3);
         // collateralTokens[0] = 0xE4408cECD1eC5D8336b16998f010cf4f8497AB23;
@@ -56,7 +56,7 @@ contract DeployPositionManager is Script {
 }
 
 // vm.startBroadcast();
-// // spiUsdAddress = address(new SPIUSD());
+// // stblUSDAddress = address(new StblUSD());
 // positionManagerAddress = address(
 //     new PositionManager(
 //         0xdBcEA9CE3997479C7434D5F20EA4428Bb29cB865,
@@ -64,8 +64,8 @@ contract DeployPositionManager is Script {
 //     )
 // );
 
-// // Setting Position manager as SPIUSD minter
-// ISPIUSD(0xdBcEA9CE3997479C7434D5F20EA4428Bb29cB865).setManagerAddresses(
+// // Setting Position manager as StblUSD minter
+// IStblUSD(0xdBcEA9CE3997479C7434D5F20EA4428Bb29cB865).setManagerAddresses(
 //         positionManagerAddress
 //     );
 

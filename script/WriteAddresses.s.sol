@@ -7,7 +7,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.
 
 contract WriteAddressesToJson is Script {
     function _writeAddressesToJson(
-        address spiUsdAddress,
+        address stblUSDAddress,
         address positionManagerAddress,
         address flashLeverageAddress,
         address[] memory collateralTokens,
@@ -24,22 +24,22 @@ contract WriteAddressesToJson is Script {
 
         vm.serializeAddress(obj, "frxUSD", frxUSD);
 
-        // SPIUSD
-        string memory spiUsdObj = "spiUsdObj";
-        IERC20Metadata spiUsd = IERC20Metadata(spiUsdAddress);
+        // StblUSD
+        string memory stblUSDObj = "stblUSDObj";
+        IERC20Metadata stblUSD = IERC20Metadata(stblUSDAddress);
 
-        vm.serializeAddress(spiUsdObj, "address", address(spiUsd));
-        vm.serializeString(spiUsdObj, "name", spiUsd.name());
-        vm.serializeString(spiUsdObj, "symbol", spiUsd.symbol());
-        spiUsdObj = vm.serializeString(
-            spiUsdObj,
+        vm.serializeAddress(stblUSDObj, "address", address(stblUSD));
+        vm.serializeString(stblUSDObj, "name", stblUSD.name());
+        vm.serializeString(stblUSDObj, "symbol", stblUSD.symbol());
+        stblUSDObj = vm.serializeString(
+            stblUSDObj,
             "decimals",
-            vm.toString(spiUsd.decimals())
+            vm.toString(stblUSD.decimals())
         );
-        vm.serializeString(obj, "SPIUSD", spiUsdObj);
+        vm.serializeString(obj, "StblUSD", stblUSDObj);
 
         // Collateral Tokens
-        vm.serializeString(obj, "collateralTokens", spiUsdObj);
+        vm.serializeString(obj, "collateralTokens", stblUSDObj);
 
         string memory collateralTokensObj = "collateralTokensObj";
         for (uint256 i; i < collateralTokens.length; ++i) {
