@@ -16,7 +16,7 @@ import {console} from "forge-std/console.sol";
 
 /**
  * @title FlashLeverage
- * @notice This contract allows users to leverage their yield-bearing assets using StblUSD-based flash loans.
+ * @notice This contract allows users to leverage their yield-bearing assets using stblUSD-based flash loans.
  *         It opens a larger position in a single atomic transaction using the ERC-3156 flash loan standard.
  */
 contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
@@ -30,11 +30,11 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
     /////////////////////////
     // Constants and Immutables
 
-    /// @notice StblUSD stablecoin contract used for CDP-based leveraging
-    IStblUSD private immutable StblUSD;
+    /// @notice stblUSD stablecoin contract used for CDP-based leveraging
+    IStblUSD private immutable i_stblUSD;
 
-    /// @notice PositionManager contract that handles debt positions for StblUSD
-    IPositionManager private immutable i_positionManager; // Is also the lender of StblUSD flash loan
+    /// @notice PositionManager contract that handles debt positions for stblUSD
+    IPositionManager private immutable i_positionManager; // Is also the lender of stblUSD flash loan
 
     // 80% max LTV gives upto 5x leverage, for optimal returns
     uint256 public constant MAX_LEVERAGE_LTV = 800e15;
@@ -64,16 +64,16 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
         address treasury
     ) Ownable(msg.sender) {
         i_positionManager = IPositionManager(positionManagerAddress);
-        StblUSD = IStblUSD(i_positionManager.getStblUSD());
+        i_stblUSD = IStblUSD(i_positionManager.getStblUSD());
         s_treasury = treasury;
     }
 
     /**
-     * @notice Callback function called by the StblUSD lender during a flash loan
-     * @dev Decodes leverage intent, swaps StblUSD to collateral, opens a leveraged position, and repays loan.
+     * @notice Callback function called by the stblUSD lender during a flash loan
+     * @dev Decodes leverage intent, swaps stblUSD to collateral, opens a leveraged position, and repays loan.
      * @param initiator Must be this contract
-     * @param token Token being borrowed (must be StblUSD)
-     * @param amountLoan Amount of StblUSD borrowed
+     * @param token Token being borrowed (must be stblUSD)
+     * @param amountLoan Amount of stblUSD borrowed
      * @param fee Flash loan fee
      * @param data ABI-encoded parameters: (collateralToken, userCollateralAmount)
      * @return bytes32 Confirmation of successful flash loan callback
@@ -94,7 +94,7 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
             Errors.FlashLeverage__UntrustedLoanInitiator()
         );
         require(
-            token == address(StblUSD),
+            token == address(i_stblUSD),
             Errors.FlashLeverage__InvalidLoanToken()
         );
 
@@ -125,7 +125,7 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
             s_curvePools[collateralToken]
         );
 
-        StblUSD.approve(address(curvePool), amountLoan);
+        i_stblUSD.approve(address(curvePool), amountLoan);
         uint256 flashSwappedCollateral = curvePool.exchange(
             1,
             0,
@@ -146,7 +146,7 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
             amountLoan + fee
         );
 
-        StblUSD.transfer(address(i_positionManager), amountLoan + fee);
+        i_stblUSD.transfer(address(i_positionManager), amountLoan + fee);
 
         s_userLeveragePositions[user].push(
             LeveragePosition({
@@ -196,12 +196,12 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
             Errors.FlashLeverage__InsufficientCollateralToUnleverage()
         );
 
-        StblUSD.transfer(address(i_positionManager), amountLoan + fee);
+        i_stblUSD.transfer(address(i_positionManager), amountLoan + fee);
 
         if (stblUSDReceived > amountLoan + fee) {
             uint256 amountRemainingStblUSD = stblUSDReceived -
                 (amountLoan + fee);
-            StblUSD.approve(address(curvePool), amountRemainingStblUSD);
+            i_stblUSD.approve(address(curvePool), amountRemainingStblUSD);
             curvePool.exchange(1, 0, amountRemainingStblUSD, 0, user);
         }
     }
@@ -245,7 +245,7 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
 
         i_positionManager.flashLoan(
             this,
-            address(StblUSD),
+            address(i_stblUSD),
             calculatedLoanAmount,
             data
         );
@@ -269,8 +269,8 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
 
         i_positionManager.flashLoan(
             this,
-            address(StblUSD),
-            associatedDebtPosition.StblUSDMinted,
+            address(i_stblUSD),
+            associatedDebtPosition.stblUSDMinted,
             data
         );
     }
@@ -308,7 +308,7 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
      * @param collateralToken The token being used as collateral
      * @param userCollateralAmount Amount of collateral supplied by user
      * @param ltv Desired Loan-To-Value ratio (1e18 precision)
-     * @return amountToBorrow StblUSD amount to borrow
+     * @return amountToBorrow stblUSD amount to borrow
      */
     function _calculateLoanAmount(
         address collateralToken,
@@ -328,7 +328,7 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
     /**
      * @dev Internal check to ensure Ltv doesn't exceed protocol max limit
      * @param collateralToken Token used as collateral
-     * @param flashLoanAmount StblUSD amount borrowed via flash loan
+     * @param flashLoanAmount stblUSD amount borrowed via flash loan
      * @param userCollateralAmount User-supplied collateral amount
      */
     function _revertIfExceedsMaxLtv(
@@ -338,7 +338,7 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
     ) private view {
         uint256 flashConvertedCollateral = ICurveCryptoSwap(
             s_curvePools[collateralToken]
-        ).get_dy(1, 0, flashLoanAmount); // 1: StblUSD, 0: Collateral
+        ).get_dy(1, 0, flashLoanAmount); // 1: stblUSD, 0: Collateral
 
         uint256 totalCollateralValueInUsd = i_positionManager.getTokenUsdValue(
             collateralToken,

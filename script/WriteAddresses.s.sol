@@ -36,7 +36,7 @@ contract WriteAddressesToJson is Script {
             "decimals",
             vm.toString(stblUSD.decimals())
         );
-        vm.serializeString(obj, "StblUSD", stblUSDObj);
+        vm.serializeString(obj, "stblUSD", stblUSDObj);
 
         // Collateral Tokens
         vm.serializeString(obj, "collateralTokens", stblUSDObj);

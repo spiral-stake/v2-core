@@ -6,50 +6,54 @@ import {StblUSD, IStblUSD} from "../src/core/borrow/StblUSD.sol";
 import {PositionManager} from "../src/core/borrow/PositionManager.sol";
 
 contract DeployPositionManager is Script {
-    function run(
-        address stblUSDAddress,
-        address[] memory collateralTokens,
-        address[] memory priceFeeds,
-        address treasury
-    ) external returns (address positionManagerAddress) {
+    function run()
+        external
+        returns (
+            // address stblUSDAddress,
+            // address[] memory collateralTokens,
+            // address[] memory priceFeeds,
+            // address treasury
+            address positionManagerAddress
+        )
+    {
         vm.startBroadcast();
 
-        positionManagerAddress = address(
-            new PositionManager(address(stblUSDAddress), treasury)
-        );
-
-        // Setting Position manager as StblUSD minter
-        IStblUSD(stblUSDAddress).setManagerAddresses(positionManagerAddress);
-
-        // Adding supported collateral tokens
-        PositionManager(positionManagerAddress).addSupportedCollateralTokens(
-            collateralTokens,
-            priceFeeds
-        );
-
-        // address stblUSDAddress = 0xdBcEA9CE3997479C7434D5F20EA4428Bb29cB865;
         // positionManagerAddress = address(
-        //     new PositionManager(stblUSDAddress, makeAddr("treasury"))
+        //     new PositionManager(address(stblUSDAddress), treasury)
         // );
 
         // // Setting Position manager as StblUSD minter
         // IStblUSD(stblUSDAddress).setManagerAddresses(positionManagerAddress);
-
-        // address[] memory collateralTokens = new address[](3);
-        // collateralTokens[0] = 0xE4408cECD1eC5D8336b16998f010cf4f8497AB23;
-        // collateralTokens[1] = 0x26b8fAb1a8179822a3D8df35A063f38913904614;
-        // collateralTokens[2] = 0xb4ccD7d85bC96E6F260671E5f218B615a5cC62D9;
-
-        // address[] memory priceFeeds = new address[](3);
-        // priceFeeds[0] = 0x9DF1CbfE7C596aedF405523D008f019be98e7983;
-        // priceFeeds[1] = 0x78a5075468Cd926789Ab5a67c81D2f8973AB6b19;
-        // priceFeeds[2] = 0xf6b317cFF0727ED95D92b1AfDdB6178C025e2Ae7;
 
         // // Adding supported collateral tokens
         // PositionManager(positionManagerAddress).addSupportedCollateralTokens(
         //     collateralTokens,
         //     priceFeeds
         // );
+
+        address stblUSDAddress = 0x1c7b129Dc0c3cced44442dcbC1abBCc7c7962801;
+        positionManagerAddress = address(
+            new PositionManager(stblUSDAddress, makeAddr("treasury"))
+        );
+
+        // Setting Position manager as StblUSD minter
+        IStblUSD(stblUSDAddress).setManagerAddresses(positionManagerAddress);
+
+        address[] memory collateralTokens = new address[](3);
+        collateralTokens[0] = 0xE4408cECD1eC5D8336b16998f010cf4f8497AB23;
+        collateralTokens[1] = 0x26b8fAb1a8179822a3D8df35A063f38913904614;
+        collateralTokens[2] = 0xb4ccD7d85bC96E6F260671E5f218B615a5cC62D9;
+
+        address[] memory priceFeeds = new address[](3);
+        priceFeeds[0] = 0x9DF1CbfE7C596aedF405523D008f019be98e7983;
+        priceFeeds[1] = 0x78a5075468Cd926789Ab5a67c81D2f8973AB6b19;
+        priceFeeds[2] = 0xf6b317cFF0727ED95D92b1AfDdB6178C025e2Ae7;
+
+        // Adding supported collateral tokens
+        PositionManager(positionManagerAddress).addSupportedCollateralTokens(
+            collateralTokens,
+            priceFeeds
+        );
 
         vm.stopBroadcast();
     }

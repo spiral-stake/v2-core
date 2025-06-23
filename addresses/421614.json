@@ -1,9 +1,9 @@
 {
-  "SPIUSD": {
-    "address": "0xdBcEA9CE3997479C7434D5F20EA4428Bb29cB865",
+  "stblUSD": {
+    "address": "0x1c7b129Dc0c3cced44442dcbC1abBCc7c7962801",
     "decimals": "18",
     "name": "Spiral Stake USD",
-    "symbol": "SPIUSD"
+    "symbol": "stblUSD"
   },
   "collateralTokens": {
     "0x3d3aF2eCfaa71343B15aCf5D64d6fbBC2B22AD26": {
@@ -38,6 +38,6 @@
     }
   },
   "frxUSD": "0x226E23821aCaa0c2c0ea567f8d59e343e145AaC2",
-  "positionManagerAddress": "0x3fCb2803A9Dbb57acBB87fD07c96A859C4a60CEa",
-  "flashLeverageAddress": "0x068bF5704cE3b666daa324d33472C5687b10f98d"
+  "positionManagerAddress": "0xFdf0B51e0faC048E1996d78a680D24C6DD26D7e3",
+  "flashLeverageAddress": "0x48501e0187756E3256560E0A7978c504D795e242"
 }

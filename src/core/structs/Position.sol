@@ -9,7 +9,7 @@ struct Position {
     address owner;
     address collateralToken;
     uint256 collateralDeposited;
-    uint256 StblUSDMinted;
+    uint256 stblUSDMinted;
     // uint256 borrowApy;
     // uint256 maturity;
 }

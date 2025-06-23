@@ -8,7 +8,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Errors} from "../libraries/Errors.sol";
 
 /**
- * @title StblUSD - Spiral Stake USD
+ * @title StblUSD - SpiralStake Stable USD
  * @dev This is the ERC20 implementation of the StblUSD stablecoin which is
  *      1. Pegged to $1
  *      2. Overcollateralized exogenously (Staked stablecoins and their PTs)

@@ -17,8 +17,8 @@ import {console} from "forge-std/console.sol";
 
 /**
  * @title PositionManager
- * @notice Manages user positions that mint StblUSD against supported collateral tokens.
- * @dev Implements core CDP logic including collateral deposits, StblUSD minting, LTV checks, and liquidations.
+ * @notice Manages user positions that mint stblUSD against supported collateral tokens.
+ * @dev Implements core CDP logic including collateral deposits, stblUSD minting, LTV checks, and liquidations.
  */
 contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     using Math for uint256;
@@ -26,8 +26,8 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     /////////////////////////
     // Constants and Immutables
 
-    /// @notice Reference to the StblUSD stablecoin contract
-    IStblUSD private immutable StblUSD;
+    /// @notice Reference to the stblUSD stablecoin contract
+    IStblUSD private immutable i_stblUSD;
 
     /// @notice Additional precision multiplier for price feeds
     uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10;
@@ -35,7 +35,7 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     /// @notice Liquidation threshold LTV (91.5% in 1e18 precision)
     uint256 public constant LIQ_LTV = 915e15;
 
-    /// @notice Maximum allowed LTV for minting StblUSD (90% in 1e18 precision)
+    /// @notice Maximum allowed LTV for minting stblUSD (90% in 1e18 precision)
     uint256 public constant MAX_LTV = 900e15;
 
     uint256 public constant MAX_LOAN = 90 days;
@@ -79,11 +79,11 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     // Constructor
 
     /**
-     * @param _StblUSD Address of the StblUSD token
+     * @param _stblUSD Address of the stblUSD token
      * @param treasury Address of the treasury
      */
-    constructor(address _StblUSD, address treasury) Ownable(msg.sender) {
-        StblUSD = IStblUSD(_StblUSD);
+    constructor(address _stblUSD, address treasury) Ownable(msg.sender) {
+        i_stblUSD = IStblUSD(_stblUSD);
         s_treasury = treasury;
     }
 
@@ -91,10 +91,10 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     // External Functions
 
     /**
-     * @notice Opens a new position with specified collateral and mints StblUSD.
+     * @notice Opens a new position with specified collateral and mints i_stblUSD.
      * @param collateralToken Address of the collateral token to deposit.
      * @param amountCollateral Amount of collateral to deposit.
-     * @param amountToMint Amount of StblUSD to mint.
+     * @param amountToMint Amount of stblUSD to mint.
      * @return positionId id of the position created
      */
     function openPosition(
@@ -113,7 +113,7 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
             owner: _msgSender,
             collateralToken: collateralToken,
             collateralDeposited: 0,
-            StblUSDMinted: 0
+            stblUSDMinted: 0
         });
 
         s_positions[positionId] = newPosition;
@@ -129,10 +129,10 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     }
 
     /**
-     * @notice Deposits collateral and mints StblUSD in a single transaction.
+     * @notice Deposits collateral and mints stblUSD in a single transaction.
      * @param positionId ID of the position to modify.
      * @param amountCollateral Amount of collateral to deposit.
-     * @param amountToMint Amount of StblUSD to mint.
+     * @param amountToMint Amount of stblUSD to mint.
      */
     function depositCollateralAndMintStblUSD(
         uint256 positionId,
@@ -161,10 +161,10 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     }
 
     /**
-     * @notice Mints StblUSD against a position's deposited collateral.
+     * @notice Mints stblUSD against a position's deposited collateral.
      * @dev Reverts if resulting LTV exceeds MAX_LTV.
-     * @param positionId ID of the position to mint StblUSD from.
-     * @param amountToMint Amount of StblUSD to mint.
+     * @param positionId ID of the position to mint sblUSD from.
+     * @param amountToMint Amount of stblUSD to mint.
      */
     function mintStblUSD(
         uint256 positionId,
@@ -173,17 +173,17 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
         Position storage position = s_positions[positionId];
         require(msg.sender == position.owner);
 
-        position.StblUSDMinted += amountToMint;
+        position.stblUSDMinted += amountToMint;
 
         _revertIfExceedsMaxLTV(positionId);
-        StblUSD.mint(position.owner, amountToMint);
+        i_stblUSD.mint(position.owner, amountToMint);
     }
 
     /**
-     * @notice Burns StblUSD and redeems corresponding collateral in one transaction.
+     * @notice Burns stblUSD and redeems corresponding collateral in one transaction.
      * @param positionId ID of the position to update.
      * @param amountCollateral Amount of collateral to redeem.
-     * @param amountToBurn Amount of StblUSD to burn.
+     * @param amountToBurn Amount of stblUSD to burn.
      */
     function redeemCollateralAndBurnStblUSD(
         uint256 positionId,
@@ -208,9 +208,9 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     }
 
     /**
-     * @notice Burns StblUSD from sender and updates the position state.
+     * @notice Burns stblUSD from sender and updates the position state.
      * @param positionId ID of the position to update.
-     * @param amountToBurn Amount of StblUSD to burn.
+     * @param amountToBurn Amount of stblUSD to burn.
      */
     function burnStblUSD(
         uint256 positionId,
@@ -233,18 +233,18 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
         );
 
         Position storage position = s_positions[positionId];
-        uint256 debtToCover = position.StblUSDMinted;
+        uint256 debtToCover = position.stblUSDMinted;
         uint256 amountCollateralSeized = position.collateralDeposited;
 
         _redeemCollateral(_msgSender, positionId, amountCollateralSeized);
         _burnStblUSD(_msgSender, positionId, debtToCover);
     }
 
-    /// @notice Initiates a flash loan in StblUSD to the specified receiver.
+    /// @notice Initiates a flash loan in stblUSD to the specified receiver.
     /// @dev Assumes zero fee for the flash loan. Expects repayment plus amount before function completes.
     /// @param receiver The contract implementing `onFlashLoan`, which will receive the funds.
-    /// @param loanToken Must be StblUSD; flash loans are only supported for this token.
-    /// @param amountLoan The amount of StblUSD to loan.
+    /// @param loanToken Must be stblUSD; flash loans are only supported for this token.
+    /// @param amountLoan The amount of stblUSD to loan.
     /// @param data Arbitrary data to pass to the receiver's `onFlashLoan` callback.
     /// @return success Boolean indicating success of flash loan execution.
     function flashLoan(
@@ -254,7 +254,7 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
         bytes calldata data
     ) external override isGreaterThanZero(amountLoan) returns (bool success) {
         require(
-            loanToken == address(StblUSD),
+            loanToken == address(i_stblUSD),
             Errors.PositionManager__InvalidFlashLoanToken()
         );
         require(
@@ -262,13 +262,13 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
             Errors.PositionManager__InvalidReceiverAddress()
         );
 
-        uint256 initialBalance = StblUSD.balanceOf(address(this));
-        StblUSD.mint(address(receiver), amountLoan);
+        uint256 initialBalance = i_stblUSD.balanceOf(address(this));
+        i_stblUSD.mint(address(receiver), amountLoan);
 
         require(
             receiver.onFlashLoan(
                 msg.sender,
-                address(StblUSD),
+                address(i_stblUSD),
                 amountLoan,
                 0, // Zero fees temporarily
                 data
@@ -276,14 +276,14 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
             Errors.PositionManager__FlashMintCallbackFailed()
         );
 
-        uint256 finalBalance = StblUSD.balanceOf(address(this));
+        uint256 finalBalance = i_stblUSD.balanceOf(address(this));
 
         require(
             finalBalance >= initialBalance + amountLoan,
             Errors.PositionManager__FlashMintNotRepaid()
         );
 
-        StblUSD.burn(address(this), amountLoan);
+        i_stblUSD.burn(address(this), amountLoan);
         return true;
     }
 
@@ -353,9 +353,9 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
         uint256 amountToBurn
     ) private {
         Position storage position = s_positions[positionId];
-        position.StblUSDMinted -= amountToBurn;
+        position.stblUSDMinted -= amountToBurn;
 
-        StblUSD.burn(burnFrom, amountToBurn);
+        i_stblUSD.burn(burnFrom, amountToBurn);
     }
 
     function _revertIfExceedsMaxLTV(uint256 positionId) internal view {
@@ -366,7 +366,7 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     }
 
     function _calcLTV(uint256 positionId) internal view returns (uint256) {
-        uint256 totalStblUSDMinted = s_positions[positionId].StblUSDMinted;
+        uint256 totalStblUSDMinted = s_positions[positionId].stblUSDMinted;
         uint256 totalCollateralValueInUsd = getPositionCollateralValue(
             positionId
         );
@@ -379,9 +379,9 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
     /////////////////////////
     // External View Functions
 
-    /// @notice Returns the address of the StblUSD token
+    /// @notice Returns the address of the stblUSD token
     function getStblUSD() external view override returns (address) {
-        return address(StblUSD);
+        return address(i_stblUSD);
     }
 
     /// @notice Returns an array of position IDs associated with a given user.
