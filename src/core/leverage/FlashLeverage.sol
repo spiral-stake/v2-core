@@ -116,7 +116,7 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
     ) internal {
         (
             ,
-            address user,
+            address owner,
             address collateralToken,
             uint256 userCollateralAmount
         ) = abi.decode(data, (Action, address, address, uint256));
@@ -148,8 +148,9 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
 
         i_stblUSD.transfer(address(i_positionManager), amountLoan + fee);
 
-        s_userLeveragePositions[user].push(
+        s_userLeveragePositions[owner].push(
             LeveragePosition({
+                owner: owner,
                 debtPositionId: positionId,
                 userCollateralDeposited: userCollateralAmount
             })
@@ -163,7 +164,7 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
     ) internal {
         (
             ,
-            address user,
+            address owner,
             uint256 debtPositionId,
             address collateralToken,
             uint256 totalCollateralDeposited
@@ -202,7 +203,7 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
             uint256 amountRemainingStblUSD = stblUSDReceived -
                 (amountLoan + fee);
             i_stblUSD.approve(address(curvePool), amountRemainingStblUSD);
-            curvePool.exchange(1, 0, amountRemainingStblUSD, 0, user);
+            curvePool.exchange(1, 0, amountRemainingStblUSD, 0, owner);
         }
     }
 
@@ -213,6 +214,7 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
      * @param desiredLtv Desired Loan-To-Value ratio (in 1e18 precision)
      */
     function leverage(
+        address owner,
         address collateralToken,
         uint256 userCollateralAmount,
         uint256 desiredLtv
@@ -238,7 +240,7 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
 
         bytes memory data = abi.encode(
             Action.LEVERAGE,
-            msg.sender,
+            owner,
             collateralToken,
             userCollateralAmount
         );
@@ -252,20 +254,30 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
     }
 
     function unleverage(uint256 leveragePositionId) external {
+        LeveragePosition memory leveragePosition = s_userLeveragePositions[
+            msg.sender
+        ][leveragePositionId];
+
         Position memory associatedDebtPosition = i_positionManager.getPosition(
-            s_userLeveragePositions[msg.sender][leveragePositionId]
-                .debtPositionId
+            leveragePosition.debtPositionId
+        );
+
+        require(
+            msg.sender == leveragePosition.owner,
+            Errors.FlashLeverage__NotThePositionOwner()
         );
 
         bytes memory data = abi.encode(
             Action.UNLEVERAGE,
-            msg.sender,
+            leveragePosition.owner,
             leveragePositionId,
             associatedDebtPosition.collateralToken,
             associatedDebtPosition.collateralDeposited
         );
 
-        delete s_userLeveragePositions[msg.sender][leveragePositionId];
+        delete s_userLeveragePositions[leveragePosition.owner][
+            leveragePositionId
+        ];
 
         i_positionManager.flashLoan(
             this,

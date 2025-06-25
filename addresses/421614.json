@@ -38,6 +38,6 @@
     }
   },
   "frxUSD": "0x226E23821aCaa0c2c0ea567f8d59e343e145AaC2",
-  "positionManagerAddress": "0xFdf0B51e0faC048E1996d78a680D24C6DD26D7e3",
+  "positionManagerAddress": "0xc5dc0C21e91CaECf9C6C41cb778b15F96Ce47C81",
   "flashLeverageAddress": "0x48501e0187756E3256560E0A7978c504D795e242"
 }

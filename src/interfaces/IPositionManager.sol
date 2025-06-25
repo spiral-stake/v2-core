@@ -51,6 +51,8 @@ interface IPositionManager is IERC3156FlashLender {
         address[] calldata priceFeedAddress
     ) external;
 
+    function updatePositionOwner(uint256 positionId, address newOwner) external;
+
     function updateTreasury(address newTreasuryAddress) external;
 
     // --- Flash Loan Functions (IERC3156FlashLender) ---

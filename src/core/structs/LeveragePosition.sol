@@ -6,6 +6,7 @@ pragma solidity 0.8.30;
  */
 
 struct LeveragePosition {
+    address owner;
     uint256 debtPositionId;
     uint256 userCollateralDeposited;
 }

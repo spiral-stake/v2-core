@@ -12,7 +12,6 @@ import {TokenHelper} from "../libraries/TokenHelper.sol";
 import {Errors} from "../libraries/Errors.sol";
 import {Math} from "../libraries/Math.sol";
 import {Position} from "../structs/Position.sol";
-
 import {console} from "forge-std/console.sol";
 
 /**
@@ -171,7 +170,10 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
         uint256 amountToMint
     ) public isGreaterThanZero(amountToMint) {
         Position storage position = s_positions[positionId];
-        require(msg.sender == position.owner);
+        require(
+            msg.sender == position.owner,
+            Errors.PositionManager__NotThePositionOwner()
+        );
 
         position.stblUSDMinted += amountToMint;
 
@@ -203,7 +205,10 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
         uint256 positionId,
         uint256 amountCollateral
     ) public isGreaterThanZero(amountCollateral) {
-        require(msg.sender == s_positions[positionId].owner);
+        require(
+            msg.sender == s_positions[positionId].owner,
+            Errors.PositionManager__NotThePositionOwner()
+        );
         _redeemCollateral(msg.sender, positionId, amountCollateral);
     }
 
@@ -316,6 +321,24 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
 
             s_priceFeeds[collateralTokens[i]] = priceFeedAddress[i];
         }
+    }
+
+    function updatePositionOwner(
+        uint256 positionId,
+        address newOwner
+    ) external override {
+        require(
+            newOwner != address(0),
+            Errors.PositionManager__CannotBeZeroAddress()
+        );
+
+        Position storage position = s_positions[positionId];
+        require(
+            msg.sender == position.owner,
+            Errors.PositionManager__NotThePositionOwner()
+        );
+        position.owner = newOwner;
+        s_userPositionIds[newOwner].push(positionId);
     }
 
     /**

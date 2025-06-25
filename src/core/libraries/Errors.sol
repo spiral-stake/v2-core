@@ -22,6 +22,8 @@ library Errors {
     error PositionManager__InvalidFlashLoanToken();
     error PositionManager__AmountCannotBeZero();
     error PositionManager__InvalidReceiverAddress();
+    error PositionManager__NotThePositionOwner();
+    error PositionManager__CannotBeZeroAddress();
 
     /////////////////////////
     // FlashLeverage
@@ -33,4 +35,5 @@ library Errors {
     error FlashLeverage__ExceedsMaxLTV();
     error FlashLeverage__ExceedsMaxLeverageLTV();
     error FlashLeverage__InsufficientCollateralToUnleverage();
+    error FlashLeverage__NotThePositionOwner();
 }
