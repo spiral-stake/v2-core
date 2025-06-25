@@ -5,6 +5,12 @@
     "name": "Spiral Stake USD",
     "symbol": "stblUSD"
   },
+  "frxUSD": {
+    "address": "0x226E23821aCaa0c2c0ea567f8d59e343e145AaC2",
+    "decimals": "18",
+    "name": "Frax USD",
+    "symbol": "frxUSD"
+  },
   "collateralTokens": {
     "0x3d3aF2eCfaa71343B15aCf5D64d6fbBC2B22AD26": {
       "address": "0x3d3aF2eCfaa71343B15aCf5D64d6fbBC2B22AD26",
@@ -37,7 +43,9 @@
       "symbol": "sUSDf"
     }
   },
-  "frxUSD": "0x226E23821aCaa0c2c0ea567f8d59e343e145AaC2",
-  "positionManagerAddress": "0xc5dc0C21e91CaECf9C6C41cb778b15F96Ce47C81",
-  "flashLeverageAddress": "0x48501e0187756E3256560E0A7978c504D795e242"
+
+  "positionManagerAddress": "0x69e09F997090fcA785490e38C65818C387AD1f6F",
+  "flashLeverageAddress": "0x0B4D1aBabF658C753BeFA976160df440cCb12E5a",
+  "borrowSwapperAddress": "0x2aC3D300951B679Db309D074cC17A80DbcC543f0",
+  "leverageWrapperAddress": "0x505d1961250578479f93DFE580b2eacf8b9f6bB7"
 }
