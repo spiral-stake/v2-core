@@ -48,17 +48,17 @@ library Math {
         }
     }
 
-    function standardizeDecimals(
-        uint256 value,
-        uint256 tokendecimals,
-        uint256 standardDecimals
+    function scaleTo(
+        uint256 amount,
+        uint8 fromDecimals,
+        uint8 toDecimals
     ) internal pure returns (uint256) {
-        if (tokendecimals == standardDecimals) return value;
-
-        if (tokendecimals < standardDecimals) {
-            return value * (10 ** (standardDecimals - tokendecimals));
+        if (fromDecimals > toDecimals) {
+            return amount / 10 ** (fromDecimals - toDecimals);
+        } else if (fromDecimals < toDecimals) {
+            return amount * 10 ** (toDecimals - fromDecimals);
         } else {
-            return value / (10 ** (tokendecimals - standardDecimals));
+            return amount;
         }
     }
 }

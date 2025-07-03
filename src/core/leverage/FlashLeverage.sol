@@ -1,25 +1,30 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
-import {IStblUSD, IERC20} from "../../interfaces/IStblUSD.sol";
-import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
-import {IPositionManager} from "../../interfaces/IPositionManager.sol";
-import {Errors} from "../libraries/Errors.sol";
-import {Math} from "../libraries/Math.sol";
+import {IMorpho, MarketParams, Id, Position} from "@morpho/interfaces/IMorpho.sol";
+import {MorphoLib} from "@morpho/libraries/periphery/MorphoLib.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
-import {ICurveCryptoSwap} from "../../interfaces/ICurveCryptoSwap.sol";
-import {Position} from "../structs/Position.sol"; // Debt Positions from PositionManager
+import {IMorphoFlashLoanCallback} from "@morpho/interfaces/IMorphoCallbacks.sol";
+import {IPAllActionV3} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
+import {IPMarket} from "@pendle/core-v2/contracts/interfaces/IPMarket.sol";
+import {Errors} from "../libraries/Errors.sol";
+import {Math} from "../libraries/Math.sol";
+import {IOracleRouter} from "../../interfaces/IOracleRouter.sol";
+import {PendleParams} from "../structs/PendleParams.sol";
 import {LeveragePosition} from "../structs/LeveragePosition.sol";
+import "./SwapAggregator.sol";
 
 import {console} from "forge-std/console.sol";
 
-/**
- * @title FlashLeverage
- * @notice This contract allows users to leverage their yield-bearing assets using stblUSD-based flash loans.
- *         It opens a larger position in a single atomic transaction using the ERC-3156 flash loan standard.
- */
-contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
+contract FlashLeverage is
+    IMorphoFlashLoanCallback,
+    SwapAggregator,
+    TokenHelper,
+    Ownable2Step
+{
     using Math for uint256;
 
     enum Action {
@@ -30,290 +35,239 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
     /////////////////////////
     // Constants and Immutables
 
-    /// @notice stblUSD stablecoin contract used for CDP-based leveraging
-    IStblUSD private immutable i_stblUSD;
+    // USD as the quote assets in price feeds
+    address private constant USD = 0x0000000000000000000000000000000000000348;
+    uint256 private constant LIQUIDATION_BUFFER = 25e15; // 2.5%, as 100% => 1e18
 
-    /// @notice PositionManager contract that handles debt positions for stblUSD
-    IPositionManager private immutable i_positionManager; // Is also the lender of stblUSD flash loan
-
-    // 80% max LTV gives upto 5x leverage, for optimal returns
-    uint256 public constant MAX_LEVERAGE_LTV = 800e15;
+    IMorpho private immutable i_morpho;
+    IPAllActionV3 private immutable i_pendleRouter;
+    IOracleRouter private immutable i_oracleRouter;
 
     /////////////////////////
     // Storage
 
-    mapping(address collateralToken => address curvePool) private s_curvePools;
-
-    address private s_treasury;
-
+    mapping(address collateralToken => MarketParams) private s_morphoParams;
+    mapping(address collateralToken => PendleParams) private s_pendleParams;
     mapping(address user => LeveragePosition[]) private s_userLeveragePositions;
 
-    /////////////////////////
-    // Modifiers
-
-    modifier isSupportedCollateralToken(address token) {
-        require(
-            s_curvePools[token] != address(0),
-            Errors.PositionManager__UnsupportedCollateralToken()
-        );
-        _;
-    }
-
     constructor(
-        address positionManagerAddress,
-        address treasury
+        address morphoAddress,
+        address pendleRouter,
+        address oracleRouter
     ) Ownable(msg.sender) {
-        i_positionManager = IPositionManager(positionManagerAddress);
-        i_stblUSD = IStblUSD(i_positionManager.getStblUSD());
-        s_treasury = treasury;
+        i_morpho = IMorpho(morphoAddress);
+        i_pendleRouter = IPAllActionV3(pendleRouter);
+        i_oracleRouter = IOracleRouter(oracleRouter);
     }
 
-    /**
-     * @notice Callback function called by the stblUSD lender during a flash loan
-     * @dev Decodes leverage intent, swaps stblUSD to collateral, opens a leveraged position, and repays loan.
-     * @param initiator Must be this contract
-     * @param token Token being borrowed (must be stblUSD)
-     * @param amountLoan Amount of stblUSD borrowed
-     * @param fee Flash loan fee
-     * @param data ABI-encoded parameters: (collateralToken, userCollateralAmount)
-     * @return bytes32 Confirmation of successful flash loan callback
-     */
-    function onFlashLoan(
-        address initiator,
-        address token,
-        uint256 amountLoan,
-        uint256 fee,
-        bytes calldata data
-    ) external override returns (bytes32) {
+    function leverage(
+        address onBehalfOf,
+        address collateralToken,
+        uint256 amountCollateral,
+        uint256 desiredLtv,
+        ApproxParams memory approxParams,
+        address pendleSwap,
+        SwapData memory swapData
+    ) external {
+        MarketParams memory morphoParams = s_morphoParams[collateralToken];
         require(
-            msg.sender == address(i_positionManager),
-            Errors.FlashLeverage__UntrustedLender()
-        );
-        require(
-            initiator == address(this),
-            Errors.FlashLeverage__UntrustedLoanInitiator()
-        );
-        require(
-            token == address(i_stblUSD),
-            Errors.FlashLeverage__InvalidLoanToken()
+            desiredLtv <= getMaxLtv(collateralToken),
+            Errors.FlashLeverage__ExceedsMaxLeverageLTV()
         );
 
-        Action action = abi.decode(data, (Action));
+        _transferIn(collateralToken, msg.sender, amountCollateral);
 
-        if (action == Action.LEVERAGE) {
-            _handleLeverage(amountLoan, fee, data);
-        } else {
-            _handleUnleverage(amountLoan, fee, data);
-        }
+        uint8 loanTokenDecimals = IERC20Metadata(morphoParams.loanToken)
+            .decimals();
 
-        return keccak256("ERC3156FlashBorrower.onFlashLoan");
-    }
-
-    function _handleLeverage(
-        uint256 amountLoan,
-        uint256 fee,
-        bytes calldata data
-    ) internal {
-        (
-            ,
-            address owner,
-            address collateralToken,
-            uint256 userCollateralAmount
-        ) = abi.decode(data, (Action, address, address, uint256));
-
-        ICurveCryptoSwap curvePool = ICurveCryptoSwap(
-            s_curvePools[collateralToken]
-        );
-
-        i_stblUSD.approve(address(curvePool), amountLoan);
-        uint256 flashSwappedCollateral = curvePool.exchange(
-            1,
-            0,
-            amountLoan,
-            0,
-            address(this)
-        );
-
-        uint256 totalCollateral = userCollateralAmount + flashSwappedCollateral;
-
-        IERC20(collateralToken).approve(
-            address(i_positionManager),
-            totalCollateral
-        );
-        uint256 positionId = i_positionManager.openPosition(
+        uint256 amountLoan = calcLoanAmount(
             collateralToken,
-            totalCollateral,
-            amountLoan + fee
+            amountCollateral,
+            desiredLtv
+        ).scaleTo(18, loanTokenDecimals);
+
+        bytes memory data = abi.encode(
+            Action.LEVERAGE,
+            onBehalfOf,
+            collateralToken,
+            amountCollateral,
+            approxParams,
+            pendleSwap,
+            swapData
         );
 
-        i_stblUSD.transfer(address(i_positionManager), amountLoan + fee);
+        i_morpho.flashLoan(morphoParams.loanToken, amountLoan, data);
 
-        s_userLeveragePositions[owner].push(
+        s_userLeveragePositions[msg.sender].push(
             LeveragePosition({
-                owner: owner,
-                debtPositionId: positionId,
-                userCollateralDeposited: userCollateralAmount
+                collateralToken: collateralToken,
+                amountUserCollateral: amountCollateral,
+                ltv: desiredLtv
             })
         );
     }
 
-    function _handleUnleverage(
-        uint256 amountLoan,
-        uint256 fee,
-        bytes calldata data
-    ) internal {
-        (
-            ,
-            address owner,
-            uint256 debtPositionId,
-            address collateralToken,
-            uint256 totalCollateralDeposited
-        ) = abi.decode(data, (Action, address, uint256, address, uint256));
-
-        i_positionManager.redeemCollateralAndBurnStblUSD(
-            debtPositionId,
-            totalCollateralDeposited,
-            amountLoan
-        );
-
-        ICurveCryptoSwap curvePool = ICurveCryptoSwap(
-            s_curvePools[collateralToken]
-        );
-
-        IERC20(collateralToken).approve(
-            address(curvePool),
-            totalCollateralDeposited
-        );
-        uint256 stblUSDReceived = curvePool.exchange(
-            0,
-            1,
-            totalCollateralDeposited,
-            0,
-            address(this)
-        );
-
-        require(
-            stblUSDReceived >= amountLoan + fee,
-            Errors.FlashLeverage__InsufficientCollateralToUnleverage()
-        );
-
-        i_stblUSD.transfer(address(i_positionManager), amountLoan + fee);
-
-        if (stblUSDReceived > amountLoan + fee) {
-            uint256 amountRemainingStblUSD = stblUSDReceived -
-                (amountLoan + fee);
-            i_stblUSD.approve(address(curvePool), amountRemainingStblUSD);
-            curvePool.exchange(1, 0, amountRemainingStblUSD, 0, owner);
-        }
-    }
-
-    /**
-     * @notice Public function to initiate a flash loan and create leverage position
-     * @param collateralToken Address of the token to leverage
-     * @param userCollateralAmount Amount of collateral provided by the user
-     * @param desiredLtv Desired Loan-To-Value ratio (in 1e18 precision)
-     */
-    function leverage(
-        address owner,
-        address collateralToken,
-        uint256 userCollateralAmount,
-        uint256 desiredLtv
-    ) external isSupportedCollateralToken(collateralToken) {
-        require(
-            desiredLtv <= MAX_LEVERAGE_LTV,
-            Errors.FlashLeverage__ExceedsMaxLeverageLTV()
-        );
-
-        _transferIn(collateralToken, msg.sender, userCollateralAmount);
-
-        uint256 calculatedLoanAmount = _calculateLoanAmount(
-            collateralToken,
-            userCollateralAmount,
-            desiredLtv
-        );
-
-        _revertIfExceedsMaxLtv(
-            collateralToken,
-            calculatedLoanAmount,
-            userCollateralAmount
-        );
-
-        bytes memory data = abi.encode(
-            Action.LEVERAGE,
-            owner,
-            collateralToken,
-            userCollateralAmount
-        );
-
-        i_positionManager.flashLoan(
-            this,
-            address(i_stblUSD),
-            calculatedLoanAmount,
-            data
-        );
-    }
-
-    function unleverage(uint256 leveragePositionId) external {
+    function unleverage(
+        uint256 leveragePositionId,
+        ApproxParams memory approxParams,
+        address pendleSwap,
+        SwapData memory swapData
+    ) external {
         LeveragePosition memory leveragePosition = s_userLeveragePositions[
             msg.sender
         ][leveragePositionId];
 
-        Position memory associatedDebtPosition = i_positionManager.getPosition(
-            leveragePosition.debtPositionId
-        );
-
-        require(
-            msg.sender == leveragePosition.owner,
-            Errors.FlashLeverage__NotThePositionOwner()
-        );
+        MarketParams memory morphoParams = s_morphoParams[
+            leveragePosition.collateralToken
+        ];
 
         bytes memory data = abi.encode(
             Action.UNLEVERAGE,
-            leveragePosition.owner,
+            msg.sender,
             leveragePositionId,
-            associatedDebtPosition.collateralToken,
-            associatedDebtPosition.collateralDeposited
+            leveragePosition.collateralToken,
+            leveragePosition.amountUserCollateral
         );
 
-        delete s_userLeveragePositions[leveragePosition.owner][
-            leveragePositionId
-        ];
+        delete s_userLeveragePositions[msg.sender][leveragePositionId];
 
-        i_positionManager.flashLoan(
-            this,
-            address(i_stblUSD),
-            associatedDebtPosition.stblUSDMinted,
-            data
-        );
+        i_morpho.flashLoan(morphoParams.loanToken, 12, data); // Amount Loan needs to change and Is incomplete function
     }
 
-    /**
-     * @notice Add or remove supported collateral tokens and their Curve pools
-     * @param collateralTokens List of collateral token addresses
-     * @param curvePools List of Curve pool addresses; use address(0) to remove support
-     */
-    function addSupportedCollateralTokens(
-        address[] memory collateralTokens,
-        address[] memory curvePools
-    ) external onlyOwner {
-        require(
-            collateralTokens.length == curvePools.length,
-            "Length Mismatch"
-        );
+    function onMorphoFlashLoan(
+        uint256 amountLoan,
+        bytes memory data
+    ) external override {
+        require(msg.sender == address(i_morpho));
 
-        for (uint256 i = 0; i < collateralTokens.length; i++) {
-            require(
-                collateralTokens[i] != address(0),
-                Errors.PositionManager__InvalidTokenAddress()
+        (
+            Action action,
+            address onBehalfOf,
+            address collateralToken,
+            uint256 amountUserCollateral,
+            ApproxParams memory approxParams,
+            address pendleSwap,
+            SwapData memory swapData
+        ) = abi.decode(
+                data,
+                (
+                    Action,
+                    address,
+                    address,
+                    uint256,
+                    ApproxParams,
+                    address,
+                    SwapData
+                )
             );
-            s_curvePools[collateralTokens[i]] = curvePools[i];
-        }
+
+        PendleParams memory pendleParams = s_pendleParams[collateralToken];
+        MarketParams memory morphoParams = s_morphoParams[collateralToken];
+
+        if (action == Action.LEVERAGE) {
+            _handleLeverage(
+                onBehalfOf,
+                morphoParams,
+                pendleParams,
+                amountUserCollateral,
+                amountLoan,
+                approxParams,
+                pendleSwap,
+                swapData
+            );
+        } else {}
+
+        _safeApprove(morphoParams.loanToken, address(i_morpho), amountLoan);
     }
 
-    /**
-     * @notice Disabled renounceOwnership for upgradeability and admin control
-     */
-    function renounceOwnership() public override {}
+    /////////////////////////
+    // Internal Functions
+
+    function _handleLeverage(
+        address onBehalfOf,
+        MarketParams memory morphoParams,
+        PendleParams memory pendleParams,
+        uint256 amountUserCollateral,
+        uint256 amountLoan,
+        ApproxParams memory approxParams,
+        address pendleSwap,
+        SwapData memory swapData
+    ) internal {
+        // Swap USDC loan -> PT collateral
+        _safeApprove(
+            morphoParams.loanToken,
+            address(i_pendleRouter),
+            amountLoan
+        );
+        (uint256 amountSwappedCollateral, , ) = i_pendleRouter
+            .swapExactTokenForPt(
+                address(this),
+                pendleParams.market,
+                0,
+                approxParams,
+                createTokenInputSimple(
+                    morphoParams.loanToken,
+                    amountLoan,
+                    pendleParams.underlyingToken,
+                    pendleSwap,
+                    swapData
+                ),
+                createEmptyLimitOrderData()
+            );
+
+        uint256 amountTotalCollateral = amountUserCollateral +
+            amountSwappedCollateral;
+
+        // Supply total collateral to amount Loan USDC against collateral PT
+        _morphoSupplyCollateral(morphoParams, amountTotalCollateral);
+        _morphoBorrow(morphoParams, amountLoan);
+    }
+
+    function _handleUnleverage(
+        address onBehalfOf,
+        MarketParams memory morphoParams,
+        PendleParams memory pendleParams,
+        uint256 amountCollateral,
+        uint256 amountLoan
+    ) internal {}
+
+    function _morphoSupplyCollateral(
+        MarketParams memory morphoParams,
+        uint256 amount
+    ) internal {
+        address onBehalfOf = msg.sender;
+
+        _safeApprove(morphoParams.collateralToken, address(i_morpho), amount);
+        i_morpho.supplyCollateral(morphoParams, amount, address(this), hex"");
+    }
+
+    function _morphoBorrow(
+        MarketParams memory morphoParams,
+        uint256 amount
+    ) internal returns (uint256 assetsBorrowed, uint256 sharesBorrowed) {
+        uint256 shares;
+        address onBehalf = address(this);
+        address receiver = address(this);
+
+        (assetsBorrowed, sharesBorrowed) = i_morpho.borrow(
+            morphoParams,
+            amount,
+            shares,
+            onBehalf,
+            receiver
+        );
+    }
+
+    function addSupportedCollateralToken(
+        address collateralToken,
+        bytes32 morphoMarketId,
+        PendleParams memory pendleParams
+    ) external onlyOwner {
+        s_morphoParams[collateralToken] = i_morpho.idToMarketParams(
+            Id.wrap(morphoMarketId)
+        );
+        s_pendleParams[collateralToken] = pendleParams;
+    }
 
     /**
      * @dev Internal function to calculate flash loan amount based on user's collateral and Ltv
@@ -321,54 +275,35 @@ contract FlashLeverage is IERC3156FlashBorrower, TokenHelper, Ownable2Step {
      * @param userCollateralAmount Amount of collateral supplied by user
      * @param ltv Desired Loan-To-Value ratio (1e18 precision)
      * @return amountToBorrow stblUSD amount to borrow
+     * @notice Important, here we roughly assume that USDC, USDT (loanToken) value is $1
      */
-    function _calculateLoanAmount(
+    function calcLoanAmount(
         address collateralToken,
         uint256 userCollateralAmount,
         uint256 ltv
-    ) private view returns (uint256) {
-        uint256 userCollateralInUsd = i_positionManager.getTokenUsdValue(
+    ) public view returns (uint256) {
+        uint256 userCollateralInUsd = getTokenUsdValue(
             collateralToken,
             userCollateralAmount
         );
 
-        return
-            (Math.ONE.mulDown(userCollateralInUsd).divDown(Math.ONE - ltv)) -
-            userCollateralInUsd;
+        uint256 loanAmount = Math.ONE.mulDown(userCollateralInUsd).divDown(
+            Math.ONE - ltv
+        );
+
+        return loanAmount - userCollateralInUsd;
     }
 
-    /**
-     * @dev Internal check to ensure Ltv doesn't exceed protocol max limit
-     * @param collateralToken Token used as collateral
-     * @param flashLoanAmount stblUSD amount borrowed via flash loan
-     * @param userCollateralAmount User-supplied collateral amount
-     */
-    function _revertIfExceedsMaxLtv(
-        address collateralToken,
-        uint256 flashLoanAmount,
-        uint256 userCollateralAmount
-    ) private view {
-        uint256 flashConvertedCollateral = ICurveCryptoSwap(
-            s_curvePools[collateralToken]
-        ).get_dy(1, 0, flashLoanAmount); // 1: stblUSD, 0: Collateral
-
-        uint256 totalCollateralValueInUsd = i_positionManager.getTokenUsdValue(
-            collateralToken,
-            flashConvertedCollateral + userCollateralAmount
-        );
-
-        uint256 effectiveLtv = flashLoanAmount.divDown(
-            totalCollateralValueInUsd
-        );
-
-        require(
-            effectiveLtv <= i_positionManager.MAX_LTV(),
-            Errors.FlashLeverage__ExceedsMaxLTV()
-        );
+    function getTokenUsdValue(
+        address token,
+        uint256 amount
+    ) public view returns (uint256) {
+        return i_oracleRouter.getQuote(amount, token, USD);
     }
 
-    /////////////////////////
-    // Constants and Immutables
+    function getMaxLtv(address collateralToken) public view returns (uint256) {
+        return s_morphoParams[collateralToken].lltv - LIQUIDATION_BUFFER;
+    }
 
     function getUserLeveragePositions(
         address user

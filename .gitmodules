@@ -10,3 +10,9 @@
 [submodule "lib/chainlink"]
 	path = lib/chainlink
 	url = https://github.com/smartcontractkit/chainlink
+[submodule "lib/morpho-blue"]
+	path = lib/morpho-blue
+	url = https://github.com/morpho-org/morpho-blue
+[submodule "lib/pendle-core-v2-public"]
+	path = lib/pendle-core-v2-public
+	url = https://github.com/pendle-finance/pendle-core-v2-public

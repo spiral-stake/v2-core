@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import {Script} from "forge-std/Script.sol";
 import {HelperConfig, ChainConfig} from "./HelperConfig.s.sol";
 import {IERC20Mock} from "../src/interfaces/IERC20Mock.sol";
-import {FlashLeverage} from "../src/core/leverage/FlashLeverage.sol";
+import {OldFlashLeverage} from "../src/core/leverage/OldFlashLeverage.sol";
 import {DeployStblUSD, PositionManager} from "../script/DeployStblUSD.s.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
@@ -18,10 +18,10 @@ contract DeployFlashLeverage is Script {
         vm.startBroadcast();
 
         flashLeverageAddress = address(
-            new FlashLeverage(positionManager, treasury)
+            new OldFlashLeverage(positionManager, treasury)
         );
 
-        FlashLeverage(flashLeverageAddress).addSupportedCollateralTokens(
+        OldFlashLeverage(flashLeverageAddress).addSupportedCollateralTokens(
             collateralTokens,
             curvePools
         );
