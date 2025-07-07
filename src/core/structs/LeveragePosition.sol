@@ -5,14 +5,10 @@ pragma solidity 0.8.30;
  * @notice Leverage Position
  */
 
-struct LevPosition {
-    address owner;
-    uint256 debtPositionId;
-    uint256 userCollateralDeposited;
-}
-
 struct LeveragePosition {
     address collateralToken;
+    address loanToken;
     uint256 amountUserCollateral;
-    uint256 ltv; // Needs to change
+    uint256 amountTotalCollateral;
+    uint256 sharesBorrowed;
 }

@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
+library Error {
+    error FlashLeverage__InvalidAmountCollateral();
+    error FlashLeverage__UnsupportedCollateralToken();
+    error FlashLeverage__UntrustedLender();
+    error FlashLeverage__ExceedsMaxLeverageLTV();
+    error FlashLeverage__PositionDoesNotExist();
+    error FlashLeverage__PositionAlreadyUnleveraged();
+}
+
 library Errors {
     /////////////////////////
-    // StblUSD
-
-    error StblUSD__CallerNotAManagerAddress();
-
-    /////////////////////////
     // PositionManager
-
     error PositionManager__ValueCannotBeZero();
     error PositionManager__UnsupportedCollateralToken();
     error PositionManager__MintExceedsMaxLTV();
@@ -26,14 +29,6 @@ library Errors {
     error PositionManager__CannotBeZeroAddress();
 
     /////////////////////////
-    // FlashLeverage
-
-    error FlashLeverage__UntrustedLender();
-    error FlashLeverage__UntrustedLoanInitiator();
-    error FlashLeverage__InvalidLoanToken();
-    error FlashLeverage__InvalidLoanAmount();
-    error FlashLeverage__ExceedsMaxLTV();
-    error FlashLeverage__ExceedsMaxLeverageLTV();
-    error FlashLeverage__InsufficientCollateralToUnleverage();
-    error FlashLeverage__NotThePositionOwner();
+    // StblUSD
+    error StblUSD__CallerNotAManagerAddress();
 }

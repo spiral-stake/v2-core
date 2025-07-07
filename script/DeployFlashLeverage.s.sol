@@ -4,26 +4,26 @@ pragma solidity 0.8.30;
 import {Script} from "forge-std/Script.sol";
 import {HelperConfig, ChainConfig} from "./HelperConfig.s.sol";
 import {IERC20Mock} from "../src/interfaces/IERC20Mock.sol";
-import {OldFlashLeverage} from "../src/core/leverage/OldFlashLeverage.sol";
+import {FlashLeverage} from "../src/core/leverage/FlashLeverage.sol";
 import {DeployStblUSD, PositionManager} from "../script/DeployStblUSD.s.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
 
 contract DeployFlashLeverage is Script {
     function run(
-        address positionManager,
-        address[] memory collateralTokens,
-        address[] memory curvePools,
-        address treasury
+        address morpho,
+        address pendleRouter,
+        address oracleRouter,
+        CollateralTokenConfig[] memory configs
     ) external returns (address flashLeverageAddress) {
         vm.startBroadcast();
 
         flashLeverageAddress = address(
-            new OldFlashLeverage(positionManager, treasury)
+            new FlashLeverage(morpho, pendleRouter, oracleRouter)
         );
 
-        OldFlashLeverage(flashLeverageAddress).addSupportedCollateralTokens(
-            collateralTokens,
-            curvePools
+        FlashLeverage(flashLeverageAddress).addSupportedCollateralTokens(
+            configs
         );
 
         vm.stopBroadcast();

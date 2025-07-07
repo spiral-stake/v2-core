@@ -47,4 +47,12 @@ abstract contract TokenHelper {
             "Safe Approve"
         );
     }
+
+    function _forceApprove(
+        address token,
+        address spender,
+        uint256 value
+    ) internal {
+        IERC20(token).forceApprove(spender, value);
+    }
 }

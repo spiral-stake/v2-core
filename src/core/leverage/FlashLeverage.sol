@@ -1,299 +1,353 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
-import {IMorpho, MarketParams, Id, Position} from "@morpho/interfaces/IMorpho.sol";
-import {MorphoLib} from "@morpho/libraries/periphery/MorphoLib.sol";
-import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
-import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
-import {TokenHelper} from "../libraries/TokenHelper.sol";
-import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
-import {IMorphoFlashLoanCallback} from "@morpho/interfaces/IMorphoCallbacks.sol";
-import {IPAllActionV3} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
-import {IPMarket} from "@pendle/core-v2/contracts/interfaces/IPMarket.sol";
-import {Errors} from "../libraries/Errors.sol";
-import {Math} from "../libraries/Math.sol";
-import {IOracleRouter} from "../../interfaces/IOracleRouter.sol";
-import {PendleParams} from "../structs/PendleParams.sol";
+import {SwapAggregator, SwapParams, SwapData, ApproxParams, LimitOrderData} from "./SwapAggregator.sol";
+import {MarketPositionManager, MarketParams, Id} from "./MarketPositionManager.sol";
 import {LeveragePosition} from "../structs/LeveragePosition.sol";
-import "./SwapAggregator.sol";
+import {CollateralTokenConfig} from "../structs/CollateralTokenConfig.sol";
+import {IOracleRouter} from "../../interfaces/IOracleRouter.sol";
+import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
+import {Math} from "../libraries/Math.sol";
+import {Error} from "../libraries/Errors.sol";
 
-import {console} from "forge-std/console.sol";
+/**
+ * @notice Loan token is currently fixed to USDC
+ */
 
-contract FlashLeverage is
-    IMorphoFlashLoanCallback,
-    SwapAggregator,
-    TokenHelper,
-    Ownable2Step
-{
+contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
     using Math for uint256;
-
-    enum Action {
-        LEVERAGE,
-        UNLEVERAGE
-    }
 
     /////////////////////////
     // Constants and Immutables
 
     // USD as the quote assets in price feeds
-    address private constant USD = 0x0000000000000000000000000000000000000348;
-    uint256 private constant LIQUIDATION_BUFFER = 25e15; // 2.5%, as 100% => 1e18
+    address public constant USD = 0x0000000000000000000000000000000000000348;
+    uint256 public constant LIQUIDATION_BUFFER = 50e15; // 5%, as 100% => 1e18
+    uint256 public constant AMOUNT_COLLATERAL_CAP = 100e18;
 
-    IMorpho private immutable i_morpho;
-    IPAllActionV3 private immutable i_pendleRouter;
-    IOracleRouter private immutable i_oracleRouter;
+    IOracleRouter public immutable i_oracleRouter;
 
     /////////////////////////
     // Storage
 
-    mapping(address collateralToken => MarketParams) private s_morphoParams;
-    mapping(address collateralToken => PendleParams) private s_pendleParams;
     mapping(address user => LeveragePosition[]) private s_userLeveragePositions;
+
+    /////////////////////////
+    // Events
+
+    event LeveragePositionOpened(
+        address indexed user,
+        uint256 indexed positionId,
+        address collateralToken,
+        address loanToken,
+        uint256 amountUserCollateral,
+        uint256 amountTotalCollateral,
+        uint256 sharesBorrowed
+    );
+
+    event LeveragePositionClosed(
+        address indexed user,
+        uint256 indexed positionId,
+        uint256 indexed amountReturned
+    );
+
+    event CollateralTokenAdded(
+        address indexed token,
+        address indexed pendleMarket,
+        bytes32 indexed morphoMarketId
+    );
+
+    /////////////////////////
+    // Modifiers
+
+    modifier validateAmountCollateral(uint256 value) {
+        require(
+            value > 0 && value <= AMOUNT_COLLATERAL_CAP,
+            Error.FlashLeverage__InvalidAmountCollateral()
+        );
+        _;
+    }
+
+    /////////////////////////
+    // Constructor
 
     constructor(
         address morphoAddress,
         address pendleRouter,
         address oracleRouter
-    ) Ownable(msg.sender) {
-        i_morpho = IMorpho(morphoAddress);
-        i_pendleRouter = IPAllActionV3(pendleRouter);
+    )
+        Ownable(msg.sender)
+        SwapAggregator(pendleRouter)
+        MarketPositionManager(morphoAddress)
+    {
         i_oracleRouter = IOracleRouter(oracleRouter);
     }
+
+    /////////////////////////
+    // External Functions
 
     function leverage(
         address onBehalfOf,
         address collateralToken,
         uint256 amountCollateral,
         uint256 desiredLtv,
-        ApproxParams memory approxParams,
         address pendleSwap,
-        SwapData memory swapData
-    ) external {
-        MarketParams memory morphoParams = s_morphoParams[collateralToken];
+        SwapData memory swapData,
+        ApproxParams memory approxParams
+    ) external validateAmountCollateral(amountCollateral) {
         require(
             desiredLtv <= getMaxLtv(collateralToken),
-            Errors.FlashLeverage__ExceedsMaxLeverageLTV()
+            Error.FlashLeverage__ExceedsMaxLeverageLTV()
+        );
+        address loanToken = s_marketParams[collateralToken].loanToken;
+        require(
+            loanToken != address(0),
+            Error.FlashLeverage__UnsupportedCollateralToken()
         );
 
         _transferIn(collateralToken, msg.sender, amountCollateral);
 
-        uint8 loanTokenDecimals = IERC20Metadata(morphoParams.loanToken)
-            .decimals();
-
         uint256 amountLoan = calcLoanAmount(
             collateralToken,
+            loanToken,
             amountCollateral,
             desiredLtv
-        ).scaleTo(18, loanTokenDecimals);
+        );
+
+        uint256 positionId = s_userLeveragePositions[onBehalfOf].length;
+        s_userLeveragePositions[onBehalfOf].push(
+            LeveragePosition({
+                collateralToken: collateralToken,
+                loanToken: loanToken,
+                amountUserCollateral: amountCollateral,
+                amountTotalCollateral: 0, // gets set in _handleLeverage
+                sharesBorrowed: 0 // gets set in _handleLeverage
+            })
+        );
 
         bytes memory data = abi.encode(
             Action.LEVERAGE,
             onBehalfOf,
-            collateralToken,
-            amountCollateral,
-            approxParams,
+            positionId,
             pendleSwap,
-            swapData
+            swapData,
+            approxParams
         );
 
-        i_morpho.flashLoan(morphoParams.loanToken, amountLoan, data);
-
-        s_userLeveragePositions[msg.sender].push(
-            LeveragePosition({
-                collateralToken: collateralToken,
-                amountUserCollateral: amountCollateral,
-                ltv: desiredLtv
-            })
-        );
+        i_morpho.flashLoan(loanToken, amountLoan, data);
     }
 
     function unleverage(
-        uint256 leveragePositionId,
-        ApproxParams memory approxParams,
+        uint256 positionId,
         address pendleSwap,
-        SwapData memory swapData
+        SwapData memory swapData,
+        LimitOrderData memory limitOrderData
     ) external {
-        LeveragePosition memory leveragePosition = s_userLeveragePositions[
-            msg.sender
-        ][leveragePositionId];
+        address _msgSender = msg.sender;
 
-        MarketParams memory morphoParams = s_morphoParams[
-            leveragePosition.collateralToken
+        require(
+            positionId < s_userLeveragePositions[_msgSender].length,
+            Error.FlashLeverage__PositionDoesNotExist()
+        );
+        LeveragePosition memory position = s_userLeveragePositions[_msgSender][
+            positionId
         ];
+        require(
+            position.loanToken != address(0),
+            Error.FlashLeverage__PositionAlreadyUnleveraged()
+        );
 
         bytes memory data = abi.encode(
             Action.UNLEVERAGE,
-            msg.sender,
-            leveragePositionId,
-            leveragePosition.collateralToken,
-            leveragePosition.amountUserCollateral
+            _msgSender,
+            positionId,
+            pendleSwap,
+            swapData,
+            limitOrderData
         );
 
-        delete s_userLeveragePositions[msg.sender][leveragePositionId];
+        uint256 amountLoan = getRepayAmount(
+            position.collateralToken,
+            position.sharesBorrowed
+        );
 
-        i_morpho.flashLoan(morphoParams.loanToken, 12, data); // Amount Loan needs to change and Is incomplete function
-    }
+        i_morpho.flashLoan(position.loanToken, amountLoan, data);
 
-    function onMorphoFlashLoan(
-        uint256 amountLoan,
-        bytes memory data
-    ) external override {
-        require(msg.sender == address(i_morpho));
-
-        (
-            Action action,
-            address onBehalfOf,
-            address collateralToken,
-            uint256 amountUserCollateral,
-            ApproxParams memory approxParams,
-            address pendleSwap,
-            SwapData memory swapData
-        ) = abi.decode(
-                data,
-                (
-                    Action,
-                    address,
-                    address,
-                    uint256,
-                    ApproxParams,
-                    address,
-                    SwapData
-                )
-            );
-
-        PendleParams memory pendleParams = s_pendleParams[collateralToken];
-        MarketParams memory morphoParams = s_morphoParams[collateralToken];
-
-        if (action == Action.LEVERAGE) {
-            _handleLeverage(
-                onBehalfOf,
-                morphoParams,
-                pendleParams,
-                amountUserCollateral,
-                amountLoan,
-                approxParams,
-                pendleSwap,
-                swapData
-            );
-        } else {}
-
-        _safeApprove(morphoParams.loanToken, address(i_morpho), amountLoan);
+        delete s_userLeveragePositions[_msgSender][positionId];
     }
 
     /////////////////////////
     // Internal Functions
 
     function _handleLeverage(
-        address onBehalfOf,
-        MarketParams memory morphoParams,
-        PendleParams memory pendleParams,
-        uint256 amountUserCollateral,
         uint256 amountLoan,
-        ApproxParams memory approxParams,
-        address pendleSwap,
-        SwapData memory swapData
-    ) internal {
-        // Swap USDC loan -> PT collateral
-        _safeApprove(
-            morphoParams.loanToken,
-            address(i_pendleRouter),
-            amountLoan
-        );
-        (uint256 amountSwappedCollateral, , ) = i_pendleRouter
-            .swapExactTokenForPt(
-                address(this),
-                pendleParams.market,
-                0,
-                approxParams,
-                createTokenInputSimple(
-                    morphoParams.loanToken,
-                    amountLoan,
-                    pendleParams.underlyingToken,
-                    pendleSwap,
-                    swapData
-                ),
-                createEmptyLimitOrderData()
+        bytes memory data
+    ) internal override {
+        (
+            ,
+            address user,
+            uint256 positionId,
+            address pendleSwap,
+            SwapData memory swapData,
+            ApproxParams memory approxParams
+        ) = abi.decode(
+                data,
+                (Action, address, uint256, address, SwapData, ApproxParams)
             );
 
-        uint256 amountTotalCollateral = amountUserCollateral +
-            amountSwappedCollateral;
+        LeveragePosition storage position = s_userLeveragePositions[user][
+            positionId
+        ];
 
-        // Supply total collateral to amount Loan USDC against collateral PT
-        _morphoSupplyCollateral(morphoParams, amountTotalCollateral);
-        _morphoBorrow(morphoParams, amountLoan);
+        // Swap USDC loan -> PT collateral
+        uint256 amountSwappedCollateralToken = _swapLoanTokenToCollateralToken(
+            position.loanToken,
+            position.collateralToken,
+            amountLoan,
+            pendleSwap,
+            swapData,
+            approxParams
+        );
+        position.amountTotalCollateral =
+            position.amountUserCollateral +
+            amountSwappedCollateralToken;
+
+        // Supply total collateral and borrow USDC
+        uint256 sharesBorrowed = _supplyCollateralAndBorrow(
+            position.collateralToken,
+            position.amountTotalCollateral,
+            amountLoan
+        );
+        position.sharesBorrowed = sharesBorrowed;
+
+        // Repay the flash loan, with borrowed USDC
+        _forceApprove(position.loanToken, address(i_morpho), amountLoan);
+
+        emit LeveragePositionOpened(
+            user,
+            positionId,
+            position.collateralToken,
+            position.loanToken,
+            position.amountUserCollateral,
+            position.amountTotalCollateral,
+            position.sharesBorrowed
+        );
     }
 
     function _handleUnleverage(
-        address onBehalfOf,
-        MarketParams memory morphoParams,
-        PendleParams memory pendleParams,
-        uint256 amountCollateral,
-        uint256 amountLoan
-    ) internal {}
+        uint256 amountLoan,
+        bytes memory data
+    ) internal override {
+        (
+            ,
+            address user,
+            uint256 positionId,
+            address pendleSwap,
+            SwapData memory swapData,
+            LimitOrderData memory limitOrderData
+        ) = abi.decode(
+                data,
+                (Action, address, uint256, address, SwapData, LimitOrderData)
+            );
 
-    function _morphoSupplyCollateral(
-        MarketParams memory morphoParams,
-        uint256 amount
-    ) internal {
-        address onBehalfOf = msg.sender;
+        LeveragePosition storage position = s_userLeveragePositions[user][
+            positionId
+        ];
 
-        _safeApprove(morphoParams.collateralToken, address(i_morpho), amount);
-        i_morpho.supplyCollateral(morphoParams, amount, address(this), hex"");
-    }
-
-    function _morphoBorrow(
-        MarketParams memory morphoParams,
-        uint256 amount
-    ) internal returns (uint256 assetsBorrowed, uint256 sharesBorrowed) {
-        uint256 shares;
-        address onBehalf = address(this);
-        address receiver = address(this);
-
-        (assetsBorrowed, sharesBorrowed) = i_morpho.borrow(
-            morphoParams,
-            amount,
-            shares,
-            onBehalf,
-            receiver
+        // Repay the loan, with flashloan amount, to withdraw position's total collateral
+        _repayAndWithdrawCollateral(
+            position.collateralToken,
+            amountLoan,
+            position.amountTotalCollateral,
+            position.sharesBorrowed
         );
+
+        // Swap withdrawn total collateral -> USDC
+        uint256 amountSwappedLoanToken = _swapCollateralTokenToLoanToken(
+            position.collateralToken,
+            position.loanToken,
+            position.amountTotalCollateral,
+            pendleSwap,
+            swapData,
+            limitOrderData
+        );
+
+        // Repay the flash loan, with swapped USDC
+        _forceApprove(position.loanToken, address(i_morpho), amountLoan);
+
+        // And transfer out the remaining USDC to the user
+        uint256 amountReturned;
+        if (amountSwappedLoanToken > amountLoan) {
+            amountReturned = amountSwappedLoanToken - amountLoan;
+            _transferOut(position.loanToken, user, amountReturned);
+        }
+
+        emit LeveragePositionClosed(user, positionId, amountReturned);
     }
 
-    function addSupportedCollateralToken(
-        address collateralToken,
-        bytes32 morphoMarketId,
-        PendleParams memory pendleParams
+    function addSupportedCollateralTokens(
+        CollateralTokenConfig[] memory configs
     ) external onlyOwner {
-        s_morphoParams[collateralToken] = i_morpho.idToMarketParams(
-            Id.wrap(morphoMarketId)
-        );
-        s_pendleParams[collateralToken] = pendleParams;
+        for (uint256 i = 0; i < configs.length; i++) {
+            CollateralTokenConfig memory config = configs[i];
+
+            _updateMorphoMarket(config.token, config.morphoMarketId);
+            _updateSwapParams(
+                config.token,
+                SwapParams({
+                    underlyingToken: config.underlyingToken,
+                    pendleMarket: config.pendleMarket
+                })
+            );
+
+            emit CollateralTokenAdded(
+                config.token,
+                config.pendleMarket,
+                config.morphoMarketId
+            );
+        }
     }
+
+    /////////////////////////
+    // Public and External View Functions
 
     /**
      * @dev Internal function to calculate flash loan amount based on user's collateral and Ltv
      * @param collateralToken The token being used as collateral
+     * @param loanToken The token being user to provide loan
      * @param userCollateralAmount Amount of collateral supplied by user
-     * @param ltv Desired Loan-To-Value ratio (1e18 precision)
      * @return amountToBorrow stblUSD amount to borrow
-     * @notice Important, here we roughly assume that USDC, USDT (loanToken) value is $1
+     *
+     * @notice Important, here we roughly assume that USDC, USDT (loanToken) value is always $1
      */
     function calcLoanAmount(
         address collateralToken,
+        address loanToken,
         uint256 userCollateralAmount,
-        uint256 ltv
+        uint256 desiredLtv
     ) public view returns (uint256) {
         uint256 userCollateralInUsd = getTokenUsdValue(
             collateralToken,
             userCollateralAmount
         );
 
-        uint256 loanAmount = Math.ONE.mulDown(userCollateralInUsd).divDown(
-            Math.ONE - ltv
+        // Total position value in USD = collateralUsd / (1 - LTV)
+        uint256 totalPositionUsd = userCollateralInUsd.divDown(
+            Math.ONE - desiredLtv
         );
 
-        return loanAmount - userCollateralInUsd;
+        // Loan amount = total position - collateral
+        uint256 loanUsd = totalPositionUsd - userCollateralInUsd;
+
+        // Adjust loan amount to match loanToken decimals
+        return loanUsd.scaleTo(18, IERC20Metadata(loanToken).decimals());
     }
 
+    /**
+     *
+     * @dev return value is 18 decimals
+     */
     function getTokenUsdValue(
         address token,
         uint256 amount
@@ -302,12 +356,19 @@ contract FlashLeverage is
     }
 
     function getMaxLtv(address collateralToken) public view returns (uint256) {
-        return s_morphoParams[collateralToken].lltv - LIQUIDATION_BUFFER;
+        return s_marketParams[collateralToken].lltv - LIQUIDATION_BUFFER;
     }
 
     function getUserLeveragePositions(
         address user
     ) external view returns (LeveragePosition[] memory) {
         return s_userLeveragePositions[user];
+    }
+
+    function getUserLeveragePosition(
+        address user,
+        uint256 positionId
+    ) external view returns (LeveragePosition memory) {
+        return s_userLeveragePositions[user][positionId];
     }
 }

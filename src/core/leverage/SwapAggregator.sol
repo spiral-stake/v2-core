@@ -1,52 +1,81 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
-import {ApproxParams, TokenInput, TokenOutput, SwapData, LimitOrderData, SwapType} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
+import {IPAllActionV3} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
+import {IPMarket} from "@pendle/core-v2/contracts/interfaces/IPMarket.sol";
+import {ApproxParams, TokenInput, TokenOutput, SwapData, LimitOrderData, SwapType, FillOrderParams} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
+import {TokenHelper} from "../libraries/TokenHelper.sol";
+import {SwapParams} from "../structs/SwapParams.sol";
 
-/*
- * NOTICE:
- * For detailed information on TokenInput, TokenOutput, ApproxParams, and LimitOrderData,
- * refer to https://docs.pendle.finance/Developers/Contracts/PendleRouter
- *
- * It's recommended to use Pendle's Hosted SDK to generate these parameters for:
- * 1. Optimal liquidity and gas efficiency
- * 2. Access to deeper liquidity via limit orders
- * 3. Zapping in/out using any ERC20 token
- *
- * Else, to generate these parameters fully onchain, use the following functions:
- * - For TokenInput: Use createTokenInputSimple
- * - For TokenOutput: Use createTokenOutputSimple
- * - For ApproxParams: Use createDefaultApproxParams
- * - For LimitOrderData: Use createEmptyLimitOrderData
- *
- * These generated parameters can be directly passed into the respective function calls.
- *
- * Examples:
- *
- * addLiquiditySingleToken(
- *     msg.sender,
- *     MARKET_ADDRESS,
- *     minLpOut,
- *     createDefaultApproxParams(),
- *     createTokenInputSimple(USDC_ADDRESS, 1000e6),
- *     createEmptyLimitOrderData()
- * )
- *
- * swapExactTokenForPt(
- *     msg.sender,
- *     MARKET_ADDRESS,
- *     minPtOut,
- *     createDefaultApproxParams(),
- *     createTokenInputSimple(USDC_ADDRESS, 1000e6),
- *     createEmptyLimitOrderData()
- * )
- */
+abstract contract SwapAggregator is TokenHelper {
+    IPAllActionV3 private immutable i_pendleRouter;
+    mapping(address collateralToken => SwapParams) private s_swapParams;
 
-abstract contract SwapAggregator {
+    constructor(address pendleRouter) {
+        i_pendleRouter = IPAllActionV3(pendleRouter);
+    }
+
+    function _swapLoanTokenToCollateralToken(
+        address loanToken,
+        address collateralToken,
+        uint256 amountLoan,
+        address pendleSwap,
+        SwapData memory swapData,
+        ApproxParams memory approxParams
+    ) internal returns (uint256 amountSwappedCollateralToken) {
+        SwapParams memory swapParams = s_swapParams[collateralToken];
+
+        _forceApprove(loanToken, address(i_pendleRouter), amountLoan);
+        (amountSwappedCollateralToken, , ) = i_pendleRouter.swapExactTokenForPt(
+            address(this),
+            swapParams.pendleMarket,
+            0,
+            approxParams,
+            _createTokenInputSimple(
+                loanToken,
+                amountLoan,
+                swapParams.underlyingToken,
+                pendleSwap,
+                swapData
+            ),
+            _createEmptyLimitOrderData()
+        );
+    }
+
+    function _swapCollateralTokenToLoanToken(
+        address collateralToken,
+        address loanToken,
+        uint256 amountCollateral,
+        address pendleSwap,
+        SwapData memory swapData,
+        LimitOrderData memory limitOrderData
+    ) internal returns (uint256 amountSwappedLoanToken) {
+        SwapParams memory swapParams = s_swapParams[collateralToken];
+
+        _safeApprove(
+            collateralToken,
+            address(i_pendleRouter),
+            amountCollateral
+        );
+        (amountSwappedLoanToken, , ) = i_pendleRouter.swapExactPtForToken(
+            address(this),
+            swapParams.pendleMarket,
+            amountCollateral,
+            _createTokenOutputSimple(
+                loanToken,
+                0,
+                swapParams.underlyingToken,
+                pendleSwap,
+                swapData
+            ),
+            limitOrderData
+        );
+    }
+
     /// @dev Creates a TokenInput struct without using any swap aggregator
     /// @param tokenIn must be one of the SY's tokens in (obtain via `IStandardizedYield#getTokensIn`)
     /// @param netTokenIn amount of token in
-    function createTokenInputSimple(
+    function _createTokenInputSimple(
         address tokenIn,
         uint256 netTokenIn,
         address tokenMintSy,
@@ -66,28 +95,31 @@ abstract contract SwapAggregator {
     /// @dev Creates a TokenOutput struct without using any swap aggregator
     /// @param tokenOut must be one of the SY's tokens out (obtain via `IStandardizedYield#getTokensOut`)
     /// @param minTokenOut minimum amount of token out
-    function createTokenOutputSimple(
+    function _createTokenOutputSimple(
         address tokenOut,
-        uint256 minTokenOut
+        uint256 minTokenOut,
+        address tokenRedeemSy,
+        address pendleSwap,
+        SwapData memory swapData
     ) internal pure returns (TokenOutput memory) {
         return
             TokenOutput({
                 tokenOut: tokenOut,
                 minTokenOut: minTokenOut,
-                tokenRedeemSy: tokenOut,
-                pendleSwap: address(0),
-                swapData: createSwapTypeNoAggregator()
+                tokenRedeemSy: tokenRedeemSy,
+                pendleSwap: pendleSwap,
+                swapData: swapData
             });
     }
 
-    function createEmptyLimitOrderData()
+    function _createEmptyLimitOrderData()
         internal
         pure
         returns (LimitOrderData memory)
     {}
 
     /// @dev Creates default ApproxParams for on-chain approximation
-    function createDefaultApproxParams()
+    function _createDefaultApproxParams()
         internal
         pure
         returns (ApproxParams memory)
@@ -102,9 +134,16 @@ abstract contract SwapAggregator {
             });
     }
 
-    function createSwapTypeNoAggregator()
+    function _createSwapTypeNoAggregator()
         internal
         pure
         returns (SwapData memory)
     {}
+
+    function _updateSwapParams(
+        address collateralToken,
+        SwapParams memory swapParams
+    ) internal {
+        s_swapParams[collateralToken] = swapParams;
+    }
 }
