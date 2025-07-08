@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
+/// @title SwapAggregator Abstract Contract
+/// @notice Provides Pendle PT/token swap helpers for leverage flows.
+/// @dev Wraps Pendle V2 router calls using simplified TokenInput/Output interfaces.
+
 import {IPAllActionV3} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
 import {IPMarket} from "@pendle/core-v2/contracts/interfaces/IPMarket.sol";
 import {ApproxParams, TokenInput, TokenOutput, SwapData, LimitOrderData, SwapType, FillOrderParams} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
@@ -8,20 +12,43 @@ import {TokenHelper} from "../libraries/TokenHelper.sol";
 import {SwapParams} from "../structs/SwapParams.sol";
 
 abstract contract SwapAggregator is TokenHelper {
+    /////////////////////////
+    // Constants and Immutables
+
     IPAllActionV3 private immutable i_pendleRouter;
+
+    /////////////////////////
+    // Storage
+
     mapping(address collateralToken => SwapParams) private s_swapParams;
 
+    /////////////////////////
+    // Constructor
+
+    /// @param pendleRouter Address of the Pendle router.
     constructor(address pendleRouter) {
         i_pendleRouter = IPAllActionV3(pendleRouter);
     }
 
+    /**
+     * @notice Swaps borrowed loan token to PT (collateral) via Pendle.
+     * @param loanToken Token being swapped from (e.g., USDC).
+     * @param collateralToken Token to be received (e.g., PT).
+     * @param amountLoan Amount of loan token to swap.
+     * @param approxParams Pendle slippage approximation settings.
+     * @param pendleSwap Address used to route the swap.
+     * @param swapData Swap path details.
+     * @param limitOrderData Optional limit order info.
+     * @return amountSwappedCollateralToken Amount of PT tokens received.
+     */
     function _swapLoanTokenToCollateralToken(
         address loanToken,
         address collateralToken,
         uint256 amountLoan,
+        ApproxParams memory approxParams,
         address pendleSwap,
         SwapData memory swapData,
-        ApproxParams memory approxParams
+        LimitOrderData memory limitOrderData
     ) internal returns (uint256 amountSwappedCollateralToken) {
         SwapParams memory swapParams = s_swapParams[collateralToken];
 
@@ -38,10 +65,20 @@ abstract contract SwapAggregator is TokenHelper {
                 pendleSwap,
                 swapData
             ),
-            _createEmptyLimitOrderData()
+            limitOrderData
         );
     }
 
+    /**
+     * @notice Swaps PT (collateral) back to loan token via Pendle.
+     * @param collateralToken Token to be swapped from (PT).
+     * @param loanToken Token to be received (e.g., USDC).
+     * @param amountCollateral Amount of PT to swap.
+     * @param pendleSwap Address used to route the swap.
+     * @param swapData Swap path details.
+     * @param limitOrderData Optional limit order info.
+     * @return amountSwappedLoanToken Amount of loan tokens received.
+     */
     function _swapCollateralTokenToLoanToken(
         address collateralToken,
         address loanToken,
@@ -72,9 +109,15 @@ abstract contract SwapAggregator is TokenHelper {
         );
     }
 
-    /// @dev Creates a TokenInput struct without using any swap aggregator
-    /// @param tokenIn must be one of the SY's tokens in (obtain via `IStandardizedYield#getTokensIn`)
-    /// @param netTokenIn amount of token in
+    /**
+     * @notice Creates a TokenInput struct for token → PT swaps.
+     * @param tokenIn Base token being swapped.
+     * @param netTokenIn Amount of tokenIn to send.
+     * @param tokenMintSy Token to mint PT from.
+     * @param pendleSwap Swap router address.
+     * @param swapData Swap route/configuration.
+     * @return tokenInput Pendle-compatible token input.
+     */
     function _createTokenInputSimple(
         address tokenIn,
         uint256 netTokenIn,
@@ -92,9 +135,15 @@ abstract contract SwapAggregator is TokenHelper {
             });
     }
 
-    /// @dev Creates a TokenOutput struct without using any swap aggregator
-    /// @param tokenOut must be one of the SY's tokens out (obtain via `IStandardizedYield#getTokensOut`)
-    /// @param minTokenOut minimum amount of token out
+    /**
+     * @notice Creates a TokenOutput struct for PT → token swaps.
+     * @param tokenOut Desired output token.
+     * @param minTokenOut Minimum acceptable output.
+     * @param tokenRedeemSy Token to redeem PT into.
+     * @param pendleSwap Swap router address.
+     * @param swapData Swap route/configuration.
+     * @return tokenOutput Pendle-compatible token output.
+     */
     function _createTokenOutputSimple(
         address tokenOut,
         uint256 minTokenOut,
@@ -112,13 +161,20 @@ abstract contract SwapAggregator is TokenHelper {
             });
     }
 
+    /**
+     * @notice Returns an empty `LimitOrderData` struct.
+     * @dev Can be used if not leveraging limit orders.
+     */
     function _createEmptyLimitOrderData()
         internal
         pure
         returns (LimitOrderData memory)
     {}
 
-    /// @dev Creates default ApproxParams for on-chain approximation
+    /**
+     * @notice Returns default approximation parameters for slippage-tolerant swaps.
+     * @dev Can be reused for most basic trades.
+     */
     function _createDefaultApproxParams()
         internal
         pure
@@ -134,12 +190,20 @@ abstract contract SwapAggregator is TokenHelper {
             });
     }
 
+    /**
+     * @notice Returns an empty `SwapData` struct for direct swaps (no aggregator).
+     */
     function _createSwapTypeNoAggregator()
         internal
         pure
         returns (SwapData memory)
     {}
 
+    /**
+     * @notice Sets swap configuration for a specific collateral token.
+     * @param collateralToken Address of the collateral token (e.g., PT).
+     * @param swapParams Struct containing Pendle market and underlying token info.
+     */
     function _updateSwapParams(
         address collateralToken,
         SwapParams memory swapParams

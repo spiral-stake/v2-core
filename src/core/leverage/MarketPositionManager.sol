@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
+/// @title MarketPositionManager Abstract Contract
+/// @notice Handles core collateral and borrowing logic using the Morpho protocol.
+/// @dev This contract must be inherited and extended with leverage/unleverage logic.
+///      Integrates Morpho flashloans, supply/borrow/repay/withdraw flows, and market configuration.
+
 import {IMorphoFlashLoanCallback} from "@morpho/interfaces/IMorphoCallbacks.sol";
 import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
 import {MorphoBalancesLib, SharesMathLib} from "@morpho/libraries/periphery/MorphoBalancesLib.sol";
@@ -14,6 +19,7 @@ abstract contract MarketPositionManager is
     using MorphoBalancesLib for IMorpho;
     using SharesMathLib for uint256;
 
+    /// @notice Enum defining available flashloan actions.
     enum Action {
         LEVERAGE,
         UNLEVERAGE
@@ -29,6 +35,10 @@ abstract contract MarketPositionManager is
 
     mapping(address collateralToken => MarketParams) internal s_marketParams;
 
+    /////////////////////////
+    // Constructor
+
+    /// @param morpho Address of the deployed Morpho contract.
     constructor(address morpho) {
         i_morpho = IMorpho(morpho);
     }
@@ -36,6 +46,12 @@ abstract contract MarketPositionManager is
     /////////////////////////
     // External Functions
 
+    /**
+     * @notice Morpho flashloan callback handler.
+     * @dev Delegates handling to either _handleLeverage or _handleUnleverage based on Action enum.
+     * @param amountLoan Amount of flashloan received.
+     * @param data Encoded data used to determine action and pass parameters.
+     */
     function onMorphoFlashLoan(
         uint256 amountLoan,
         bytes memory data
@@ -57,6 +73,13 @@ abstract contract MarketPositionManager is
     /////////////////////////
     // Internal Functions
 
+    /**
+     * @notice Supplies collateral and borrows funds from Morpho market.
+     * @param collateralToken Token used as collateral.
+     * @param amountCollateral Amount of collateral to supply.
+     * @param amountLoan Amount to borrow.
+     * @return sharesBorrowed Number of shares borrowed from the market.
+     */
     function _supplyCollateralAndBorrow(
         address collateralToken,
         uint256 amountCollateral,
@@ -68,6 +91,13 @@ abstract contract MarketPositionManager is
         (, sharesBorrowed) = _morphoBorrow(marketParams, amountLoan);
     }
 
+    /**
+     * @notice Repays borrowed funds and withdraws supplied collateral.
+     * @param collateralToken Token used as collateral.
+     * @param amountLoan Amount of loan to repay (for approval).
+     * @param amountCollateral Amount of collateral to withdraw.
+     * @param sharesBorrowed Shares representing borrowed amount to repay.
+     */
     function _repayAndWithdrawCollateral(
         address collateralToken,
         uint256 amountLoan,
@@ -80,6 +110,11 @@ abstract contract MarketPositionManager is
         _morphoWithdrawCollateral(marketParams, amountCollateral);
     }
 
+    /**
+     * @notice Supplies collateral into a Morpho market.
+     * @param marketParams Market configuration details.
+     * @param amount Amount of collateral to supply.
+     */
     function _morphoSupplyCollateral(
         MarketParams memory marketParams,
         uint256 amount
@@ -88,6 +123,13 @@ abstract contract MarketPositionManager is
         i_morpho.supplyCollateral(marketParams, amount, address(this), hex"");
     }
 
+    /**
+     * @notice Borrows funds from a Morpho market.
+     * @param marketParams Market configuration details.
+     * @param amount Amount to borrow in asset terms.
+     * @return assetsBorrowed Amount actually borrowed.
+     * @return sharesBorrowed Shares received for the borrowed amount.
+     */
     function _morphoBorrow(
         MarketParams memory marketParams,
         uint256 amount
@@ -106,9 +148,13 @@ abstract contract MarketPositionManager is
     }
 
     /**
-     *
-     * @dev passed shares borrowed to burn the exact shares, to withdraw equivalent collateral
-     * and safeApproved equivalent amount, but passed amount as 0 (Required by morpho)
+     * @notice Repays borrowed shares to Morpho market.
+     * @dev Repays exact shares, sets amount=0 as required by Morpho, but approves full amount.
+     * @param marketParams Market configuration details.
+     * @param amount Stablecoin value of repayment (used only for approval).
+     * @param sharesBorrowed Shares to repay.
+     * @return assetsRepaid Actual assets repaid.
+     * @return sharesRepaid Shares repaid.
      */
     function _morphoRepay(
         MarketParams memory marketParams,
@@ -120,13 +166,18 @@ abstract contract MarketPositionManager is
         address onBehalf = address(this);
         (assetsRepaid, sharesRepaid) = i_morpho.repay(
             marketParams,
-            0, // AmountLoan
+            0, // amount ignored when repaying by shares
             sharesBorrowed,
             onBehalf,
             hex""
         );
     }
 
+    /**
+     * @notice Withdraws previously supplied collateral from Morpho.
+     * @param marketParams Market configuration details.
+     * @param amount Amount of collateral to withdraw.
+     */
     function _morphoWithdrawCollateral(
         MarketParams memory marketParams,
         uint256 amount
@@ -137,6 +188,11 @@ abstract contract MarketPositionManager is
         i_morpho.withdrawCollateral(marketParams, amount, onBehalf, receiver);
     }
 
+    /**
+     * @notice Updates market parameters for a collateral token using Morpho's market ID.
+     * @param collateralToken Token used as collateral.
+     * @param morphoMarketId Morpho market ID (as bytes32).
+     */
     function _updateMorphoMarket(
         address collateralToken,
         bytes32 morphoMarketId
@@ -149,11 +205,21 @@ abstract contract MarketPositionManager is
     /////////////////////////
     // Virtual Functions, implemented in the main contract
 
+    /**
+     * @dev Called after receiving a flashloan for leverage operation.
+     * @param amountLoan Amount of flashloan received.
+     * @param data Encoded context for leverage.
+     */
     function _handleLeverage(
         uint256 amountLoan,
         bytes memory data
     ) internal virtual {}
 
+    /**
+     * @dev Called after receiving a flashloan for unleverage operation.
+     * @param amountLoan Amount of flashloan received.
+     * @param data Encoded context for unleverage.
+     */
     function _handleUnleverage(
         uint256 amountLoan,
         bytes memory data
@@ -162,6 +228,12 @@ abstract contract MarketPositionManager is
     /////////////////////////
     // Public View Functions
 
+    /**
+     * @notice Calculates the amount of loan token needed to repay borrowed shares.
+     * @param collateralToken Token used as collateral in the position.
+     * @param sharesBorrowed Shares representing the borrowed position.
+     * @return amountRepay Equivalent amount in loan token required for repayment.
+     */
     function getRepayAmount(
         address collateralToken,
         uint256 sharesBorrowed
