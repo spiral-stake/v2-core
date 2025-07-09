@@ -9,10 +9,32 @@ import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
-import {Errors} from "../libraries/Errors.sol";
 import {Math} from "../libraries/Math.sol";
 import {Position} from "../structs/Position.sol";
 import {console} from "forge-std/console.sol";
+
+library Errors {
+    /////////////////////////
+    // PositionManager
+    error PositionManager__ValueCannotBeZero();
+    error PositionManager__UnsupportedCollateralToken();
+    error PositionManager__MintExceedsMaxLTV();
+    error PositionManager__IsUnderLiqLTV();
+    error PositionManager__HealthFactorIsOK();
+    error PositionManager__InvalidTokenAddress();
+    error PositionManager__InvalidPriceFeedAddress();
+    error PositionManager__FlashMintCallbackFailed();
+    error PositionManager__FlashMintNotRepaid();
+    error PositionManager__InvalidFlashLoanToken();
+    error PositionManager__AmountCannotBeZero();
+    error PositionManager__InvalidReceiverAddress();
+    error PositionManager__NotThePositionOwner();
+    error PositionManager__CannotBeZeroAddress();
+
+    /////////////////////////
+    // StblUSD
+    error StblUSD__CallerNotAManagerAddress();
+}
 
 /**
  * @title PositionManager

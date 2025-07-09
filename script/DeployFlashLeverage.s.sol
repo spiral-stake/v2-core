@@ -14,12 +14,18 @@ contract DeployFlashLeverage is Script {
         address morpho,
         address pendleRouter,
         address oracleRouter,
+        uint256 amountUserCollateralCap,
         CollateralTokenConfig[] memory configs
     ) external returns (address flashLeverageAddress) {
         vm.startBroadcast();
 
         flashLeverageAddress = address(
-            new FlashLeverage(morpho, pendleRouter, oracleRouter)
+            new FlashLeverage(
+                morpho,
+                pendleRouter,
+                oracleRouter,
+                amountUserCollateralCap
+            )
         );
 
         FlashLeverage(flashLeverageAddress).addSupportedCollateralTokens(

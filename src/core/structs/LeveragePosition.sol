@@ -11,4 +11,5 @@ struct LeveragePosition {
     uint256 amountUserCollateral;
     uint256 amountTotalCollateral;
     uint256 sharesBorrowed;
+    bool open;
 }

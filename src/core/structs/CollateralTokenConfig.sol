@@ -6,7 +6,8 @@ pragma solidity 0.8.30;
  */
 
 struct CollateralTokenConfig {
-    address token;
+    address collateralToken;
+    address loanToken;
     bytes32 morphoMarketId;
     address underlyingToken;
     address pendleMarket;

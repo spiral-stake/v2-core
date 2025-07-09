@@ -10,7 +10,7 @@ import {IMorphoFlashLoanCallback} from "@morpho/interfaces/IMorphoCallbacks.sol"
 import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
 import {MorphoBalancesLib, SharesMathLib} from "@morpho/libraries/periphery/MorphoBalancesLib.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
-import {Error} from "../libraries/Errors.sol";
+import {Error} from "../libraries/Error.sol";
 
 abstract contract MarketPositionManager is
     IMorphoFlashLoanCallback,
@@ -33,7 +33,8 @@ abstract contract MarketPositionManager is
     /////////////////////////
     // Storage
 
-    mapping(address collateralToken => MarketParams) internal s_marketParams;
+    mapping(address collateralToken => mapping(address loanToken => MarketParams))
+        internal s_marketParams;
 
     /////////////////////////
     // Constructor
@@ -82,10 +83,13 @@ abstract contract MarketPositionManager is
      */
     function _supplyCollateralAndBorrow(
         address collateralToken,
+        address loanToken,
         uint256 amountCollateral,
         uint256 amountLoan
     ) internal returns (uint256 sharesBorrowed) {
-        MarketParams memory marketParams = s_marketParams[collateralToken];
+        MarketParams memory marketParams = s_marketParams[collateralToken][
+            loanToken
+        ];
 
         _morphoSupplyCollateral(marketParams, amountCollateral);
         (, sharesBorrowed) = _morphoBorrow(marketParams, amountLoan);
@@ -100,11 +104,14 @@ abstract contract MarketPositionManager is
      */
     function _repayAndWithdrawCollateral(
         address collateralToken,
+        address loanToken,
         uint256 amountLoan,
         uint256 amountCollateral,
         uint256 sharesBorrowed
     ) internal {
-        MarketParams memory marketParams = s_marketParams[collateralToken];
+        MarketParams memory marketParams = s_marketParams[collateralToken][
+            loanToken
+        ];
 
         _morphoRepay(marketParams, amountLoan, sharesBorrowed);
         _morphoWithdrawCollateral(marketParams, amountCollateral);
@@ -195,9 +202,10 @@ abstract contract MarketPositionManager is
      */
     function _updateMorphoMarket(
         address collateralToken,
+        address loanToken,
         bytes32 morphoMarketId
     ) internal {
-        s_marketParams[collateralToken] = i_morpho.idToMarketParams(
+        s_marketParams[collateralToken][loanToken] = i_morpho.idToMarketParams(
             Id.wrap(morphoMarketId)
         );
     }
@@ -236,9 +244,12 @@ abstract contract MarketPositionManager is
      */
     function getRepayAmount(
         address collateralToken,
+        address loanToken,
         uint256 sharesBorrowed
     ) public view returns (uint256 amountRepay) {
-        MarketParams memory marketParams = s_marketParams[collateralToken];
+        MarketParams memory marketParams = s_marketParams[collateralToken][
+            loanToken
+        ];
 
         (, , uint256 totalBorrowAssets, uint256 totalBorrowShares) = i_morpho
             .expectedMarketBalances(marketParams);

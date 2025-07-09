@@ -8,7 +8,6 @@ import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {TokenHelper} from "../core/libraries/TokenHelper.sol";
-import {Errors} from "../core/libraries/Errors.sol";
 import {ICurveCryptoSwap} from "../interfaces/ICurveCryptoSwap.sol";
 
 /**
@@ -61,10 +60,7 @@ contract BorrowSwapper is Ownable2Step, TokenHelper {
         require(tokens.length == curvePools.length, "Length Mismatch");
 
         for (uint256 i = 0; i < tokens.length; i++) {
-            require(
-                tokens[i] != address(0),
-                Errors.PositionManager__InvalidTokenAddress()
-            );
+            require(tokens[i] != address(0), "Invalid Token Address");
             s_curvePools[tokens[i]] = curvePools[i];
         }
     }

@@ -5,7 +5,10 @@ import {IStblUSD} from "../../interfaces/IStblUSD.sol";
 import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {Errors} from "../libraries/Errors.sol";
+
+library Error {
+    error StblUSD__CallerNotAManagerAddress();
+}
 
 /**
  * @title StblUSD - SpiralStake Stable USD
@@ -49,7 +52,7 @@ contract StblUSD is IStblUSD, ERC20Permit, Ownable {
     function mint(address account, uint256 amount) external override {
         require(
             msg.sender == positionManagerAddress,
-            Errors.StblUSD__CallerNotAManagerAddress()
+            Error.StblUSD__CallerNotAManagerAddress()
         );
 
         _mint(account, amount);
@@ -58,7 +61,7 @@ contract StblUSD is IStblUSD, ERC20Permit, Ownable {
     function burn(address account, uint256 amount) external override {
         require(
             msg.sender == positionManagerAddress,
-            Errors.StblUSD__CallerNotAManagerAddress()
+            Error.StblUSD__CallerNotAManagerAddress()
         );
 
         _burn(account, amount);

@@ -6,7 +6,6 @@ pragma solidity 0.8.30;
 /// @dev Wraps Pendle V2 router calls using simplified TokenInput/Output interfaces.
 
 import {IPAllActionV3} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
-import {IPMarket} from "@pendle/core-v2/contracts/interfaces/IPMarket.sol";
 import {ApproxParams, TokenInput, TokenOutput, SwapData, LimitOrderData, SwapType, FillOrderParams} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
 import {SwapParams} from "../structs/SwapParams.sol";
@@ -189,15 +188,6 @@ abstract contract SwapAggregator is TokenHelper {
                 eps: 1e14
             });
     }
-
-    /**
-     * @notice Returns an empty `SwapData` struct for direct swaps (no aggregator).
-     */
-    function _createSwapTypeNoAggregator()
-        internal
-        pure
-        returns (SwapData memory)
-    {}
 
     /**
      * @notice Sets swap configuration for a specific collateral token.

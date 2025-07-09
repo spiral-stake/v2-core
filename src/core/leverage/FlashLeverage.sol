@@ -2,67 +2,61 @@
 pragma solidity 0.8.30;
 
 /// @title FlashLeverage
-/// @author
 /// @notice Provides flashloan-based leveraged yield on stable PT-collateral (PENDLE) using morpho markets.
 /// @dev Integrates with Morpho, Pendle, and custom SwapAggregator and MarketPositionManager modules.
-/// @dev loanToken Fixed to USDC (6 decimals).
 
-import {SwapAggregator, SwapParams, SwapData, ApproxParams, LimitOrderData} from "./SwapAggregator.sol";
+import {IFlashLeverage} from "../../interfaces/IFlashLeverage.sol";
+import {SwapAggregator} from "./SwapAggregator.sol";
 import {MarketPositionManager, MarketParams, Id} from "./MarketPositionManager.sol";
+import {LeverageParams, SwapAggregator, SwapParams, SwapData, ApproxParams, LimitOrderData} from "../structs/LeverageParams.sol";
 import {LeveragePosition} from "../structs/LeveragePosition.sol";
 import {CollateralTokenConfig} from "../structs/CollateralTokenConfig.sol";
 import {IOracleRouter} from "../../interfaces/IOracleRouter.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 import {Math} from "../libraries/Math.sol";
-import {Error} from "../libraries/Errors.sol";
+import {Error} from "../libraries/Error.sol";
 
-contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
+contract FlashLeverage is
+    IFlashLeverage,
+    MarketPositionManager,
+    SwapAggregator,
+    Ownable2Step
+{
     using Math for uint256;
 
     /////////////////////////
     // Constants and Immutables
 
     /// @notice USD reference address used in price feeds (e.g., Chainlink).
-    address public constant USD = 0x0000000000000000000000000000000000000348;
+    address private constant USD = 0x0000000000000000000000000000000000000348;
 
     /// @notice Buffer subtracted from liquidation LTV to reduce liquidation risk (5%).
     uint256 public constant LIQUIDATION_BUFFER = 50e15;
 
-    /// @notice Max collateral amount allowed per leverage (100 PT tokens).
-    uint256 public constant AMOUNT_COLLATERAL_CAP = 100e18;
-
     /// @notice Oracle router used for fetching USD price quotes.
-    IOracleRouter public immutable i_oracleRouter;
+    IOracleRouter private immutable i_oracleRouter;
 
     /////////////////////////
     // Storage
 
     mapping(address user => LeveragePosition[]) private s_userLeveragePositions;
 
+    /// @notice Max collateral amount allowed per leverage (100 PT tokens).
+    uint256 private s_amountUserCollateralCap;
+
     /////////////////////////
     // Events
 
     event LeveragePositionOpened(
         address indexed user,
-        uint256 indexed positionId,
-        address collateralToken,
-        address loanToken,
-        uint256 amountUserCollateral,
-        uint256 amountTotalCollateral,
-        uint256 sharesBorrowed
+        uint256 indexed positionId
     );
 
     event LeveragePositionClosed(
         address indexed user,
         uint256 indexed positionId,
         uint256 indexed amountReturned
-    );
-
-    event CollateralTokenAdded(
-        address indexed token,
-        address indexed pendleMarket,
-        bytes32 indexed morphoMarketId
     );
 
     /////////////////////////
@@ -76,7 +70,20 @@ contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
      */
     modifier validateAmountCollateral(uint256 value) {
         require(
-            value > 0 && value <= AMOUNT_COLLATERAL_CAP,
+            value > 0 && value <= s_amountUserCollateralCap,
+            Error.FlashLeverage__InvalidAmountCollateral()
+        );
+        _;
+    }
+    /**
+     * @dev Validates if the receivers address is not a zero address
+     * @param receiver receivers address
+     *
+     * Reverts if the receivers address is a zero address
+     */
+    modifier validateReceiverAddress(address receiver) {
+        require(
+            receiver != address(0),
             Error.FlashLeverage__InvalidAmountCollateral()
         );
         _;
@@ -94,13 +101,15 @@ contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
     constructor(
         address morphoAddress,
         address pendleRouter,
-        address oracleRouter
+        address oracleRouter,
+        uint256 amountUserCollateralCap
     )
         Ownable(msg.sender)
         SwapAggregator(pendleRouter)
         MarketPositionManager(morphoAddress)
     {
         i_oracleRouter = IOracleRouter(oracleRouter);
+        s_amountUserCollateralCap = amountUserCollateralCap;
     }
 
     /////////////////////////
@@ -108,37 +117,32 @@ contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
 
     /**
      * @notice Opens a leveraged position by supplying stable PT-collateral and borrowing stablecoins via flashloan.
-     * @param onBehalfOf Address that receives the leveraged position.
-     * @param collateralToken Token used as collateral (e.g., PT-sUSDe, PT-USR tokens).
-     * @param amountCollateral Amount of user-supplied PT-collateral.
-     * @param approxParams Pendle approximation parameters for slippage-tolerant swaps.
-     * @param pendleSwap Address of Pendle's swap adapter.
-     * @param swapData Swap path and execution details.
-     * @param limitOrderData Optional limit order data for swap.
-     *
      * Emits a {LeveragePositionOpened} event.
      */
     function leverage(
         address onBehalfOf,
-        address collateralToken,
-        uint256 amountCollateral,
-        ApproxParams memory approxParams,
-        address pendleSwap,
-        SwapData memory swapData,
-        LimitOrderData memory limitOrderData
-    ) external validateAmountCollateral(amountCollateral) {
-        address loanToken = s_marketParams[collateralToken].loanToken;
+        LeverageParams memory params
+    )
+        external
+        validateReceiverAddress(onBehalfOf)
+        validateAmountCollateral(params.amountUserCollateral)
+    {
+        address collateralToken = params.collateralToken;
+        address loanToken = params.loanToken;
+        uint256 amountUserCollateral = params.amountUserCollateral;
+
         require(
-            loanToken != address(0),
+            s_marketParams[collateralToken][loanToken].collateralToken !=
+                address(0),
             Error.FlashLeverage__UnsupportedCollateralToken()
         );
 
-        _transferIn(collateralToken, msg.sender, amountCollateral);
+        _transferIn(collateralToken, msg.sender, amountUserCollateral);
 
         uint256 amountLoan = calcLoanAmount(
             collateralToken,
             loanToken,
-            amountCollateral
+            amountUserCollateral
         );
 
         uint256 positionId = s_userLeveragePositions[onBehalfOf].length;
@@ -146,9 +150,10 @@ contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
             LeveragePosition({
                 collateralToken: collateralToken,
                 loanToken: loanToken,
-                amountUserCollateral: amountCollateral,
+                amountUserCollateral: amountUserCollateral,
                 amountTotalCollateral: 0, // gets set in _handleLeverage
-                sharesBorrowed: 0 // gets set in _handleLeverage
+                sharesBorrowed: 0, // gets set in _handleLeverage
+                open: true
             })
         );
 
@@ -156,10 +161,10 @@ contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
             Action.LEVERAGE,
             onBehalfOf,
             positionId,
-            approxParams,
-            pendleSwap,
-            swapData,
-            limitOrderData
+            params.approxParams,
+            params.pendleSwap,
+            params.swapData,
+            params.limitOrderData
         );
 
         i_morpho.flashLoan(loanToken, amountLoan, data);
@@ -186,11 +191,11 @@ contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
             positionId < s_userLeveragePositions[_msgSender].length,
             Error.FlashLeverage__PositionDoesNotExist()
         );
-        LeveragePosition memory position = s_userLeveragePositions[_msgSender][
+        LeveragePosition storage position = s_userLeveragePositions[_msgSender][
             positionId
         ];
         require(
-            position.loanToken != address(0),
+            position.open,
             Error.FlashLeverage__PositionAlreadyUnleveraged()
         );
 
@@ -205,13 +210,59 @@ contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
 
         uint256 amountLoan = getRepayAmount(
             position.collateralToken,
+            position.loanToken,
             position.sharesBorrowed
         );
 
         i_morpho.flashLoan(position.loanToken, amountLoan, data);
 
-        delete s_userLeveragePositions[_msgSender][positionId];
+        position.open = false;
     }
+
+    /**
+     * @notice Allows owner to add support for new collateral tokens.
+     * @param configs Array of token configurations including swap and market parameters.
+     *
+     * Emits a {CollateralTokenAdded} event for each token added.
+     */
+    function addSupportedCollateralTokens(
+        CollateralTokenConfig[] memory configs
+    ) external onlyOwner {
+        uint256 configsLength = configs.length;
+        for (uint256 i = 0; i < configsLength; ++i) {
+            CollateralTokenConfig memory config = configs[i];
+
+            _updateMorphoMarket(
+                config.collateralToken,
+                config.loanToken,
+                config.morphoMarketId
+            );
+            _updateSwapParams(
+                config.collateralToken,
+                SwapParams({
+                    underlyingToken: config.underlyingToken,
+                    pendleMarket: config.pendleMarket
+                })
+            );
+        }
+    }
+
+    /**
+     * @notice Sets the maximum collateral amount that a user can leverage.
+     * @dev Only callable by the contract owner to update the collateral cap.
+     * @param newAmountUserCollateralCap The new collateral cap to be set for users.
+     */
+    function setAmountUserCollateralCap(
+        uint256 newAmountUserCollateralCap
+    ) external onlyOwner {
+        s_amountUserCollateralCap = newAmountUserCollateralCap;
+    }
+
+    /**
+     * @notice Overrides renounceOwnership to prevent ownership renunciation.
+     * @dev Intentionally disabled to retain upgradeability and collateral support management.
+     */
+    function renounceOwnership() public override {}
 
     /////////////////////////
     // Internal Functions
@@ -269,6 +320,7 @@ contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
         // Supply total collateral and borrow USDC
         uint256 sharesBorrowed = _supplyCollateralAndBorrow(
             position.collateralToken,
+            position.loanToken,
             position.amountTotalCollateral,
             amountLoan
         );
@@ -277,15 +329,7 @@ contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
         // Repay the flash loan, with borrowed USDC
         _forceApprove(position.loanToken, address(i_morpho), amountLoan);
 
-        emit LeveragePositionOpened(
-            user,
-            positionId,
-            position.collateralToken,
-            position.loanToken,
-            position.amountUserCollateral,
-            position.amountTotalCollateral,
-            position.sharesBorrowed
-        );
+        emit LeveragePositionOpened(user, positionId);
     }
 
     /**
@@ -318,6 +362,7 @@ contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
         // Repay the loan, with flashloan amount, to withdraw position's total collateral
         _repayAndWithdrawCollateral(
             position.collateralToken,
+            position.loanToken,
             amountLoan,
             position.amountTotalCollateral,
             position.sharesBorrowed
@@ -339,40 +384,13 @@ contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
         // And transfer out the remaining USDC to the user
         uint256 amountReturned;
         if (amountSwappedLoanToken > amountLoan) {
-            amountReturned = amountSwappedLoanToken - amountLoan;
+            unchecked {
+                amountReturned = amountSwappedLoanToken - amountLoan;
+            }
             _transferOut(position.loanToken, user, amountReturned);
         }
 
         emit LeveragePositionClosed(user, positionId, amountReturned);
-    }
-
-    /**
-     * @notice Allows owner to add support for new collateral tokens.
-     * @param configs Array of token configurations including swap and market parameters.
-     *
-     * Emits a {CollateralTokenAdded} event for each token added.
-     */
-    function addSupportedCollateralTokens(
-        CollateralTokenConfig[] memory configs
-    ) external onlyOwner {
-        for (uint256 i = 0; i < configs.length; i++) {
-            CollateralTokenConfig memory config = configs[i];
-
-            _updateMorphoMarket(config.token, config.morphoMarketId);
-            _updateSwapParams(
-                config.token,
-                SwapParams({
-                    underlyingToken: config.underlyingToken,
-                    pendleMarket: config.pendleMarket
-                })
-            );
-
-            emit CollateralTokenAdded(
-                config.token,
-                config.pendleMarket,
-                config.morphoMarketId
-            );
-        }
     }
 
     /////////////////////////
@@ -399,7 +417,7 @@ contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
 
         // Total position value in USD = collateralUsd / (1 - LTV)
         uint256 totalPositionUsd = userCollateralInUsd.divDown(
-            Math.ONE - getMaxLtv(collateralToken)
+            Math.ONE - getMaxLtv(collateralToken, loanToken)
         );
 
         // Loan amount = total position - collateral
@@ -427,8 +445,13 @@ contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
      * @param collateralToken Address of the collateral token.
      * @return maxLtv Adjusted loan-to-value ratio (scaled 1e18).
      */
-    function getMaxLtv(address collateralToken) public view returns (uint256) {
-        return s_marketParams[collateralToken].lltv - LIQUIDATION_BUFFER;
+    function getMaxLtv(
+        address collateralToken,
+        address loanToken
+    ) public view returns (uint256) {
+        return
+            s_marketParams[collateralToken][loanToken].lltv -
+            LIQUIDATION_BUFFER;
     }
 
     /**
@@ -453,5 +476,13 @@ contract FlashLeverage is SwapAggregator, MarketPositionManager, Ownable2Step {
         uint256 positionId
     ) external view returns (LeveragePosition memory) {
         return s_userLeveragePositions[user][positionId];
+    }
+
+    /**
+     * @notice Returns the maximum amount of collateral that a user is allowed to leverage.
+     * @dev This cap limits the total collateral a single user can utilize for leveraging purposes in a single attempt.
+     */
+    function getAmountUserCollateralCap() external view returns (uint256) {
+        return s_amountUserCollateralCap;
     }
 }
