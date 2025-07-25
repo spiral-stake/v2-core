@@ -10,7 +10,7 @@ import {IMorphoFlashLoanCallback} from "@morpho/interfaces/IMorphoCallbacks.sol"
 import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
 import {MorphoBalancesLib, SharesMathLib} from "@morpho/libraries/periphery/MorphoBalancesLib.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
-import {Error} from "../libraries/Error.sol";
+import {FLCError} from "../libraries/Error.sol";
 
 abstract contract MarketPositionManager is
     IMorphoFlashLoanCallback,
@@ -55,11 +55,11 @@ abstract contract MarketPositionManager is
      */
     function onMorphoFlashLoan(
         uint256 amountLoan,
-        bytes memory data
+        bytes calldata data
     ) external override {
         require(
             msg.sender == address(i_morpho),
-            Error.FlashLeverage__UntrustedLender()
+            FLCError.FlashLeverageCore__UntrustedLender()
         );
 
         Action action = abi.decode(data, (Action));
@@ -220,7 +220,7 @@ abstract contract MarketPositionManager is
      */
     function _handleLeverage(
         uint256 amountLoan,
-        bytes memory data
+        bytes calldata data
     ) internal virtual {}
 
     /**
@@ -230,7 +230,7 @@ abstract contract MarketPositionManager is
      */
     function _handleUnleverage(
         uint256 amountLoan,
-        bytes memory data
+        bytes calldata data
     ) internal virtual {}
 
     /////////////////////////
@@ -242,7 +242,7 @@ abstract contract MarketPositionManager is
      * @param sharesBorrowed Shares representing the borrowed position.
      * @return amountRepay Equivalent amount in loan token required for repayment.
      */
-    function getRepayAmount(
+    function getSharesToAsset(
         address collateralToken,
         address loanToken,
         uint256 sharesBorrowed

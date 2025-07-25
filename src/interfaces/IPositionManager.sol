@@ -3,7 +3,15 @@ pragma solidity 0.8.30;
 
 import {IERC3156FlashLender} from "@openzeppelin/contracts/interfaces/IERC3156FlashLender.sol";
 import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
-import {Position} from "../core/structs/Position.sol";
+
+struct Position {
+    address owner;
+    address collateralToken;
+    uint256 collateralDeposited;
+    uint256 stblUSDMinted;
+    // uint256 borrowApy;
+    // uint256 maturity;
+}
 
 /**
  * @title IPositionManager

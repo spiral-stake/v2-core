@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
-import {IPositionManager} from "../../interfaces/IPositionManager.sol";
+import {IPositionManager, Position} from "../../interfaces/IPositionManager.sol";
 import {IStblUSD} from "../../interfaces/IStblUSD.sol";
 import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
 import {IERC3156FlashLender} from "@openzeppelin/contracts/interfaces/IERC3156FlashLender.sol";
@@ -10,7 +10,6 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
 import {Math} from "../libraries/Math.sol";
-import {Position} from "../structs/Position.sol";
 import {console} from "forge-std/console.sol";
 
 library Errors {
@@ -328,7 +327,7 @@ contract PositionManager is Ownable2Step, TokenHelper, IPositionManager {
             "Length Mismatch"
         );
 
-        for (uint256 i = 0; i < collateralTokens.length; i++) {
+        for (uint256 i = 0; i < collateralTokens.length; ++i) {
             require(
                 collateralTokens[i] != address(0),
                 Errors.PositionManager__InvalidTokenAddress()

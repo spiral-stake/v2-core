@@ -6,10 +6,11 @@ pragma solidity 0.8.30;
  */
 
 struct LeveragePosition {
+    bool open;
     address collateralToken;
     address loanToken;
-    uint256 amountUserCollateral;
-    uint256 amountTotalCollateral;
+    uint256 collateralTokenUsdValue;
+    uint256 amountCollateral;
+    uint256 amountLeveragedCollateral;
     uint256 sharesBorrowed;
-    bool open;
 }
