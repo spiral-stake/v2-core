@@ -19,6 +19,7 @@ struct SwapParams {
     uint256 minOut;
     ApproxParams approxParams;
     address pendleSwap;
+    address tokenMintSy;
     SwapData swapData;
     LimitOrderData limitOrderData;
 }

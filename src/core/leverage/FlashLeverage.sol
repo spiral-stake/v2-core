@@ -5,7 +5,7 @@ import {IPAllActionV3, SwapData, LimitOrderData, ApproxParams, TokenInput} from 
 import {IFlashLeverageCore, LeverageParams, UnleverageParams, CoreLeveragePosition} from "../../interfaces/IFlashLeverageCore.sol";
 import {SwapParams} from "../structs/SwapParams.sol";
 import {LeveragePosition} from "../structs/LeveragePosition.sol";
-import {CollateralTokenData} from "../structs/CollateralTokenData.sol";
+import {CollateralTokenConfig} from "../structs/CollateralTokenConfig.sol";
 import {TokenHelper, IERC20} from "../libraries/TokenHelper.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {Math} from "../libraries/Math.sol";
@@ -34,9 +34,9 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
 
     mapping(address user => LeveragePosition[]) private s_userLeveragePositions;
 
-    /// @notice Mapping of collateral tokens to their swap parameters
-    mapping(address collateralToken => CollateralTokenData)
-        private s_collateralTokenData;
+    /// @notice Mapping of PT collateral tokens to their pendle market
+    mapping(address collateralToken => address pendleMarket)
+        private s_pendleMarket;
 
     /////////////////////////
     // Events
@@ -109,6 +109,11 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         validateOnBehalfOf(onBehalfOf)
         validateAmount(leverageParams.amountCollateral)
     {
+        require(
+            s_pendleMarket[leverageParams.collateralToken] != address(0),
+            FLError.FlashLeverage__UnsupportedCollateralToken()
+        );
+
         _transferIn(
             leverageParams.collateralToken,
             msg.sender,
@@ -134,6 +139,10 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         validateAmount(leverageParams.amountCollateral)
     {
         address collateralToken = leverageParams.collateralToken;
+        require(
+            s_pendleMarket[collateralToken] != address(0),
+            FLError.FlashLeverage__UnsupportedCollateralToken()
+        );
 
         // Transfer tokens from user
         IERC20(swapParams.tokenIn).transferFrom(
@@ -144,10 +153,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
 
         // Swap if needed
         if (swapParams.tokenIn != collateralToken) {
-            _handleTokenSwap(
-                swapParams,
-                s_collateralTokenData[collateralToken]
-            );
+            _handleTokenSwap(collateralToken, swapParams);
         }
 
         // Call internal leverage
@@ -164,6 +170,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
     function unleverage(
         uint256 positionId,
         address pendleSwap,
+        address tokenRedeemSy,
         SwapData calldata swapData,
         LimitOrderData calldata limitOrderData
     ) external {
@@ -188,38 +195,38 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
                 sharesToBurn: position.sharesBorrowed,
                 amountCollateralToWithdraw: position.amountLeveragedCollateral,
                 pendleSwap: pendleSwap,
+                tokenRedeemSy: tokenRedeemSy,
                 swapData: swapData,
                 limitOrderData: limitOrderData
             })
         );
 
-        _transferOut(
-            position.loanToken,
-            _msgSender,
-            _selfBalance(position.loanToken)
-        );
-
         position.open = false;
+
+        uint256 amountReturned = _selfBalance(position.loanToken);
+        _transferOut(position.loanToken, _msgSender, amountReturned);
+
+        emit LeveragePositionClosed(_msgSender, positionId, amountReturned);
     }
 
     /**
-     * @notice Updates swap parameters for a specific collateral token
-     * @dev Only owner can update swap parameters to ensure proper configuration
-     * @param collateralToken The collateral token to configure
-     * @param tokenData New swap parameters for the token
+     * @notice Allows owner to add support for new collateral tokens.
+     * @param configs Array of token configurations including swap and market parameters.
      */
-    function addCollateralToken(
-        address collateralToken,
-        CollateralTokenData calldata tokenData
+    function addSupportedCollateralTokens(
+        CollateralTokenConfig[] calldata configs
     ) external onlyOwner {
-        s_collateralTokenData[collateralToken] = tokenData;
+        for (uint256 i; i < configs.length; ++i) {
+            CollateralTokenConfig memory config = configs[i];
+            s_pendleMarket[config.collateralToken] = config.pendleMarket;
 
-        // Safe approve max collateral token to i_flashLeverage for lifetime
-        _safeApprove(
-            collateralToken,
-            address(i_flashLeverageCore),
-            type(uint256).max
-        );
+            // Safe approve max collateral token to i_flashLeverage for lifetime
+            _safeApprove(
+                config.collateralToken,
+                address(i_flashLeverageCore),
+                type(uint256).max
+            );
+        }
     }
 
     /**
@@ -238,10 +245,6 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         address collateralToken = leverageParams.collateralToken;
         address loanToken = leverageParams.loanToken;
         uint256 amountCollateral = leverageParams.amountCollateral;
-        uint256 collateralTokenUsdValue = i_flashLeverageCore.getTokenUsdValue(
-            collateralToken,
-            Math.ONE
-        );
 
         // Position before
         CoreLeveragePosition memory positionBefore = i_flashLeverageCore
@@ -253,6 +256,13 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         // Position after
         CoreLeveragePosition memory positionAfter = i_flashLeverageCore
             .getCoreLeveragePosition(address(this), collateralToken, loanToken);
+
+        uint256 collateralTokenUsdValue = i_flashLeverageCore
+            .getCollateralValueInLoanToken(
+                collateralToken,
+                loanToken,
+                Math.ONE
+            );
 
         // Add new Leverage Position
         uint256 positionId = s_userLeveragePositions[onBehalfOf].length;
@@ -279,8 +289,8 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
      * @param swapParams Wrapper parameters containing swap details
      */
     function _handleTokenSwap(
-        SwapParams calldata swapParams,
-        CollateralTokenData memory collateralTokenData
+        address collateralToken,
+        SwapParams calldata swapParams
     ) internal {
         // Approve Pendle router to spend input tokens
         _forceApprove(
@@ -292,13 +302,13 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         // Execute swap from input token to PT (Principal Token)
         i_pendleRouter.swapExactTokenForPt(
             address(this),
-            collateralTokenData.pendleMarket,
+            s_pendleMarket[collateralToken],
             swapParams.minOut,
             swapParams.approxParams,
             TokenInput({
                 tokenIn: swapParams.tokenIn,
                 netTokenIn: swapParams.amountTokenIn,
-                tokenMintSy: collateralTokenData.underlyingToken,
+                tokenMintSy: swapParams.tokenMintSy,
                 pendleSwap: swapParams.pendleSwap,
                 swapData: swapParams.swapData
             }),

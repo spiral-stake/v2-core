@@ -6,14 +6,13 @@ pragma solidity 0.8.30;
 /// @dev Integrates with Morpho, Pendle, and custom SwapAggregator and MarketPositionmanager modules.
 
 import {IFlashLeverageCore, CoreLeveragePosition} from "../../interfaces/IFlashLeverageCore.sol";
-import {SwapAggregator, CollateralTokenData, SwapData, LimitOrderData, ApproxParams} from "./SwapAggregator.sol";
-import {MarketPositionManager, MarketParams, Id} from "./MarketPositionManager.sol";
+import {SwapAggregator, SwapData, LimitOrderData, ApproxParams} from "./SwapAggregator.sol";
+import {MarketPositionManager, MarketParams, Id, IOracle, IERC20Metadata} from "./MarketPositionManager.sol";
 import {LeverageParams, UnleverageParams} from "../structs/LeverageParams.sol";
 import {CollateralTokenConfig} from "../structs/CollateralTokenConfig.sol";
-import {IOracleRouter} from "../../interfaces/IOracleRouter.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
-import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
+import {IPendleMarket} from "../../interfaces/IPendleMarket.sol";
 import {Math} from "../libraries/Math.sol";
 import {FLCError} from "../libraries/Error.sol";
 
@@ -37,9 +36,6 @@ contract FlashLeverageCore is
 
     /// @notice Maximum allowed slippage (1% = 1e16)
     uint256 private constant SLIPPAGE_BUFFER = 1e16;
-
-    /// @notice Oracle router used for fetching USD price quotes.
-    IOracleRouter private immutable i_oracleRouter;
 
     /////////////////////////
     // Storage
@@ -98,19 +94,15 @@ contract FlashLeverageCore is
      * @notice Initializes the FlashLeverage contract.
      * @param morphoAddress Address of the Morpho protocol contract.
      * @param pendleRouter Address of the Pendle router for swap execution.
-     * @param oracleRouter Address of the oracle router for price feeds.
      */
     constructor(
         address morphoAddress,
-        address pendleRouter,
-        address oracleRouter
+        address pendleRouter
     )
         Ownable(msg.sender)
         SwapAggregator(pendleRouter)
         MarketPositionManager(morphoAddress)
-    {
-        i_oracleRouter = IOracleRouter(oracleRouter);
-    }
+    {}
 
     /////////////////////////
     // External Functions
@@ -148,6 +140,7 @@ contract FlashLeverageCore is
             amountCollateral,
             params.approxParams,
             params.pendleSwap,
+            params.tokenMintSy,
             params.swapData,
             params.limitOrderData
         );
@@ -217,6 +210,7 @@ contract FlashLeverageCore is
             sharesToBurn,
             amountCollateralToWithdraw,
             params.pendleSwap,
+            params.tokenRedeemSy,
             params.swapData,
             params.limitOrderData
         );
@@ -230,28 +224,29 @@ contract FlashLeverageCore is
     function addSupportedCollateralTokens(
         CollateralTokenConfig[] calldata configs
     ) external onlyOwner {
-        uint256 configsLength = configs.length;
-        for (uint256 i = 0; i < configsLength; ++i) {
+        for (uint256 i; i < configs.length; ++i) {
             CollateralTokenConfig memory config = configs[i];
+            address collateralToken = config.collateralToken;
 
-            require(config.collateralToken != address(0));
-            require(config.loanToken != address(0));
-            require(config.underlyingToken != address(0));
-            require(config.morphoMarketId != bytes32(0));
-            require(config.pendleMarket != address(0));
+            (, address PT, ) = IPendleMarket(config.pendleMarket).readTokens();
+            MarketParams memory marketParams = i_morpho.idToMarketParams(
+                Id.wrap(config.morphoMarketId)
+            );
 
-            _updateMorphoMarket(
-                config.collateralToken,
-                config.loanToken,
-                config.morphoMarketId
+            require(
+                collateralToken == PT &&
+                    collateralToken == marketParams.collateralToken,
+                FLCError.FlashLeverageCore__InvalidCollateralToken()
             );
-            _updateCollateralTokenData(
-                config.collateralToken,
-                CollateralTokenData({
-                    underlyingToken: config.underlyingToken,
-                    pendleMarket: config.pendleMarket
-                })
+
+            require(
+                IERC20Metadata(collateralToken).decimals() ==
+                    Math.STANDARD_DECIMALS,
+                FLCError.FlashLeverageCore__InvalidCollateralTokenDecimals()
             );
+
+            _updateMarketParams(marketParams);
+            _updatePendleMarket(collateralToken, config.pendleMarket);
         }
     }
 
@@ -269,7 +264,11 @@ contract FlashLeverageCore is
      * @notice Overrides renounceOwnership to prevent ownership renunciation.
      * @dev Intentionally disabled to retain upgradeability and collateral support management.
      */
-    function renounceOwnership() public pure override {
+    function renounceOwnership()
+        public
+        pure
+        override(Ownable, IFlashLeverageCore)
+    {
         revert FLCError.FlashLeverageCore__RenounceOwnershipDisabled();
     }
 
@@ -295,6 +294,7 @@ contract FlashLeverageCore is
             uint256 amountCollateral,
             ApproxParams memory approxParams,
             address pendleSwap,
+            address tokenMintSy,
             SwapData memory swapData,
             LimitOrderData memory limitOrderData
         ) = abi.decode(
@@ -306,6 +306,7 @@ contract FlashLeverageCore is
                     address,
                     uint256,
                     ApproxParams,
+                    address,
                     address,
                     SwapData,
                     LimitOrderData
@@ -319,6 +320,7 @@ contract FlashLeverageCore is
             amountLoan,
             approxParams,
             pendleSwap,
+            tokenMintSy,
             swapData,
             limitOrderData
         );
@@ -373,6 +375,7 @@ contract FlashLeverageCore is
             uint256 sharesToBurn,
             uint256 amountCollateralToWithdraw,
             address pendleSwap,
+            address tokenRedeemSy,
             SwapData memory swapData,
             LimitOrderData memory limitOrderData
         ) = abi.decode(
@@ -384,6 +387,7 @@ contract FlashLeverageCore is
                     address,
                     uint256,
                     uint256,
+                    address,
                     address,
                     SwapData,
                     LimitOrderData
@@ -405,6 +409,7 @@ contract FlashLeverageCore is
             loanToken,
             amountCollateralToWithdraw,
             pendleSwap,
+            tokenRedeemSy,
             swapData,
             limitOrderData
         );
@@ -435,8 +440,9 @@ contract FlashLeverageCore is
         uint256 amountCollateral,
         uint256 amountLoan
     ) internal view {
-        uint256 amountCollateralInUsd = getTokenUsdValue(
+        uint256 amountCollateralInUsd = getCollateralValueInLoanToken(
             collateralToken,
+            loanToken,
             amountCollateral
         );
 
@@ -444,7 +450,12 @@ contract FlashLeverageCore is
             return;
         }
 
-        uint256 effectiveLtv = amountLoan.divDown(amountCollateralInUsd);
+        uint256 amountLoanScaled = amountLoan.scaleTo(
+            s_loanTokenDecimals[loanToken],
+            Math.STANDARD_DECIMALS
+        );
+
+        uint256 effectiveLtv = amountLoanScaled.divDown(amountCollateralInUsd);
 
         require(
             effectiveLtv <= getMaxLtv(collateralToken, loanToken),
@@ -456,21 +467,47 @@ contract FlashLeverageCore is
     // Public and External View Functions
 
     /**
+     * @notice Returns the loan token value of a collateral token amount.
+     * @param collateralToken Address of the CollateralToken.
+     * @param loanToken Address of the Loan Token
+     * @param amountCollateral Amount of collateral token to value.
+     * @return valueInLoanToken Value of collateral amount in loan token terms (18 decimals).
+     */
+    function getCollateralValueInLoanToken(
+        address collateralToken,
+        address loanToken,
+        uint256 amountCollateral
+    ) public view returns (uint256) {
+        IOracle oracle = IOracle(
+            s_marketParams[collateralToken][loanToken].oracle
+        );
+
+        uint256 priceScaled = oracle.price(); // Returns scaled price of collateralToken
+
+        uint256 totalValue = amountCollateral.mulDown(priceScaled);
+
+        return
+            totalValue.scaleTo(
+                Math.STANDARD_DECIMALS + s_loanTokenDecimals[loanToken],
+                Math.STANDARD_DECIMALS
+            );
+    }
+
+    /**
      * @notice Calculates the maximum loan amount based on the amount collateral and safe LTV.
      * @param collateralToken The token used as collateral.
      * @param loanToken The stablecoin loan token (eg: USDC, DAI, USR, ...).
      * @param amountCollateral Amount of collateral is being supplied.
      * @return amountToBorrow Amount of stablecoin that can be borrowed.
-     *
-     * @dev Assumes loanToken (morpho supported stablecoins) are always valued at $1.
      */
     function calcFlashLoanAmount(
         address collateralToken,
         address loanToken,
         uint256 amountCollateral
     ) public view returns (uint256) {
-        uint256 amountCollateralInUsd = getTokenUsdValue(
+        uint256 amountCollateralInUsd = getCollateralValueInLoanToken(
             collateralToken,
+            loanToken,
             amountCollateral
         );
 
@@ -483,20 +520,11 @@ contract FlashLeverageCore is
         uint256 loanUsd = totalPositionUsd - amountCollateralInUsd;
 
         // Adjust loan amount to match loanToken decimals
-        return loanUsd.scaleTo(18, IERC20Metadata(loanToken).decimals());
-    }
-
-    /**
-     * @notice Returns the USD value of a token amount.
-     * @param token The address of the token.
-     * @param amount Amount of token to value.
-     * @return valueInUsd USD value (18 decimals).
-     */
-    function getTokenUsdValue(
-        address token,
-        uint256 amount
-    ) public view returns (uint256) {
-        return i_oracleRouter.getQuote(amount, token, USD);
+        return
+            loanUsd.scaleTo(
+                Math.STANDARD_DECIMALS,
+                s_loanTokenDecimals[loanToken]
+            );
     }
 
     /// @notice Returns the safe LTV used for leverage calculations after applying liquidation and slippage buffer.

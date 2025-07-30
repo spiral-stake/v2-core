@@ -8,7 +8,9 @@ pragma solidity 0.8.30;
 
 import {IMorphoFlashLoanCallback} from "@morpho/interfaces/IMorphoCallbacks.sol";
 import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
+import {IOracle} from "@morpho/interfaces/IOracle.sol";
 import {MorphoBalancesLib, SharesMathLib} from "@morpho/libraries/periphery/MorphoBalancesLib.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
 import {FLCError} from "../libraries/Error.sol";
 
@@ -35,6 +37,8 @@ abstract contract MarketPositionManager is
 
     mapping(address collateralToken => mapping(address loanToken => MarketParams))
         internal s_marketParams;
+
+    mapping(address loanToken => uint8) internal s_loanTokenDecimals;
 
     /////////////////////////
     // Constructor
@@ -197,17 +201,12 @@ abstract contract MarketPositionManager is
 
     /**
      * @notice Updates market parameters for a collateral token using Morpho's market ID.
-     * @param collateralToken Token used as collateral.
-     * @param morphoMarketId Morpho market ID (as bytes32).
+     * @param params Morpho market params for PT collateral token
      */
-    function _updateMorphoMarket(
-        address collateralToken,
-        address loanToken,
-        bytes32 morphoMarketId
-    ) internal {
-        s_marketParams[collateralToken][loanToken] = i_morpho.idToMarketParams(
-            Id.wrap(morphoMarketId)
-        );
+    function _updateMarketParams(MarketParams memory params) internal {
+        s_marketParams[params.collateralToken][params.loanToken] = params;
+        s_loanTokenDecimals[params.loanToken] = IERC20Metadata(params.loanToken)
+            .decimals();
     }
 
     /////////////////////////

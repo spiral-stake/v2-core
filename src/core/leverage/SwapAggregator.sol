@@ -8,19 +8,18 @@ pragma solidity 0.8.30;
 import {IPAllActionV3} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
 import {ApproxParams, TokenInput, TokenOutput, SwapData, LimitOrderData, SwapType, FillOrderParams} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
-import {CollateralTokenData} from "../structs/CollateralTokenData.sol";
 
 abstract contract SwapAggregator is TokenHelper {
     /////////////////////////
     // Constants and Immutables
 
-    IPAllActionV3 private immutable i_pendleRouter;
+    IPAllActionV3 public immutable i_pendleRouter;
 
     /////////////////////////
     // Storage
 
-    mapping(address collateralToken => CollateralTokenData)
-        private s_collateralTokenData;
+    mapping(address collateralToken => address pendleMarket)
+        private s_pendleMarket;
 
     /////////////////////////
     // Constructor
@@ -47,23 +46,20 @@ abstract contract SwapAggregator is TokenHelper {
         uint256 amountLoan,
         ApproxParams memory approxParams,
         address pendleSwap,
+        address tokenMintSy,
         SwapData memory swapData,
         LimitOrderData memory limitOrderData
     ) internal returns (uint256 amountSwappedCollateralToken) {
-        CollateralTokenData memory tokenData = s_collateralTokenData[
-            collateralToken
-        ];
-
         _forceApprove(loanToken, address(i_pendleRouter), amountLoan);
         (amountSwappedCollateralToken, , ) = i_pendleRouter.swapExactTokenForPt(
             address(this),
-            tokenData.pendleMarket,
+            s_pendleMarket[collateralToken],
             0,
             approxParams,
             _createTokenInputSimple(
                 loanToken,
                 amountLoan,
-                tokenData.underlyingToken,
+                tokenMintSy,
                 pendleSwap,
                 swapData
             ),
@@ -86,13 +82,10 @@ abstract contract SwapAggregator is TokenHelper {
         address loanToken,
         uint256 amountCollateral,
         address pendleSwap,
+        address tokenRedeemSy,
         SwapData memory swapData,
         LimitOrderData memory limitOrderData
     ) internal returns (uint256 amountSwappedLoanToken) {
-        CollateralTokenData memory tokenData = s_collateralTokenData[
-            collateralToken
-        ];
-
         _safeApprove(
             collateralToken,
             address(i_pendleRouter),
@@ -100,12 +93,12 @@ abstract contract SwapAggregator is TokenHelper {
         );
         (amountSwappedLoanToken, , ) = i_pendleRouter.swapExactPtForToken(
             address(this),
-            tokenData.pendleMarket,
+            s_pendleMarket[collateralToken],
             amountCollateral,
             _createTokenOutputSimple(
                 loanToken,
                 0,
-                tokenData.underlyingToken,
+                tokenRedeemSy,
                 pendleSwap,
                 swapData
             ),
@@ -197,12 +190,12 @@ abstract contract SwapAggregator is TokenHelper {
     /**
      * @notice Sets swap configuration for a specific collateral token.
      * @param collateralToken Address of the collateral token (e.g., PT).
-     * @param tokenData Struct containing Pendle market and underlying token info.
+     * @param pendleMarket Address of the pendle market for PT collateralToken
      */
-    function _updateCollateralTokenData(
+    function _updatePendleMarket(
         address collateralToken,
-        CollateralTokenData memory tokenData
+        address pendleMarket
     ) internal {
-        s_collateralTokenData[collateralToken] = tokenData;
+        s_pendleMarket[collateralToken] = pendleMarket;
     }
 }

@@ -10,6 +10,8 @@ library FLCError {
     error FlashLeverageCore__ExceedsMaxLTV();
     error FlashLeverageCore__RenounceOwnershipDisabled();
     error FlashLeverageCore__NotAManager();
+    error FlashLeverageCore__InvalidCollateralToken();
+    error FlashLeverageCore__InvalidCollateralTokenDecimals();
 }
 
 library FLError {

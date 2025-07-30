@@ -9,6 +9,7 @@ struct LeverageParams {
     uint256 amountCollateral;
     ApproxParams approxParams;
     address pendleSwap;
+    address tokenMintSy;
     SwapData swapData;
     LimitOrderData limitOrderData;
 }
@@ -19,6 +20,7 @@ struct UnleverageParams {
     uint256 sharesToBurn;
     uint256 amountCollateralToWithdraw;
     address pendleSwap;
+    address tokenRedeemSy;
     SwapData swapData;
     LimitOrderData limitOrderData;
 }

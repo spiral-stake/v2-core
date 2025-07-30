@@ -1,83 +1,65 @@
-// // SPDX-License-Identifier: GPL-3.0-or-later
-// pragma solidity 0.8.30;
+// SPDX-License-Identifier: GPL-3.0-or-later
+pragma solidity 0.8.30;
 
-// import {Script} from "forge-std/Script.sol";
-// import {HelperConfig, ChainConfig} from "./HelperConfig.s.sol";
-// import {DeployStblUSD} from "./DeployStblUSD.s.sol";
-// import {DeployPositionManager} from "./DeployPositionManager.s.sol";
-// import {WriteAddressesToJson} from "./WriteAddresses.s.sol";
-// import {DeployFlashLeverage} from "./DeployFlashLeverage.s.sol";
+import {Script} from "forge-std/Script.sol";
+import {IWETH} from "../src/interfaces/IWETH.sol";
+import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
+import {DeployFlashLeverageCore} from "./DeployFlashLeverageCore.s.sol";
+import {DeployFlashLeverage} from "./DeployFlashLeverage.s.sol";
 
-// interface IERC20Mock {
-//     function mint(address account, uint256 amount) external;
-// }
+import {console} from "forge-std/console.sol";
 
-// contract Main is Script {
-//     address payable private user =
-//         payable(0x08675879B01177a9Bc80A7FC58c032cFA2Bb7742);
-//     uint256 private constant AMOUNT_COLLATERAL_TOKEN = 100000000e18;
-//     uint256 private constant AMOUNT_NATIVE = 100e18;
+contract Main is Script {
+    address morpho = 0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb;
+    address pendleRouter = 0x888888888889758F76e7103c6CbF23ABbF58F946;
+    address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
-//     function run() external {
-//         HelperConfig helperConfig = new HelperConfig();
-//         ChainConfig memory chain = helperConfig.deployIfNeededAndGetConfig();
+    function setUp() external {
+        vm.startBroadcast();
+        if (block.chainid == 31337) {
+            IWETH(WETH).deposit{value: 10 ether}();
+        }
+        vm.stopBroadcast();
+    }
 
-//         if (chain.isLocal) {
-//             address stblUSDAddress = (new DeployStblUSD()).run();
+    function run() external {
+        CollateralTokenConfig[] memory configs = new CollateralTokenConfig[](3);
 
-//             address positionManagerAddress = (new DeployPositionManager()).run(
-//                 stblUSDAddress,
-//                 chain.collateralTokens,
-//                 chain.priceFeeds,
-//                 chain.treasury
-//             );
+        // PT-slvlUSD
+        configs[0] = CollateralTokenConfig({
+            collateralToken: 0x2CA5f2C4300450D53214B00546795c1c07B89acB,
+            morphoMarketId: 0x8ebcaf72c7cd75e8c621ec77ec343b3152c48908c4a6e217da82fe6af23c1928,
+            pendleMarket: 0xC88FF954d42d3e11D43B62523B3357847C29377c
+        });
 
-//             address flashLeverageAddress = (
-//                 new DeployFlashLeverage().run(
-//                     positionManagerAddress,
-//                     new address[](0),
-//                     new address[](0),
-//                     chain.treasury
-//                 )
-//             );
+        // PT-wstUSR
+        configs[1] = CollateralTokenConfig({
+            collateralToken: 0x23E60d1488525bf4685f53b3aa8E676c30321066,
+            morphoMarketId: 0xeec6c7e2ddb7578f2a7d86fc11cf9da005df34452ad9b9189c51266216f5d71b,
+            pendleMarket: 0x09fA04Aac9c6d1c6131352EE950CD67ecC6d4fB9
+        });
 
-//             (new WriteAddressesToJson())._writeAddressesToJson(
-//                 stblUSDAddress,
-//                 positionManagerAddress,
-//                 flashLeverageAddress,
-//                 chain.collateralTokens,
-//                 chain.frxUSD
-//             );
+        // PT-USDS
+        configs[2] = CollateralTokenConfig({
+            collateralToken: 0xFfEc096c087C13Cc268497B89A613cACE4DF9A48,
+            morphoMarketId: 0xa458018cf1a6e77ebbcc40ba5776ac7990e523b7cc5d0c1e740a4bbc13190d8f,
+            pendleMarket: 0xdacE1121e10500e9e29d071F01593fD76B000f08
+        });
 
-//             _mintCollateralTokens(
-//                 user,
-//                 chain.collateralTokens,
-//                 AMOUNT_COLLATERAL_TOKEN
-//             );
+        address flashLeverageCoreAddress = new DeployFlashLeverageCore().run(
+            morpho,
+            pendleRouter,
+            configs
+        );
 
-//             _mintNative(user, AMOUNT_NATIVE);
-//         }
-//     }
+        address flashLeverageAddress = new DeployFlashLeverage().run(
+            flashLeverageCoreAddress,
+            pendleRouter,
+            configs
+        );
 
-//     function _mintCollateralTokens(
-//         address _user,
-//         address[] memory collateralTokens,
-//         uint256 amountToken
-//     ) private {
-//         for (uint256 j = 0; j < collateralTokens.length; j++) {
-//             address collateralToken = collateralTokens[j];
-
-//             vm.startBroadcast();
-
-//             IERC20Mock(collateralToken).mint(_user, amountToken);
-
-//             vm.stopBroadcast();
-//         }
-//     }
-
-//     function _mintNative(address payable _user, uint256 amountNative) private {
-//         vm.startBroadcast();
-//         _user.transfer(amountNative);
-//         vm.stopBroadcast();
-//     }
-// }
+        console.log(flashLeverageCoreAddress);
+        console.log(flashLeverageAddress);
+    }
+}
