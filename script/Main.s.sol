@@ -24,7 +24,7 @@ contract Main is Script {
     }
 
     function run() external {
-        CollateralTokenConfig[] memory configs = new CollateralTokenConfig[](3);
+        CollateralTokenConfig[] memory configs = new CollateralTokenConfig[](5);
 
         // PT-slvlUSD
         configs[0] = CollateralTokenConfig({
@@ -45,6 +45,20 @@ contract Main is Script {
             collateralToken: 0xFfEc096c087C13Cc268497B89A613cACE4DF9A48,
             morphoMarketId: 0xa458018cf1a6e77ebbcc40ba5776ac7990e523b7cc5d0c1e740a4bbc13190d8f,
             pendleMarket: 0xdacE1121e10500e9e29d071F01593fD76B000f08
+        });
+
+        // PT-cUSDO
+        configs[3] = CollateralTokenConfig({
+            collateralToken: 0xB10DA2F9147f9cf2B8826877Cd0c95c18A0f42dc,
+            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb,
+            pendleMarket: 0x3F53eb4c57c7E7118BE8566bCd503EA502639581
+        });
+
+        // PT-USDe
+        configs[4] = CollateralTokenConfig({
+            collateralToken: 0xBC6736d346a5eBC0dEbc997397912CD9b8FAe10a,
+            morphoMarketId: 0x3462a9442ec1aa46fc38bf91472b593b8fb86bf18eac47ebf82493dc4bed5b1b,
+            pendleMarket: 0x6d98a2b6CDbF44939362a3E99793339Ba2016aF4
         });
 
         address flashLeverageCoreAddress = new DeployFlashLeverageCore().run(

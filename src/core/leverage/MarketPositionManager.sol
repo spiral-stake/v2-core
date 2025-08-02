@@ -30,7 +30,7 @@ abstract contract MarketPositionManager is
     /////////////////////////
     // Constants and Immutables
 
-    IMorpho internal immutable i_morpho;
+    IMorpho public immutable i_morpho;
 
     /////////////////////////
     // Storage
