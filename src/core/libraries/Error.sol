@@ -21,4 +21,6 @@ library FLError {
     error FlashLeverage__PositionAlreadyUnleveraged();
     error FlashLeverage__AmountCannotBeZero();
     error FlashLeverage__UnsupportedCollateralToken();
+    error FlashLeverage__TreasuryCannotBeZero();
+    error FlashLeverage__RenounceOwnershipDisabled();
 }

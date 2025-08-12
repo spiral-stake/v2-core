@@ -13,11 +13,13 @@ import {MorphoBalancesLib, SharesMathLib} from "@morpho/libraries/periphery/Morp
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
 import {FLCError} from "../libraries/Error.sol";
+import {Math} from "../libraries/Math.sol";
 
 abstract contract MarketPositionManager is
     IMorphoFlashLoanCallback,
     TokenHelper
 {
+    using Math for uint256;
     using MorphoBalancesLib for IMorpho;
     using SharesMathLib for uint256;
 
@@ -239,13 +241,15 @@ abstract contract MarketPositionManager is
      * @notice Calculates the amount of loan token needed to repay borrowed shares.
      * @param collateralToken Token used as collateral in the position.
      * @param sharesBorrowed Shares representing the borrowed position.
-     * @return amountRepay Equivalent amount in loan token required for repayment.
+     *
+     * @return Equivalent amount in loan token
+     * @dev scaled to 18 decimals
      */
-    function getSharesToAsset(
+    function getSharesValueInLoanToken(
         address collateralToken,
         address loanToken,
         uint256 sharesBorrowed
-    ) public view returns (uint256 amountRepay) {
+    ) public view returns (uint256) {
         MarketParams memory marketParams = s_marketParams[collateralToken][
             loanToken
         ];
@@ -253,6 +257,12 @@ abstract contract MarketPositionManager is
         (, , uint256 totalBorrowAssets, uint256 totalBorrowShares) = i_morpho
             .expectedMarketBalances(marketParams);
 
-        return sharesBorrowed.toAssetsUp(totalBorrowAssets, totalBorrowShares);
+        return
+            sharesBorrowed
+                .toAssetsUp(totalBorrowAssets, totalBorrowShares)
+                .scaleTo(
+                    s_loanTokenDecimals[loanToken],
+                    Math.STANDARD_DECIMALS
+                );
     }
 }

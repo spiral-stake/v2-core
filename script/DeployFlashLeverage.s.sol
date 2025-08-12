@@ -10,14 +10,16 @@ contract DeployFlashLeverage is Script {
     function run(
         address flashLeverageCore,
         address pendleRouter,
-        CollateralTokenConfig[] memory configs
+        address treasury,
+        CollateralTokenConfig[] memory tokensConfig
     ) external returns (address flashLeverageAddress) {
         vm.startBroadcast();
 
         // Deploy
         FlashLeverage flashLeverage = new FlashLeverage(
             flashLeverageCore,
-            pendleRouter
+            pendleRouter,
+            treasury
         );
 
         // Set as Manager in FlashLeverageCore
@@ -28,7 +30,7 @@ contract DeployFlashLeverage is Script {
 
         // Add supported collateral tokens
 
-        flashLeverage.addSupportedCollateralTokens(configs);
+        flashLeverage.addSupportedCollateralTokens(tokensConfig);
 
         vm.stopBroadcast();
 

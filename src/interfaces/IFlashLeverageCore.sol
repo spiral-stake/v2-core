@@ -13,7 +13,7 @@ interface IFlashLeverageCore {
     function unleverage(UnleverageParams calldata params) external;
 
     function addSupportedCollateralTokens(
-        CollateralTokenConfig[] calldata configs
+        CollateralTokenConfig[] calldata tokensConfig
     ) external;
 
     function setManager(address manager, bool value) external;
@@ -22,16 +22,28 @@ interface IFlashLeverageCore {
 
     // ======== Public / External View Functions ========
 
-    function calcFlashLoanAmount(
+    function calcLeverageFlashLoan(
         address collateralToken,
         address loanToken,
         uint256 amountCollateral
+    ) external view returns (uint256);
+
+    function calcUnleverageFlashLoan(
+        address collateralToken,
+        address loanToken,
+        uint256 sharesToBurn
     ) external view returns (uint256);
 
     function getCollateralValueInLoanToken(
         address collateralToken,
         address loanToken,
         uint256 amountCollateral
+    ) external view returns (uint256);
+
+    function getSharesValueInLoanToken(
+        address collateralToken,
+        address loanToken,
+        uint256 sharesBorrowed
     ) external view returns (uint256);
 
     function getSafeLtv(
@@ -54,4 +66,12 @@ interface IFlashLeverageCore {
         address collateralToken,
         address loanToken
     ) external view returns (CoreLeveragePosition memory);
+
+    function i_morpho() external view returns (address);
+
+    function i_pendleRouter() external view returns (address);
+
+    function i_liquidationBuffer() external view returns (uint256);
+
+    function i_slippageBuffer() external view returns (uint256);
 }

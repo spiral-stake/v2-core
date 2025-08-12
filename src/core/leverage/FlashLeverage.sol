@@ -10,6 +10,7 @@ import {TokenHelper, IERC20} from "../libraries/TokenHelper.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {Math} from "../libraries/Math.sol";
 import {FLError} from "../libraries/Error.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 
 /**
  * @title FlashLeverage
@@ -29,6 +30,9 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
     /// @notice Flash leverage contract for executing leveraged positions
     IFlashLeverageCore public immutable i_flashLeverageCore;
 
+    /// @notice Fee percentage in basis points (5%)
+    uint256 public constant YIELD_FEE = 5e16;
+
     /////////////////////////
     // Storage
 
@@ -37,6 +41,9 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
     /// @notice Mapping of PT collateral tokens to their pendle market
     mapping(address collateralToken => address pendleMarket)
         private s_pendleMarket;
+
+    /// @notice Treasury address to receive fees
+    address private s_treasury;
 
     /////////////////////////
     // Events
@@ -85,13 +92,16 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
      * @notice Initializes the wrapper with required contract addresses
      * @param flashLeverageCore Address of the flash leverage contract
      * @param pendleRouter Address of the Pendle router contract
+     * @param treasury Address to receive yield fees
      */
     constructor(
         address flashLeverageCore,
-        address pendleRouter
+        address pendleRouter,
+        address treasury
     ) Ownable(msg.sender) {
         i_flashLeverageCore = IFlashLeverageCore(flashLeverageCore);
         i_pendleRouter = IPAllActionV3(pendleRouter);
+        s_treasury = treasury;
     }
 
     /////////////////////////
@@ -99,6 +109,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
 
     /**
      * @notice Executes the flash leverage using PT collateral
+     * @param onBehalfOf Address to open the position on behalf of
      * @param leverageParams Parameters for the flash leverage operation
      */
     function leverage(
@@ -125,6 +136,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
 
     /**
      * @notice Entry point for users. Swaps tokens if needed, approves, then leverages.
+     * @param onBehalfOf Address to open the position on behalf of
      * @param swapParams Parameters including tokenIn, amountTokenIn
      * @param leverageParams Parameters for the leverage call
      */
@@ -164,8 +176,10 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
      * @notice Closes an open leverage position and withdraws collateral.
      * @param positionId The ID of the position to close.
      * @param pendleSwap Address of the Pendle swap contract to use.
+     * @param tokenRedeemSy Address of the token to redeem from SY (Standardized Yield) tokens
      * @param swapData Additional swap data required by Pendle.
      * @param limitOrderData Limit order parameters for the swap.
+     * @dev Calculates yield and deducts 5% fee on positive yields before returning funds to user
      */
     function unleverage(
         uint256 positionId,
@@ -173,7 +187,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         address tokenRedeemSy,
         SwapData calldata swapData,
         LimitOrderData calldata limitOrderData
-    ) external {
+    ) external returns (uint256 amountReturned) {
         address _msgSender = msg.sender;
 
         require(
@@ -200,24 +214,44 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
                 limitOrderData: limitOrderData
             })
         );
-
         position.open = false;
 
-        uint256 amountReturned = _selfBalance(position.loanToken);
-        _transferOut(position.loanToken, _msgSender, amountReturned);
+        uint8 loanTokenDecimals = IERC20Metadata(position.loanToken).decimals();
+        uint256 totalAmountDeposited = position.amountCollateralInLoanToken;
+        uint256 totalAmountReceived = _selfBalance(position.loanToken).scaleTo(
+            loanTokenDecimals,
+            Math.STANDARD_DECIMALS
+        );
 
+        uint256 amountFee;
+        if (totalAmountReceived > totalAmountDeposited) {
+            uint256 yieldGenerated = totalAmountReceived - totalAmountDeposited;
+            amountFee = yieldGenerated.mulDown(YIELD_FEE);
+            _transferOut(
+                position.loanToken,
+                s_treasury,
+                amountFee.scaleTo(Math.STANDARD_DECIMALS, loanTokenDecimals)
+            );
+        }
+
+        amountReturned = (totalAmountReceived - amountFee).scaleTo(
+            Math.STANDARD_DECIMALS,
+            loanTokenDecimals
+        );
+        _transferOut(position.loanToken, _msgSender, amountReturned);
         emit LeveragePositionClosed(_msgSender, positionId, amountReturned);
     }
 
     /**
      * @notice Allows owner to add support for new collateral tokens.
-     * @param configs Array of token configurations including swap and market parameters.
+     * @param tokensConfig Array of token configurations including swap and market parameters.
+     * @dev For each token, maps it to its Pendle market and approves max spending to flash leverage core
      */
     function addSupportedCollateralTokens(
-        CollateralTokenConfig[] calldata configs
+        CollateralTokenConfig[] calldata tokensConfig
     ) external onlyOwner {
-        for (uint256 i; i < configs.length; ++i) {
-            CollateralTokenConfig memory config = configs[i];
+        for (uint256 i; i < tokensConfig.length; ++i) {
+            CollateralTokenConfig memory config = tokensConfig[i];
             s_pendleMarket[config.collateralToken] = config.pendleMarket;
 
             // Safe approve max collateral token to i_flashLeverage for lifetime
@@ -230,14 +264,36 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
     }
 
     /**
+     * @notice Updates the treasury address
+     * @param newTreasury The new treasury address
+     * @dev Only callable by the contract owner. Validates that the new treasury is not zero address.
+     */
+    function updateTreasury(address newTreasury) external onlyOwner {
+        require(
+            newTreasury != address(0),
+            FLError.FlashLeverage__TreasuryCannotBeZero()
+        );
+
+        s_treasury = newTreasury;
+    }
+
+    /**
      * @notice Overrides renounceOwnership to prevent ownership renunciation
      * @dev Intentionally disabled to retain upgradeability and integration support management
      */
-    function renounceOwnership() public override {}
+    function renounceOwnership() public pure override {
+        revert FLError.FlashLeverage__RenounceOwnershipDisabled();
+    }
 
     /////////////////////////
     // Internal Functions
 
+    /**
+     * @notice Internal function to execute leverage operations
+     * @param onBehalfOf Address to open the position on behalf of
+     * @param leverageParams Parameters for the leverage operation
+     * @dev Compares position before and after leverage to track deltas and store position data
+     */
     function _leverage(
         address onBehalfOf,
         LeverageParams calldata leverageParams
@@ -257,12 +313,25 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         CoreLeveragePosition memory positionAfter = i_flashLeverageCore
             .getCoreLeveragePosition(address(this), collateralToken, loanToken);
 
-        uint256 collateralTokenUsdValue = i_flashLeverageCore
+        // Amount Leveraged & Shares Borrowed
+        uint256 amountLeveragedCollateral = positionAfter.amountCollateral -
+            positionBefore.amountCollateral;
+        uint256 sharesBorrowed = positionAfter.sharesBorrowed -
+            positionBefore.sharesBorrowed;
+
+        // Tracking related
+        uint256 amountCollateralInLoanToken = i_flashLeverageCore
             .getCollateralValueInLoanToken(
                 collateralToken,
                 loanToken,
-                Math.ONE
+                amountCollateral
             );
+        uint256 positionValueInLoanToken = _calcPositionValueInLoanToken(
+            collateralToken,
+            loanToken,
+            amountLeveragedCollateral,
+            sharesBorrowed
+        );
 
         // Add new Leverage Position
         uint256 positionId = s_userLeveragePositions[onBehalfOf].length;
@@ -271,12 +340,11 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
                 open: true,
                 collateralToken: collateralToken,
                 loanToken: loanToken,
-                collateralTokenUsdValue: collateralTokenUsdValue,
                 amountCollateral: amountCollateral,
-                amountLeveragedCollateral: positionAfter.amountCollateral -
-                    positionBefore.amountCollateral,
-                sharesBorrowed: positionAfter.sharesBorrowed -
-                    positionBefore.sharesBorrowed
+                amountCollateralInLoanToken: amountCollateralInLoanToken,
+                amountLeveragedCollateral: amountLeveragedCollateral,
+                sharesBorrowed: sharesBorrowed,
+                positionValueInLoanToken: positionValueInLoanToken
             })
         );
 
@@ -285,8 +353,9 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
 
     /**
      * @notice Swaps input tokens to collateral tokens via Pendle
-     * @dev Uses stored swap parameters and handles excess token refunds
+     * @param collateralToken The target collateral token to swap to
      * @param swapParams Wrapper parameters containing swap details
+     * @dev Uses stored swap parameters and handles token approvals for Pendle router
      */
     function _handleTokenSwap(
         address collateralToken,
@@ -314,16 +383,39 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
             }),
             swapParams.limitOrderData
         );
-
-        // Return any excess collateral tokens to user or let it accumulate as dust (gas-efficient)
-        // if (amountCollateralOut > swapParams.minOut) {
-        //     uint256 amountRemaining;
-        //     unchecked {
-        //         amountRemaining = amountCollateralOut - swapParams.minOut;
-        //     }
-        //     _transferOut(collateralToken, msg.sender, amountRemaining);
-        // }
     }
+
+    /**
+     * @notice Calculates the net position value in loan token terms
+     * @param collateralToken Address of the collateral token
+     * @param loanToken Address of the loan token
+     * @param amountLeveragedCollateral Amount of leveraged collateral
+     * @param sharesBorrowed Amount of shares borrowed
+     * @return Net position value (collateral value minus borrowed shares value) in 18 decimals
+     */
+    function _calcPositionValueInLoanToken(
+        address collateralToken,
+        address loanToken,
+        uint256 amountLeveragedCollateral,
+        uint256 sharesBorrowed
+    ) internal view returns (uint256) {
+        uint256 collateralValue = i_flashLeverageCore
+            .getCollateralValueInLoanToken(
+                collateralToken,
+                loanToken,
+                amountLeveragedCollateral
+            );
+        uint256 sharesValue = i_flashLeverageCore.getSharesValueInLoanToken(
+            collateralToken,
+            loanToken,
+            sharesBorrowed
+        );
+
+        return collateralValue - sharesValue;
+    }
+
+    /////////////////////////
+    // View Functions
 
     /**
      * @notice Returns all leverage positions for a specific user.
@@ -337,14 +429,53 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
     }
 
     /**
-     * @notice Returns all leverage positions for a specific user.
+     * @notice Returns a specific leverage position for a user.
      * @param user Address of the user
      * @param positionId Id of the leverage position
+     * @return position The leverage position struct
      */
     function getUserLeveragePosition(
         address user,
         uint256 positionId
     ) public view returns (LeveragePosition memory) {
         return s_userLeveragePositions[user][positionId];
+    }
+
+    /**
+     * @notice Calculates the yield generated on a specific position
+     * @param user Address of the user
+     * @param positionId Id of the leverage position
+     * @return yield The yield generated in loan token terms with 18 decimals, returns 0 if position is at a loss
+     */
+    function getPositionYieldInLoanToken(
+        address user,
+        uint256 positionId
+    ) public view returns (uint256) {
+        LeveragePosition memory position = s_userLeveragePositions[user][
+            positionId
+        ];
+
+        uint256 initialPositionValue = position.positionValueInLoanToken;
+        uint256 currentPositionValue = _calcPositionValueInLoanToken(
+            position.collateralToken,
+            position.loanToken,
+            position.amountLeveragedCollateral,
+            position.sharesBorrowed
+        );
+
+        // Return 0 if current value is less than initial (no yield/loss)
+        if (currentPositionValue <= initialPositionValue) {
+            return 0;
+        }
+
+        return (currentPositionValue - initialPositionValue);
+    }
+
+    /**
+     * @notice Returns the current treasury address
+     * @return treasury The address of the current treasury
+     */
+    function getTreasury() public view returns (address) {
+        return s_treasury;
     }
 }
