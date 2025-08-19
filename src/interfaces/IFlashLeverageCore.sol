@@ -8,9 +8,15 @@ import {CoreLeveragePosition} from "../core/structs/CoreLeveragePosition.sol";
 interface IFlashLeverageCore {
     // ======== External Mutable Functions ========
 
-    function leverage(LeverageParams calldata params) external;
+    function leverage(
+        address onBehalfOf,
+        LeverageParams calldata params
+    ) external;
 
-    function unleverage(UnleverageParams calldata params) external;
+    function unleverage(
+        address onBehalfOf,
+        UnleverageParams calldata params
+    ) external;
 
     function addSupportedCollateralTokens(
         CollateralTokenConfig[] calldata tokensConfig
@@ -20,9 +26,14 @@ interface IFlashLeverageCore {
 
     function renounceOwnership() external;
 
+    function getOrCreateUserProxy(
+        address user
+    ) external returns (address proxy);
+
     // ======== Public / External View Functions ========
 
     function calcLeverageFlashLoan(
+        uint256 desiredLtv,
         address collateralToken,
         address loanToken,
         uint256 amountCollateral
@@ -46,7 +57,7 @@ interface IFlashLeverageCore {
         uint256 sharesBorrowed
     ) external view returns (uint256);
 
-    function getSafeLtv(
+    function getLiqLtv(
         address collateralToken,
         address loanToken
     ) external view returns (uint256);
@@ -56,16 +67,17 @@ interface IFlashLeverageCore {
         address loanToken
     ) external view returns (uint256);
 
-    function getLiqLtv(
-        address collateralToken,
-        address loanToken
-    ) external view returns (uint256);
-
-    function getCoreLeveragePosition(
-        address manager,
+    function getUserCoreLeveragePosition(
+        address user,
+        uint256 desiredLtv,
         address collateralToken,
         address loanToken
     ) external view returns (CoreLeveragePosition memory);
+
+    function getUserProxy(
+        address user,
+        address desiredLtv
+    ) external view returns (address);
 
     function i_morpho() external view returns (address);
 
@@ -74,4 +86,6 @@ interface IFlashLeverageCore {
     function i_liquidationBuffer() external view returns (uint256);
 
     function i_slippageBuffer() external view returns (uint256);
+
+    function i_userProxyImplementation() external view returns (address);
 }

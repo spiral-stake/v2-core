@@ -11,6 +11,7 @@ remappings = [
 fs_permissions = [{ access = "write", path = "../" }]
 solc_version = "0.8.30"
 gas_reports = ["*"]
+ffi = true
 
 # Gas settings
 gas_price = 2250000000

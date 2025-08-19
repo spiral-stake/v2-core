@@ -188,13 +188,13 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         SwapData calldata swapData,
         LimitOrderData calldata limitOrderData
     ) external returns (uint256 amountReturned) {
-        address _msgSender = msg.sender;
+        address user = msg.sender;
 
         require(
-            positionId < s_userLeveragePositions[_msgSender].length,
+            positionId < s_userLeveragePositions[user].length,
             FLError.FlashLeverage__PositionDoesNotExist()
         );
-        LeveragePosition storage position = s_userLeveragePositions[_msgSender][
+        LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
         ];
         require(
@@ -203,9 +203,11 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         );
 
         i_flashLeverageCore.unleverage(
+            user,
             UnleverageParams({
                 collateralToken: position.collateralToken,
                 loanToken: position.loanToken,
+                desiredLtv: position.desiredLtv,
                 sharesToBurn: position.sharesBorrowed,
                 amountCollateralToWithdraw: position.amountLeveragedCollateral,
                 pendleSwap: pendleSwap,
@@ -238,8 +240,8 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
             Math.STANDARD_DECIMALS,
             loanTokenDecimals
         );
-        _transferOut(position.loanToken, _msgSender, amountReturned);
-        emit LeveragePositionClosed(_msgSender, positionId, amountReturned);
+        _transferOut(position.loanToken, user, amountReturned);
+        emit LeveragePositionClosed(user, positionId, amountReturned);
     }
 
     /**
@@ -300,26 +302,37 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
     ) internal {
         address collateralToken = leverageParams.collateralToken;
         address loanToken = leverageParams.loanToken;
+        uint256 desiredLtv = leverageParams.desiredLtv;
         uint256 amountCollateral = leverageParams.amountCollateral;
 
         // Position before
         CoreLeveragePosition memory positionBefore = i_flashLeverageCore
-            .getCoreLeveragePosition(address(this), collateralToken, loanToken);
+            .getUserCoreLeveragePosition(
+                onBehalfOf,
+                desiredLtv,
+                collateralToken,
+                loanToken
+            );
 
         // Leverage
-        i_flashLeverageCore.leverage(leverageParams);
+        i_flashLeverageCore.leverage(onBehalfOf, leverageParams);
 
         // Position after
         CoreLeveragePosition memory positionAfter = i_flashLeverageCore
-            .getCoreLeveragePosition(address(this), collateralToken, loanToken);
+            .getUserCoreLeveragePosition(
+                onBehalfOf,
+                desiredLtv,
+                collateralToken,
+                loanToken
+            );
 
-        // Amount Leveraged & Shares Borrowed
+        // Position Related: Amount Leveraged & Shares Borrowed
         uint256 amountLeveragedCollateral = positionAfter.amountCollateral -
             positionBefore.amountCollateral;
         uint256 sharesBorrowed = positionAfter.sharesBorrowed -
             positionBefore.sharesBorrowed;
 
-        // Tracking related
+        // Position Tracking Related
         uint256 amountCollateralInLoanToken = i_flashLeverageCore
             .getCollateralValueInLoanToken(
                 collateralToken,
@@ -340,6 +353,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
                 open: true,
                 collateralToken: collateralToken,
                 loanToken: loanToken,
+                desiredLtv: desiredLtv,
                 amountCollateral: amountCollateral,
                 amountCollateralInLoanToken: amountCollateralInLoanToken,
                 amountLeveragedCollateral: amountLeveragedCollateral,

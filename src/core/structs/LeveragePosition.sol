@@ -9,6 +9,7 @@ struct LeveragePosition {
     bool open;
     address collateralToken;
     address loanToken;
+    uint256 desiredLtv;
     uint256 amountCollateral;
     uint256 amountCollateralInLoanToken;
     uint256 amountLeveragedCollateral;

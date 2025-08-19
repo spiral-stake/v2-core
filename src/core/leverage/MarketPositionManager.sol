@@ -14,6 +14,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.
 import {TokenHelper} from "../libraries/TokenHelper.sol";
 import {FLCError} from "../libraries/Error.sol";
 import {Math} from "../libraries/Math.sol";
+import {UserProxy} from "./UserProxy.sol";
 
 abstract contract MarketPositionManager is
     IMorphoFlashLoanCallback,
@@ -82,33 +83,41 @@ abstract contract MarketPositionManager is
 
     /**
      * @notice Supplies collateral and borrows funds from Morpho market.
+     * @param userProxy Address of the user's proxy contract, to execute / deposit on behalf of
      * @param collateralToken Token used as collateral.
      * @param amountCollateral Amount of collateral to supply.
-     * @param amountLoan Amount to borrow.
+     * @param amountBorrow Amount to borrow.
      * @return sharesBorrowed Number of shares borrowed from the market.
      */
-    function _supplyCollateralAndBorrow(
+    function _supplyCollateralAndBorrowViaProxy(
+        address userProxy,
         address collateralToken,
         address loanToken,
         uint256 amountCollateral,
-        uint256 amountLoan
+        uint256 amountBorrow
     ) internal returns (uint256 sharesBorrowed) {
         MarketParams memory marketParams = s_marketParams[collateralToken][
             loanToken
         ];
 
-        _morphoSupplyCollateral(marketParams, amountCollateral);
-        (, sharesBorrowed) = _morphoBorrow(marketParams, amountLoan);
+        _morphoSupplyCollateral(userProxy, marketParams, amountCollateral);
+        sharesBorrowed = _morphoBorrowViaProxy(
+            userProxy,
+            marketParams,
+            amountBorrow
+        );
     }
 
     /**
      * @notice Repays borrowed funds and withdraws supplied collateral.
+     * @param userProxy Address of the user's proxy contract, to execute / deposit on behalf of
      * @param collateralToken Token used as collateral.
      * @param amountLoan Amount of loan to repay (for approval).
      * @param amountCollateral Amount of collateral to withdraw.
      * @param sharesBorrowed Shares representing borrowed amount to repay.
      */
-    function _repayAndWithdrawCollateral(
+    function _repayAndWithdrawCollateralViaProxy(
+        address userProxy,
         address collateralToken,
         address loanToken,
         uint256 amountLoan,
@@ -119,50 +128,66 @@ abstract contract MarketPositionManager is
             loanToken
         ];
 
-        _morphoRepay(marketParams, amountLoan, sharesBorrowed);
-        _morphoWithdrawCollateral(marketParams, amountCollateral);
+        _morphoRepay(userProxy, marketParams, amountLoan, sharesBorrowed);
+        _morphoWithdrawCollateralViaProxy(
+            userProxy,
+            marketParams,
+            amountCollateral
+        );
     }
 
     /**
      * @notice Supplies collateral into a Morpho market.
+     * @param userProxy Address of the user's proxy contract, to supply on behalf of
      * @param marketParams Market configuration details.
      * @param amount Amount of collateral to supply.
      */
     function _morphoSupplyCollateral(
+        address userProxy,
         MarketParams memory marketParams,
         uint256 amount
     ) internal {
+        address onBehalfOf = userProxy;
+
         _safeApprove(marketParams.collateralToken, address(i_morpho), amount);
-        i_morpho.supplyCollateral(marketParams, amount, address(this), hex"");
+        i_morpho.supplyCollateral(marketParams, amount, onBehalfOf, hex"");
     }
 
     /**
      * @notice Borrows funds from a Morpho market.
+     * @param userProxy Address of the user's proxy contract, to execute borrow
      * @param marketParams Market configuration details.
      * @param amount Amount to borrow in asset terms.
-     * @return assetsBorrowed Amount actually borrowed.
      * @return sharesBorrowed Shares received for the borrowed amount.
      */
-    function _morphoBorrow(
+    function _morphoBorrowViaProxy(
+        address userProxy,
         MarketParams memory marketParams,
         uint256 amount
-    ) internal returns (uint256 assetsBorrowed, uint256 sharesBorrowed) {
+    ) internal returns (uint256 sharesBorrowed) {
         uint256 shares;
-        address onBehalf = address(this);
+        address onBehalf = userProxy;
         address receiver = address(this);
 
-        (assetsBorrowed, sharesBorrowed) = i_morpho.borrow(
-            marketParams,
-            amount,
-            shares,
-            onBehalf,
-            receiver
+        bytes memory result = UserProxy(userProxy).execute(
+            address(i_morpho),
+            abi.encodeWithSignature(
+                "borrow((address,address,address,address,uint256),uint256,uint256,address,address)",
+                marketParams,
+                amount,
+                shares,
+                onBehalf,
+                receiver
+            )
         );
+
+        (, sharesBorrowed) = abi.decode(result, (uint256, uint256));
     }
 
     /**
      * @notice Repays borrowed shares to Morpho market.
      * @dev Repays exact shares, sets amount=0 as required by Morpho, but approves full amount.
+     * @param userProxy Address of the user's proxy contract, to repay on behalf of
      * @param marketParams Market configuration details.
      * @param amount Stablecoin value of repayment (used only for approval).
      * @param sharesBorrowed Shares to repay.
@@ -170,13 +195,14 @@ abstract contract MarketPositionManager is
      * @return sharesRepaid Shares repaid.
      */
     function _morphoRepay(
+        address userProxy,
         MarketParams memory marketParams,
         uint256 amount,
         uint256 sharesBorrowed
     ) internal returns (uint256 assetsRepaid, uint256 sharesRepaid) {
         _forceApprove(marketParams.loanToken, address(i_morpho), amount);
 
-        address onBehalf = address(this);
+        address onBehalf = userProxy;
         (assetsRepaid, sharesRepaid) = i_morpho.repay(
             marketParams,
             0, // amount ignored when repaying by shares
@@ -188,17 +214,28 @@ abstract contract MarketPositionManager is
 
     /**
      * @notice Withdraws previously supplied collateral from Morpho.
+     * @param userProxy Address of the user's proxy contract, to execute withdrawCollateral
      * @param marketParams Market configuration details.
      * @param amount Amount of collateral to withdraw.
      */
-    function _morphoWithdrawCollateral(
+    function _morphoWithdrawCollateralViaProxy(
+        address userProxy,
         MarketParams memory marketParams,
         uint256 amount
     ) internal {
-        address onBehalf = address(this);
+        address onBehalf = userProxy;
         address receiver = address(this);
 
-        i_morpho.withdrawCollateral(marketParams, amount, onBehalf, receiver);
+        UserProxy(userProxy).execute(
+            address(i_morpho),
+            abi.encodeWithSignature(
+                "withdrawCollateral((address,address,address,address,uint256),uint256,address,address)",
+                marketParams,
+                amount,
+                onBehalf,
+                receiver
+            )
+        );
     }
 
     /**

@@ -8,6 +8,7 @@ library FLCError {
     error FlashLeverageCore__InsufficientSharesBorrowed();
     error FlashLeverageCore__InsufficientCollateralDeposited();
     error FlashLeverageCore__ExceedsMaxLTV();
+    error FlashLeverageCore__EffectiveLtvTooHigh();
     error FlashLeverageCore__RenounceOwnershipDisabled();
     error FlashLeverageCore__NotAManager();
     error FlashLeverageCore__InvalidCollateralToken();
