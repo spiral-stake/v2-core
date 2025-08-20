@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
-import {FlashLeverage} from "../src/core/leverage/FlashLeverage.sol";
+import {FlashLeverage} from "../src/core/FlashLeverage/FlashLeverage.sol";
 import {IFlashLeverageCore} from "../src/interfaces/IFlashLeverageCore.sol";
 import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
 import {Main} from "../script/Main.s.sol";
@@ -49,9 +49,9 @@ contract Setup is Test {
 
     function getLeverageCalldata(
         address user,
+        uint256 desiredLtv,
         address collateralToken,
         address loanToken,
-        uint256 desiredLtv,
         uint256 amountCollateral
     ) internal returns (bytes memory) {
         uint256 amountLeverageFlashLoan = flc.calcLeverageFlashLoan(
@@ -65,6 +65,8 @@ contract Setup is Test {
             "http://127.0.0.1:3000/leverage",
             "?userAddress=",
             vm.toString(user),
+            "&desiredLtv=",
+            vm.toString(desiredLtv),
             "&collateralTokenAddress=",
             vm.toString(collateralToken),
             "&amountCollateral=",
@@ -170,7 +172,11 @@ contract Setup is Test {
 
         vm.writeJson(
             addresses,
-            string.concat("./addresses/", vm.toString(block.chainid), ".json")
+            string.concat(
+                "./api/test-addresses/",
+                vm.toString(block.chainid),
+                ".json"
+            )
         );
     }
 

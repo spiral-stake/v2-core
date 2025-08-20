@@ -14,7 +14,7 @@ test-setup:
 
 test-flashLeverage:
 	@echo "Testing FlashLeverage"
-	forge test --match-path test/FlashLeverage.t.sol --via-ir -vvv
+	forge test --match-path test/FlashLeverage.t.sol --via-ir -vv
 
 test-flashLeverageCore:
 	@echo "Testing FlashLeverageCore"

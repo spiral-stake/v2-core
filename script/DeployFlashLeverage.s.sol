@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {Script} from "forge-std/Script.sol";
 import {IFlashLeverageCore} from "../src/interfaces/IFlashLeverageCore.sol";
-import {FlashLeverage} from "../src/core/leverage/FlashLeverage.sol";
+import {FlashLeverage} from "../src/core/FlashLeverage/FlashLeverage.sol";
 import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
 
 contract DeployFlashLeverage is Script {

@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
-import {IFlashLeverageCore, FLCError, IOracle, Math, IERC20Metadata} from "../src/core/leverage/FlashLeverageCore.sol";
+import {IFlashLeverageCore, FLCError, IOracle, Math, IERC20Metadata} from "../src/core/FlashLeverage/FlashLeverageCore.sol";
 import {Math} from "../src/core/libraries/Math.sol";
 import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
 import {Setup} from "./Setup.t.sol";

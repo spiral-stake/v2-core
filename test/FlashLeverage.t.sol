@@ -25,9 +25,9 @@ contract TestFlashLeverage is Test, Setup {
         );
         bytes memory leverageCalldata = getLeverageCalldata(
             user,
+            desiredLtv,
             marketParams.collateralToken,
             marketParams.loanToken,
-            desiredLtv,
             amountCollateral
         );
 
@@ -42,7 +42,7 @@ contract TestFlashLeverage is Test, Setup {
         LeveragePosition memory userLeveragePosition = fl
             .getUserLeveragePosition(user, 0); // 1st position id is 0
 
-        assertEq(success, true);
+        require(success == true, "Leverage Call Failed");
         assertEq(userLeveragePosition.amountCollateral, amountCollateral);
     }
 

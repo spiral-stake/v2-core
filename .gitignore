@@ -13,13 +13,14 @@ node_modules/
 # Docs
 docs/
 
-# Sentio
-sentio/
-
-script/Test.s.sol
-
 # Dotenv file
 .env
+
+# broadcast
+broadcast/
+
+# workflows
+.github
 
 # abi
 abi/

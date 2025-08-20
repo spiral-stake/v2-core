@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import express from "express";
 import { getInternalSwapData } from "./utils/swapAggregator";
-import addresses from "../addresses/1.json";
+import addresses from "./test-addresses/1.json";
 import { encodeFunctionData } from "viem";
 import { abi as FLASH_LEVERAGE_ABI } from "../abi/FlashLeverage.sol/FlashLeverage.json";
 
@@ -14,8 +14,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.get("/leverage", async (req: any, res: any): Promise<string> => {
-  const { userAddress, collateralTokenAddress, amountCollateral, amountLeverageFlashLoan } =
-    req.query;
+  const {
+    userAddress,
+    desiredLtv,
+    collateralTokenAddress,
+    amountCollateral,
+    amountLeverageFlashLoan,
+  } = req.query;
 
   const collateralToken = addresses.collateralTokens[collateralTokenAddress];
 
@@ -32,6 +37,7 @@ app.get("/leverage", async (req: any, res: any): Promise<string> => {
       args: [
         userAddress,
         {
+          desiredLtv: desiredLtv,
           collateralToken: collateralToken.address,
           loanToken: collateralToken.loanToken.address,
           amountCollateral: amountCollateral,
