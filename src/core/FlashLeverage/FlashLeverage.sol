@@ -114,6 +114,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
      */
     function leverage(
         address onBehalfOf,
+        uint256 impliedApy,
         LeverageParams calldata leverageParams
     )
         external
@@ -131,7 +132,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
             leverageParams.amountCollateral
         );
 
-        _leverage(onBehalfOf, leverageParams);
+        _leverage(onBehalfOf, impliedApy, leverageParams);
     }
 
     /**
@@ -142,6 +143,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
      */
     function swapAndLeverage(
         address onBehalfOf,
+        uint256 impliedApy,
         SwapParams calldata swapParams,
         LeverageParams calldata leverageParams
     )
@@ -169,7 +171,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         }
 
         // Call internal leverage
-        _leverage(onBehalfOf, leverageParams);
+        _leverage(onBehalfOf, impliedApy, leverageParams);
     }
 
     /**
@@ -298,6 +300,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
      */
     function _leverage(
         address onBehalfOf,
+        uint256 impliedApy,
         LeverageParams calldata leverageParams
     ) internal {
         address collateralToken = leverageParams.collateralToken;
@@ -358,7 +361,8 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
                 amountCollateralInLoanToken: amountCollateralInLoanToken,
                 amountLeveragedCollateral: amountLeveragedCollateral,
                 sharesBorrowed: sharesBorrowed,
-                positionValueInLoanToken: positionValueInLoanToken
+                positionValueInLoanToken: positionValueInLoanToken,
+                impliedApy: impliedApy
             })
         );
 

@@ -9,7 +9,7 @@ export interface Token {
 
 export interface CollateralToken extends Token {
   loanToken: Token;
-  pendleMarketAddress: string;
+  pendleMarket: string;
 }
 
 export interface Position {

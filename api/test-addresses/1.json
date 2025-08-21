@@ -15,23 +15,23 @@
         "name": "USD Coin",
         "symbol": "USDC"
       },
+      "morphoMarketId": "0xeec6c7e2ddb7578f2a7d86fc11cf9da005df34452ad9b9189c51266216f5d71b",
       "name": "PT Wrapped stUSR 25SEP2025",
-      "oracleAddress": "0x5CB13E10beb0Bc0760988F16196b016536afc6c0",
-      "pendleMarketAddress": "0x09fA04Aac9c6d1c6131352EE950CD67ecC6d4fB9",
+      "pendleMarket": "0x09fA04Aac9c6d1c6131352EE950CD67ecC6d4fB9",
       "symbol": "PT-wstUSR-25SEP2025"
     },
     "0x2CA5f2C4300450D53214B00546795c1c07B89acB": {
       "address": "0x2CA5f2C4300450D53214B00546795c1c07B89acB",
       "decimals": 18,
       "loanToken": {
-        "address": "0x7C1156E515aA1A2E851674120074968C905aAF37",
-        "decimals": 18,
-        "name": "Level USD",
-        "symbol": "lvlUSD"
+        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "decimals": 6,
+        "name": "USD Coin",
+        "symbol": "USDC"
       },
+      "morphoMarketId": "0x4005ba6eb7d2221fe58102bd320aa6d83c47b212771bc950ab71c5074d9ab0ec",
       "name": "PT Staked lvlUSD 25SEP2025",
-      "oracleAddress": "0xDAeb58A601c4793667e0B0F67815cd952E752E0B",
-      "pendleMarketAddress": "0xC88FF954d42d3e11D43B62523B3357847C29377c",
+      "pendleMarket": "0xC88FF954d42d3e11D43B62523B3357847C29377c",
       "symbol": "PT-slvlUSD-25SEP2025"
     },
     "0xB10DA2F9147f9cf2B8826877Cd0c95c18A0f42dc": {
@@ -43,24 +43,38 @@
         "name": "USD Coin",
         "symbol": "USDC"
       },
+      "morphoMarketId": "0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb",
       "name": "PT Compounding Open Dollar 20NOV2025",
-      "oracleAddress": "0x0dF910a47452B995F545D66eb135f38D0FbB142E",
-      "pendleMarketAddress": "0x3F53eb4c57c7E7118BE8566bCd503EA502639581",
+      "pendleMarket": "0x3F53eb4c57c7E7118BE8566bCd503EA502639581",
       "symbol": "PT-cUSDO-20NOV2025"
     },
-    "0xFfEc096c087C13Cc268497B89A613cACE4DF9A48": {
-      "address": "0xFfEc096c087C13Cc268497B89A613cACE4DF9A48",
+    "0xBC6736d346a5eBC0dEbc997397912CD9b8FAe10a": {
+      "address": "0xBC6736d346a5eBC0dEbc997397912CD9b8FAe10a",
       "decimals": 18,
       "loanToken": {
-        "address": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
-        "decimals": 18,
-        "name": "Dai Stablecoin",
-        "symbol": "DAI"
+        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "decimals": 6,
+        "name": "USD Coin",
+        "symbol": "USDC"
       },
-      "name": "PT USDS Stablecoin 14AUG2025",
-      "oracleAddress": "0xD7c8498fF648CBB9E79d6470cf7F639e696D27A5",
-      "pendleMarketAddress": "0xdacE1121e10500e9e29d071F01593fD76B000f08",
-      "symbol": "PT-USDS-14AUG2025"
+      "morphoMarketId": "0x7a5d67805cb78fad2596899e0c83719ba89df353b931582eb7d3041fd5a06dc8",
+      "name": "PT Ethena USDe 25SEP2025",
+      "pendleMarket": "0x6d98a2b6CDbF44939362a3E99793339Ba2016aF4",
+      "symbol": "PT-USDe-25SEP2025"
+    },
+    "0xC347584b415715B1b66774B2899Fef2FD3b56d6e": {
+      "address": "0xC347584b415715B1b66774B2899Fef2FD3b56d6e",
+      "decimals": 18,
+      "loanToken": {
+        "address": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+        "decimals": 18,
+        "name": "USDS Stablecoin",
+        "symbol": "USDS"
+      },
+      "morphoMarketId": "0x366bc0aa9aa70a1f075096e825e9b1c7221878a90edd52081d2af5cfca3beb89",
+      "name": "PT Staking USDS 25SEP2025",
+      "pendleMarket": "0xff43e751f2f07BbF84Da1fc1fa12cE116bF447E5",
+      "symbol": "PT-staking-USDS-25SEP2025"
     }
   },
   "flashLeverageAddress": "0xA8452Ec99ce0C64f20701dB7dD3abDb607c00496",

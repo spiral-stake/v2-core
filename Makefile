@@ -27,21 +27,3 @@ stop-server:
 		rm -f $(SERVER_PID_FILE); \
 	fi
 	@kill -9 $$(lsof -ti :3000) 2>/dev/null || true
-
-# Handle cleanup on interrupt (Ctrl+C)
-.PHONY: cleanup
-cleanup:
-	@echo "Terminating processes on port 3000..."
-	@kill -9 $$(lsof -ti :3000) || true
-	@rm -f $(SERVER_PID_FILE)
-
-# Trap SIGINT and call cleanup
-.PHONY: start
-start:
-	@trap '$(MAKE) cleanup; exit' INT; \
-	$(MAKE) all
-
-# Override the default target
-.DEFAULT_GOAL := start
-
-.PHONY: all start-server test-setup test-flashLeverage test-flashLeverageCore stop-server cleanup start

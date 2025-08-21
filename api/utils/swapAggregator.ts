@@ -43,7 +43,7 @@ export async function getExternalSwapData(
   };
 
   const res = await callSDK<InternalSwapData>(
-    `/v2/sdk/${chainId}/markets/${collateralToken.pendleMarketAddress}/swap`,
+    `/v2/sdk/${chainId}/markets/${collateralToken.pendleMarket}/swap`,
     params
   );
 
@@ -72,7 +72,7 @@ export async function getInternalSwapData(
   };
 
   const res = await callSDK<InternalSwapData>(
-    `/v2/sdk/${chainId}/markets/${collateralToken.pendleMarketAddress}/swap`,
+    `/v2/sdk/${chainId}/markets/${collateralToken.pendleMarket}/swap`,
     params
   );
 
@@ -102,7 +102,7 @@ export async function getInternalReswapData(
   };
 
   const res = await callSDK<InternalSwapData>(
-    `/v2/sdk/${chainId}/markets/${collateralToken.pendleMarketAddress}/swap`,
+    `/v2/sdk/${chainId}/markets/${collateralToken.pendleMarket}/swap`,
     params
   );
 

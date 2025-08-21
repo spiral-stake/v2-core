@@ -6,10 +6,11 @@ import {IWETH} from "../src/interfaces/IWETH.sol";
 import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
 import {DeployFlashLeverageCore} from "./DeployFlashLeverageCore.s.sol";
 import {DeployFlashLeverage} from "./DeployFlashLeverage.s.sol";
+import {WriteAddresses} from "./WriteAddresses.s.sol";
 
 import {console} from "forge-std/console.sol";
 
-contract Main is Script {
+contract Main is Script, WriteAddresses {
     address public morpho = 0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb;
     address public pendleRouter = 0x888888888889758F76e7103c6CbF23ABbF58F946;
     CollateralTokenConfig[] tokensConfig;
@@ -29,34 +30,41 @@ contract Main is Script {
     }
 
     function _initializeConfig() private {
-        tokensConfig = new CollateralTokenConfig[](4);
+        tokensConfig = new CollateralTokenConfig[](5);
+
+        // PT-cUSDO
+        tokensConfig[0] = CollateralTokenConfig({
+            collateralToken: 0xB10DA2F9147f9cf2B8826877Cd0c95c18A0f42dc,
+            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb,
+            pendleMarket: 0x3F53eb4c57c7E7118BE8566bCd503EA502639581
+        });
+
+        // PT-USDe
+        tokensConfig[1] = CollateralTokenConfig({
+            collateralToken: 0xBC6736d346a5eBC0dEbc997397912CD9b8FAe10a,
+            morphoMarketId: 0x7a5d67805cb78fad2596899e0c83719ba89df353b931582eb7d3041fd5a06dc8,
+            pendleMarket: 0x6d98a2b6CDbF44939362a3E99793339Ba2016aF4
+        });
 
         // PT-slvlUSD
-        tokensConfig[0] = CollateralTokenConfig({
+        tokensConfig[2] = CollateralTokenConfig({
             collateralToken: 0x2CA5f2C4300450D53214B00546795c1c07B89acB,
-            morphoMarketId: 0x8ebcaf72c7cd75e8c621ec77ec343b3152c48908c4a6e217da82fe6af23c1928,
+            morphoMarketId: 0x4005ba6eb7d2221fe58102bd320aa6d83c47b212771bc950ab71c5074d9ab0ec,
             pendleMarket: 0xC88FF954d42d3e11D43B62523B3357847C29377c
         });
 
         // PT-wstUSR
-        tokensConfig[1] = CollateralTokenConfig({
+        tokensConfig[3] = CollateralTokenConfig({
             collateralToken: 0x23E60d1488525bf4685f53b3aa8E676c30321066,
             morphoMarketId: 0xeec6c7e2ddb7578f2a7d86fc11cf9da005df34452ad9b9189c51266216f5d71b,
             pendleMarket: 0x09fA04Aac9c6d1c6131352EE950CD67ecC6d4fB9
         });
 
-        // PT-USDS
-        tokensConfig[2] = CollateralTokenConfig({
-            collateralToken: 0xFfEc096c087C13Cc268497B89A613cACE4DF9A48,
-            morphoMarketId: 0xa458018cf1a6e77ebbcc40ba5776ac7990e523b7cc5d0c1e740a4bbc13190d8f,
-            pendleMarket: 0xdacE1121e10500e9e29d071F01593fD76B000f08
-        });
-
-        // PT-cUSDO
-        tokensConfig[3] = CollateralTokenConfig({
-            collateralToken: 0xB10DA2F9147f9cf2B8826877Cd0c95c18A0f42dc,
-            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb,
-            pendleMarket: 0x3F53eb4c57c7E7118BE8566bCd503EA502639581
+        // PT-USDS-SPK
+        tokensConfig[4] = CollateralTokenConfig({
+            collateralToken: 0xC347584b415715B1b66774B2899Fef2FD3b56d6e,
+            morphoMarketId: 0x366bc0aa9aa70a1f075096e825e9b1c7221878a90edd52081d2af5cfca3beb89,
+            pendleMarket: 0xff43e751f2f07BbF84Da1fc1fa12cE116bF447E5
         });
     }
 
@@ -67,6 +75,15 @@ contract Main is Script {
         _initializeConfig();
         flashLeverageCoreAddress = _deployFlashLeverageCore();
         flashLeverageAddress = _deployFlashLeverage(flashLeverageCoreAddress);
+
+        _writeAddresses(
+            morpho,
+            tokensConfig,
+            USDC,
+            flashLeverageCoreAddress,
+            flashLeverageAddress,
+            "./addresses/"
+        );
     }
 
     function _deployFlashLeverageCore()

@@ -15,4 +15,5 @@ struct LeveragePosition {
     uint256 amountLeveragedCollateral;
     uint256 sharesBorrowed;
     uint256 positionValueInLoanToken;
+    uint256 impliedApy;
 }

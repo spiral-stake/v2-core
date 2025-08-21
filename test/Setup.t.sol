@@ -9,8 +9,9 @@ import {IFlashLeverageCore} from "../src/interfaces/IFlashLeverageCore.sol";
 import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
 import {Main} from "../script/Main.s.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
+import {WriteAddresses} from "../script/WriteAddresses.s.sol";
 
-contract Setup is Test {
+contract Setup is Test, WriteAddresses {
     IFlashLeverageCore flc;
     FlashLeverage fl;
     IMorpho morpho;
@@ -44,7 +45,14 @@ contract Setup is Test {
         treasury = main.treasury();
         USDC = main.USDC();
 
-        _writeAddresses(address(flc), address(fl));
+        _writeAddresses(
+            address(morpho),
+            tokensConfig,
+            USDC,
+            address(flc),
+            address(fl),
+            "./api/test-addresses/"
+        );
     }
 
     function getLeverageCalldata(
@@ -84,100 +92,6 @@ contract Setup is Test {
         inputs[5] = url;
 
         return vm.ffi(inputs);
-    }
-
-    function _writeAddresses(
-        address flashLeverageCoreAddress,
-        address flashLeverageAddress
-    ) private {
-        string memory addresses = "addresses";
-
-        vm.serializeAddress(
-            addresses,
-            "flashLeverageCoreAddress",
-            flashLeverageCoreAddress
-        );
-        vm.serializeAddress(
-            addresses,
-            "flashLeverageAddress",
-            flashLeverageAddress
-        );
-
-        // USDC
-        string memory usdcToken = "USDC";
-        IERC20Metadata stblUSD = IERC20Metadata(USDC);
-        vm.serializeAddress(usdcToken, "address", address(stblUSD));
-        vm.serializeString(usdcToken, "name", stblUSD.name());
-        vm.serializeString(usdcToken, "symbol", stblUSD.symbol());
-        usdcToken = vm.serializeUint(usdcToken, "decimals", stblUSD.decimals());
-        vm.serializeString(addresses, "USDC", usdcToken);
-
-        // Collateral Tokens
-
-        string memory collateralTokens = "collateralTokens";
-        for (uint256 i; i < tokensConfig.length; ++i) {
-            string memory tokenObj = "tokenObj";
-
-            IERC20Metadata token = IERC20Metadata(
-                tokensConfig[i].collateralToken
-            );
-            MarketParams memory marketParams = morpho.idToMarketParams(
-                Id.wrap(tokensConfig[i].morphoMarketId)
-            );
-
-            // Create loan token metadata object
-            address loanTokenAddress = marketParams.loanToken;
-            IERC20Metadata loanToken = IERC20Metadata(loanTokenAddress);
-            string memory loanTokenObj = "loanTokenObj";
-            vm.serializeAddress(loanTokenObj, "address", loanTokenAddress);
-            vm.serializeString(loanTokenObj, "name", loanToken.name());
-            vm.serializeString(loanTokenObj, "symbol", loanToken.symbol());
-            loanTokenObj = vm.serializeUint(
-                loanTokenObj,
-                "decimals",
-                loanToken.decimals()
-            );
-
-            vm.serializeAddress(tokenObj, "address", address(token));
-            vm.serializeString(tokenObj, "name", token.name());
-            vm.serializeString(tokenObj, "symbol", token.symbol());
-            vm.serializeUint(tokenObj, "decimals", token.decimals());
-            vm.serializeAddress(tokenObj, "oracleAddress", marketParams.oracle);
-            vm.serializeString(tokenObj, "loanToken", loanTokenObj);
-            tokenObj = vm.serializeAddress(
-                tokenObj,
-                "pendleMarketAddress",
-                tokensConfig[i].pendleMarket
-            );
-
-            vm.serializeString(
-                collateralTokens,
-                vm.toString(address(token)),
-                tokenObj
-            );
-            if (i == tokensConfig.length - 1) {
-                collateralTokens = vm.serializeString(
-                    collateralTokens,
-                    vm.toString(address(token)),
-                    tokenObj
-                );
-            }
-        }
-
-        addresses = vm.serializeString(
-            addresses,
-            "collateralTokens",
-            collateralTokens
-        );
-
-        vm.writeJson(
-            addresses,
-            string.concat(
-                "./api/test-addresses/",
-                vm.toString(block.chainid),
-                ".json"
-            )
-        );
     }
 
     function testSetup() external pure {} // To avoid compiler error
