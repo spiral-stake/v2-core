@@ -1,19 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
-import {Test} from "forge-std/Test.sol";
-import {console} from "forge-std/console.sol";
-import {CoreLeveragePosition} from "../src/core/FlashLeverage/FlashLeverageCore.sol";
-import {IFlashLeverageCore} from "../src/interfaces/IFlashLeverageCore.sol";
-import {FLCError} from "../src/core/libraries/Error.sol";
-import {LeverageParams, UnleverageParams, ApproxParams, SwapData, LimitOrderData} from "../src/core/structs/LeverageParams.sol";
-import {FLCError, IOracle, Math, IERC20Metadata} from "../src/core/FlashLeverage/FlashLeverageCore.sol";
-import {Math} from "../src/core/libraries/Math.sol";
-import {IMorpho, MarketParams, Position, Id} from "@morpho/interfaces/IMorpho.sol";
-import {Setup} from "./Setup.t.sol";
-import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
-import {UserProxy} from "../src/core/FlashLeverage/UserProxy.sol";
-import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import "./TestBase.t.sol";
 
 /**
  * @title FlashLeverageCore Test Suite
@@ -21,7 +9,7 @@ import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
  * @dev Tests organized by functional areas: leveraging, unleveraging, access control, and views
  * @dev All tests follow the AAA (Arrange, Act, Assert) pattern for consistency and readability
  */
-contract TestFlashLeverageCore is Test, Setup {
+contract TestFlashLeverageCore is TestBase {
     using Math for uint256;
 
     /*//////////////////////////////////////////////////////////////
@@ -178,6 +166,7 @@ contract TestFlashLeverageCore is Test, Setup {
     function test_leverage_RevertsWhen_EffectiveLtvExceedsSlippageBuffer()
         external
     {
+        // Not Possible to mimick //
         // Arrange
         // Note: This scenario is difficult to simulate due to price oracle dependencies
         // Act
@@ -467,8 +456,8 @@ contract TestFlashLeverageCore is Test, Setup {
         // Contract should be properly initialized
 
         // Act
-        address morphoAddress = flc.i_morpho();
-        address pendleRouterAddress = flc.i_pendleRouter();
+        address morphoAddress = address(flc.i_morpho());
+        address pendleRouterAddress = address(flc.i_pendleRouter());
         address proxyImplementation = flc.i_userProxyImplementation();
 
         // Assert

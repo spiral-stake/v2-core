@@ -2,13 +2,16 @@
 pragma solidity 0.8.30;
 
 import {Script} from "forge-std/Script.sol";
-import {IWETH} from "../src/interfaces/IWETH.sol";
 import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
 import {DeployFlashLeverageCore} from "./DeployFlashLeverageCore.s.sol";
 import {DeployFlashLeverage} from "./DeployFlashLeverage.s.sol";
 import {WriteAddresses} from "./WriteAddresses.s.sol";
 
 import {console} from "forge-std/console.sol";
+
+interface IWETH {
+    function deposit() external payable;
+}
 
 contract Main is Script, WriteAddresses {
     address public morpho = 0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb;

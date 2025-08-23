@@ -284,9 +284,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
      * @notice Overrides renounceOwnership to prevent ownership renunciation
      * @dev Intentionally disabled to retain upgradeability and integration support management
      */
-    function renounceOwnership() public pure override {
-        revert FLError.FlashLeverage__RenounceOwnershipDisabled();
-    }
+    function renounceOwnership() public override(Ownable) {}
 
     /////////////////////////
     // Internal Functions
@@ -340,12 +338,6 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
                 loanToken,
                 amountCollateral
             );
-        uint256 positionValueInLoanToken = _calcPositionValueInLoanToken(
-            collateralToken,
-            loanToken,
-            amountLeveragedCollateral,
-            sharesBorrowed
-        );
 
         // Add new Leverage Position
         uint256 positionId = s_userLeveragePositions[onBehalfOf].length;
@@ -357,7 +349,6 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
                 desiredLtv: desiredLtv,
                 amountCollateral: amountCollateral,
                 amountCollateralInLoanToken: amountCollateralInLoanToken,
-                positionValueInLoanToken: positionValueInLoanToken,
                 amountLeveragedCollateral: amountLeveragedCollateral,
                 sharesBorrowed: sharesBorrowed
             })
@@ -400,35 +391,6 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         );
     }
 
-    /**
-     * @notice Calculates the net position value in loan token terms
-     * @param collateralToken Address of the collateral token
-     * @param loanToken Address of the loan token
-     * @param amountLeveragedCollateral Amount of leveraged collateral
-     * @param sharesBorrowed Amount of shares borrowed
-     * @return Net position value (collateral value minus borrowed shares value) in 18 decimals
-     */
-    function _calcPositionValueInLoanToken(
-        address collateralToken,
-        address loanToken,
-        uint256 amountLeveragedCollateral,
-        uint256 sharesBorrowed
-    ) internal view returns (uint256) {
-        uint256 collateralValue = i_flashLeverageCore
-            .getCollateralValueInLoanToken(
-                collateralToken,
-                loanToken,
-                amountLeveragedCollateral
-            );
-        uint256 sharesValue = i_flashLeverageCore.getSharesValueInLoanToken(
-            collateralToken,
-            loanToken,
-            sharesBorrowed
-        );
-
-        return collateralValue - sharesValue;
-    }
-
     /////////////////////////
     // View Functions
 
@@ -460,36 +422,6 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         uint256 positionId
     ) public view returns (LeveragePosition memory) {
         return s_userLeveragePositions[user][positionId];
-    }
-
-    /**
-     * @notice Calculates the yield generated on a specific position
-     * @param user Address of the user
-     * @param positionId Id of the leverage position
-     * @return yield The yield generated in loan token terms with 18 decimals, returns 0 if position is at a loss
-     */
-    function getPositionYieldInLoanToken(
-        address user,
-        uint256 positionId
-    ) public view returns (uint256) {
-        LeveragePosition memory position = s_userLeveragePositions[user][
-            positionId
-        ];
-
-        uint256 initialPositionValue = position.positionValueInLoanToken;
-        uint256 currentPositionValue = _calcPositionValueInLoanToken(
-            position.collateralToken,
-            position.loanToken,
-            position.amountLeveragedCollateral,
-            position.sharesBorrowed
-        );
-
-        // Return 0 if current value is less than initial (no yield/loss)
-        if (currentPositionValue <= initialPositionValue) {
-            return 0;
-        }
-
-        return (currentPositionValue - initialPositionValue);
     }
 
     /**

@@ -3,17 +3,16 @@ pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
-import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
-import {FlashLeverage} from "../src/core/FlashLeverage/FlashLeverage.sol";
-import {IFlashLeverageCore, LeverageParams} from "../src/interfaces/IFlashLeverageCore.sol";
-import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
+
+import {WriteAddresses} from "../script/WriteAddresses.s.sol";
+import {IMorpho, MarketParams, Id, Position} from "@morpho/interfaces/IMorpho.sol";
 import {Main} from "../script/Main.s.sol";
 
-import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
-import {WriteAddresses} from "../script/WriteAddresses.s.sol";
+import "../src/core/FlashLeverage/FlashLeverageCore.sol";
+import "../src/core/FlashLeverage/FlashLeverage.sol";
 
-contract Setup is Test, WriteAddresses {
-    IFlashLeverageCore flc;
+contract TestBase is Test, WriteAddresses {
+    FlashLeverageCore flc;
     FlashLeverage fl;
     IMorpho morpho;
     address pendleRouter;
@@ -36,7 +35,7 @@ contract Setup is Test, WriteAddresses {
         (address flashLeverageCoreAddress, address flashLeverageAddress) = main
             .run();
 
-        flc = IFlashLeverageCore(flashLeverageCoreAddress);
+        flc = FlashLeverageCore(flashLeverageCoreAddress);
         fl = FlashLeverage(flashLeverageAddress);
 
         morpho = IMorpho(main.morpho());
@@ -130,33 +129,4 @@ contract Setup is Test, WriteAddresses {
     }
 
     function testSetup() external pure {} // To avoid compiler error
-
-    // /**
-    //  * @notice Returns default approximation parameters for slippage-tolerant swaps.
-    //  * @dev Can be reused for most basic trades.
-    //  */
-    // function _createDefaultApproxParams()
-    //     internal
-    //     pure
-    //     returns (ApproxParams memory)
-    // {
-    //     return
-    //         ApproxParams({
-    //             guessMin: 0,
-    //             guessMax: type(uint256).max,
-    //             guessOffchain: 0,
-    //             maxIteration: 256,
-    //             eps: 1e14
-    //         });
-    // }
-
-    // /**
-    //  * @notice Returns an empty `LimitOrderData` struct.
-    //  * @dev Can be used if not leveraging limit orders.
-    //  */
-    // function _createEmptyLimitOrderData()
-    //     internal
-    //     pure
-    //     returns (LimitOrderData memory)
-    // {}
 }

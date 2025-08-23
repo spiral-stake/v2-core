@@ -2,6 +2,6 @@
 pragma solidity 0.8.30;
 
 struct CoreLeveragePosition {
-    uint256 amountCollateral; // Amount collateral (Leveraged)
-    uint256 sharesBorrowed; // Shares borrowed against it
+    uint256 amountCollateral; // (Leveraged)
+    uint256 sharesBorrowed;
 }

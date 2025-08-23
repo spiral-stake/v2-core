@@ -1,16 +1,16 @@
 # Store the server PID for cleanup
 SERVER_PID_FILE := .server.pid
 
-test: test-setup start-server test-flashLeverageCore stop-server
+test: test-base start-server test-flashLeverageCore stop-server
 
 start-server:
 	@echo "Starting swap-api server"
 	@ts-node api/index.ts & echo $$! > $(SERVER_PID_FILE)
 	@sleep 2
 
-test-setup: 	
-	@echo "Setting test setup"
-	forge test --match-path test/Setup.t.sol --via-ir
+test-base: 	
+	@echo "Setting test base"
+	forge test --match-path test/TestBase.t.sol --via-ir
 
 test-flashLeverage:
 	@echo "Testing FlashLeverage"

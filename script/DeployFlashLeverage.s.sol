@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import {Script} from "forge-std/Script.sol";
-import {IFlashLeverageCore} from "../src/interfaces/IFlashLeverageCore.sol";
+import {FlashLeverageCore} from "../src/core/FlashLeverage/FlashLeverageCore.sol";
 import {FlashLeverage} from "../src/core/FlashLeverage/FlashLeverage.sol";
 import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
 
@@ -23,9 +23,7 @@ contract DeployFlashLeverage is Script {
         );
 
         // Set as Manager in FlashLeverageCore
-        IFlashLeverageCore(flashLeverageCore).addManager(
-            address(flashLeverage)
-        );
+        FlashLeverageCore(flashLeverageCore).addManager(address(flashLeverage));
 
         // Add supported collateral tokens
 
