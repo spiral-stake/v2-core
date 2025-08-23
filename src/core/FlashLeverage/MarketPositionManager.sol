@@ -8,7 +8,6 @@ pragma solidity 0.8.30;
 
 import {IMorphoFlashLoanCallback} from "@morpho/interfaces/IMorphoCallbacks.sol";
 import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
-import {IOracle} from "@morpho/interfaces/IOracle.sol";
 import {MorphoBalancesLib, SharesMathLib} from "@morpho/libraries/periphery/MorphoBalancesLib.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
@@ -129,11 +128,14 @@ abstract contract MarketPositionManager is
         ];
 
         _morphoRepay(userProxy, marketParams, amountLoan, sharesBorrowed);
-        _morphoWithdrawCollateralViaProxy(
-            userProxy,
-            marketParams,
-            amountCollateral
-        );
+
+        if (amountCollateral > 0) {
+            _morphoWithdrawCollateralViaProxy(
+                userProxy,
+                marketParams,
+                amountCollateral
+            );
+        }
     }
 
     /**

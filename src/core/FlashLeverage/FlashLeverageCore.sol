@@ -6,17 +6,16 @@ pragma solidity 0.8.30;
 /// @dev Integrates with Morpho, Pendle, and custom SwapAggregator and MarketPositionmanager modules.
 /// @dev Creates individual position proxy contracts for each user to isolate their positions.
 
-import {IFlashLeverageCore, CoreLeveragePosition} from "../../interfaces/IFlashLeverageCore.sol";
+import {MarketPositionManager, MarketParams, Id, UserProxy, IERC20Metadata, FLCError, Math} from "./MarketPositionManager.sol";
 import {SwapAggregator, SwapData, LimitOrderData, ApproxParams} from "./SwapAggregator.sol";
-import {MarketPositionManager, UserProxy, MarketParams, Id, IOracle, IERC20Metadata} from "./MarketPositionManager.sol";
+import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {LeverageParams, UnleverageParams} from "../structs/LeverageParams.sol";
+import {CoreLeveragePosition} from "../structs/CoreLeveragePosition.sol";
 import {CollateralTokenConfig} from "../structs/CollateralTokenConfig.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
-import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {IPendleMarket} from "../../interfaces/IPendleMarket.sol";
-import {Math} from "../libraries/Math.sol";
-import {FLCError} from "../libraries/Error.sol";
+import {IOracle} from "@morpho/interfaces/IOracle.sol";
 
 contract FlashLeverageCore is
     MarketPositionManager,
@@ -47,7 +46,8 @@ contract FlashLeverageCore is
     mapping(address => bool) private s_managers;
 
     /// @notice Mapping from user => desiredLtv => proxy contract
-    mapping(address => mapping(uint256 => address)) public s_userProxies;
+    mapping(address user => mapping(uint256 desiredLtv => address proxyContract))
+        public s_userProxies;
 
     /// @notice Nested mapping to store leverage positions for each user proxy, collateral token, and loan token combination.
     /// @dev Structure: userProxy => collateralToken => loanToken => CoreLeveragePosition
@@ -59,9 +59,9 @@ contract FlashLeverageCore is
 
     /// @notice Ensures that only authorized managers can call the function.
     /// @dev Reverts with FlashLeverageCore__IsValidManager error if caller is not a manager.
-    modifier _isManager() {
+    modifier onlyManager() {
         require(
-            s_managers[msg.sender],
+            isManager(msg.sender),
             FLCError.FlashLeverageCore__NotAManager()
         );
         _;
@@ -71,7 +71,7 @@ contract FlashLeverageCore is
     /// @dev Checks if a market exists for the collateral-loan token pair.
     /// @param collateralToken The address of the collateral token to validate.
     /// @param loanToken The address of the loan token to validate against.
-    modifier _validateCollateralToken(
+    modifier validateCollateralToken(
         address collateralToken,
         address loanToken
     ) {
@@ -86,8 +86,22 @@ contract FlashLeverageCore is
     /// @notice Validates that the provided amount is greater than zero.
     /// @dev Prevents operations with zero amounts which could lead to unexpected behavior.
     /// @param value The amount to validate.
-    modifier validateAmount(uint256 value) {
-        require(value > 0, FLCError.FlashLeverageCore__AmountCannotBeZero());
+    modifier validateAmountCollateral(uint256 value) {
+        require(
+            value > 0,
+            FLCError.FlashLeverageCore__AmountCollateralCannotBeZero()
+        );
+        _;
+    }
+
+    /// @notice Validates that the provided amount is greater than zero.
+    /// @dev Prevents operations with zero amounts which could lead to unexpected behavior.
+    /// @param value The amount to validate.
+    modifier validateSharesToBurn(uint256 value) {
+        require(
+            value > 0,
+            FLCError.FlashLeverageCore__SharesToBurnCannotBeZero()
+        );
         _;
     }
 
@@ -148,9 +162,9 @@ contract FlashLeverageCore is
         LeverageParams calldata params
     )
         external
-        _isManager
-        _validateCollateralToken(params.collateralToken, params.loanToken)
-        validateAmount(params.amountCollateral)
+        onlyManager
+        validateCollateralToken(params.collateralToken, params.loanToken)
+        validateAmountCollateral(params.amountCollateral)
         validateDesiredLtv(
             params.desiredLtv,
             params.collateralToken,
@@ -195,12 +209,7 @@ contract FlashLeverageCore is
     function unleverage(
         address onBehalfOf,
         UnleverageParams calldata params
-    )
-        external
-        _isManager
-        validateAmount(params.sharesToBurn)
-        validateAmount(params.amountCollateralToWithdraw)
-    {
+    ) external onlyManager validateSharesToBurn(params.sharesToBurn) {
         address collateralToken = params.collateralToken;
         address loanToken = params.loanToken;
         uint256 sharesToBurn = params.sharesToBurn;
@@ -212,12 +221,12 @@ contract FlashLeverageCore is
         ][loanToken];
 
         require(
-            position.sharesBorrowed >= sharesToBurn,
-            FLCError.FlashLeverageCore__InsufficientSharesBorrowed()
+            position.amountCollateral >= amountCollateralToWithdraw,
+            FLCError.FlashLeverageCore__InsufficientCollateralToWithdraw()
         );
         require(
-            position.amountCollateral >= amountCollateralToWithdraw,
-            FLCError.FlashLeverageCore__InsufficientCollateralDeposited()
+            position.sharesBorrowed >= sharesToBurn,
+            FLCError.FlashLeverageCore__InsufficientSharesToBurn()
         );
 
         // Update the state
@@ -246,6 +255,27 @@ contract FlashLeverageCore is
             params.limitOrderData
         );
         i_morpho.flashLoan(loanToken, amountFlashLoan, data);
+    }
+
+    /**
+     * @notice Gets an existing user proxy or creates a new one for the specified user and desired LTV.
+     * @dev Uses the clone factory pattern to create minimal proxy contracts for gas efficiency.
+     * @param user The address of the user to get or create a proxy for.
+     * @param desiredLtv The desired loan-to-value ratio for this proxy.
+     * @return proxy The address of the user's proxy contract.
+     */
+    function getOrCreateUserProxy(
+        address user,
+        uint256 desiredLtv
+    ) public returns (address proxy) {
+        proxy = s_userProxies[user][desiredLtv];
+
+        if (proxy == address(0)) {
+            proxy = Clones.clone(i_userProxyImplementation);
+            s_userProxies[user][desiredLtv] = proxy;
+        }
+
+        return proxy;
     }
 
     /**
@@ -284,20 +314,19 @@ contract FlashLeverageCore is
     /**
      * @notice Sets or revokes manager status for a given address.
      * @dev Only the contract owner can modify manager permissions.
-     * @param manager The address to set manager status for.
-     * @param value True to grant manager status, false to revoke it.
+     * @param manager The address to add manager status for.
      */
-    function setManager(address manager, bool value) external onlyOwner {
-        s_managers[manager] = value;
+    function addManager(address manager) external onlyOwner {
+        if (!isManager(manager)) {
+            s_managers[manager] = true;
+        }
     }
 
     /**
      * @notice Overrides renounceOwnership to prevent ownership renunciation.
      * @dev Intentionally disabled to retain upgradeability and collateral support management.
      */
-    function renounceOwnership() public pure override(Ownable) {
-        revert FLCError.FlashLeverageCore__RenounceOwnershipDisabled();
-    }
+    function renounceOwnership() public override(Ownable) {}
 
     /////////////////////////
     // Internal Functions
@@ -368,7 +397,7 @@ contract FlashLeverageCore is
         );
 
         // Supply total collateral and borrow loan token
-        address userProxy = _getOrCreateUserProxy(user, desiredLtv);
+        address userProxy = getOrCreateUserProxy(user, desiredLtv);
         uint256 sharesBorrowed = _supplyCollateralAndBorrowViaProxy(
             userProxy,
             collateralToken,
@@ -438,6 +467,11 @@ contract FlashLeverageCore is
             sharesToBurn
         );
 
+        // This would only make the positions LTV better
+        if (amountCollateralToWithdraw == 0) {
+            return;
+        }
+
         // Swap withdrawn collateral -> loan token
         uint256 amountSwappedLoanToken = _swapCollateralTokenToLoanToken(
             collateralToken,
@@ -495,29 +529,12 @@ contract FlashLeverageCore is
         );
     }
 
-    /**
-     * @notice Gets an existing user proxy or creates a new one for the specified user and desired LTV.
-     * @dev Uses the clone factory pattern to create minimal proxy contracts for gas efficiency.
-     * @param user The address of the user to get or create a proxy for.
-     * @param desiredLtv The desired loan-to-value ratio for this proxy.
-     * @return proxy The address of the user's proxy contract.
-     */
-    function _getOrCreateUserProxy(
-        address user,
-        uint256 desiredLtv
-    ) internal returns (address proxy) {
-        proxy = s_userProxies[user][desiredLtv];
-
-        if (proxy == address(0)) {
-            proxy = Clones.clone(i_userProxyImplementation);
-            s_userProxies[user][desiredLtv] = proxy;
-        }
-
-        return proxy;
-    }
-
     /////////////////////////
     // Public and External View Functions
+
+    function isManager(address manager) public view returns (bool) {
+        return s_managers[manager];
+    }
 
     /**
      * @notice Returns the liquidation loan-to-value ratio for a given collateral-loan token pair.

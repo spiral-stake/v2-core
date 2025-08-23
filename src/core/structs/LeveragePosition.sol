@@ -11,9 +11,8 @@ struct LeveragePosition {
     address loanToken;
     uint256 desiredLtv;
     uint256 amountCollateral;
-    uint256 amountCollateralInLoanToken;
-    uint256 amountLeveragedCollateral;
-    uint256 sharesBorrowed;
-    uint256 positionValueInLoanToken;
-    uint256 impliedApy;
+    uint256 amountCollateralInLoanToken; // For yield tracking when closing
+    uint256 positionValueInLoanToken; // For real-time yield tracking
+    uint256 amountLeveragedCollateral; // Required when closing the position
+    uint256 sharesBorrowed; // Required when closing the position
 }

@@ -24,26 +24,26 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
     /////////////////////////
     // Constants and Immutables
 
+    /// @notice Fee percentage in basis points (5%)
+    uint256 public constant YIELD_FEE = 5e16;
+
     /// @notice Pendle router for executing token swaps
     IPAllActionV3 public immutable i_pendleRouter;
 
     /// @notice Flash leverage contract for executing leveraged positions
     IFlashLeverageCore public immutable i_flashLeverageCore;
 
-    /// @notice Fee percentage in basis points (5%)
-    uint256 public constant YIELD_FEE = 5e16;
-
     /////////////////////////
     // Storage
 
-    mapping(address user => LeveragePosition[]) private s_userLeveragePositions;
+    /// @notice Treasury address to receive fees
+    address private s_treasury;
 
     /// @notice Mapping of PT collateral tokens to their pendle market
     mapping(address collateralToken => address pendleMarket)
         private s_pendleMarket;
 
-    /// @notice Treasury address to receive fees
-    address private s_treasury;
+    mapping(address user => LeveragePosition[]) private s_userLeveragePositions;
 
     /////////////////////////
     // Events
@@ -63,15 +63,6 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
     // Modifiers
 
     /**
-     * @notice Validates that the provided amount is greater than zero
-     * @param value The amount to validate
-     */
-    modifier validateAmount(uint256 value) {
-        require(value > 0, FLError.FlashLeverage__AmountCannotBeZero());
-        _;
-    }
-
-    /**
      * @dev Validates if the onBehalfOf address is not a zero address
      * @param onBehalfOf onBehalfOf address
      *
@@ -81,6 +72,25 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         require(
             onBehalfOf != address(0),
             FLError.FlashLeverage__InvalidOnBehalfOfAddress()
+        );
+        _;
+    }
+
+    /**
+     * @notice Validates that the provided amount is greater than zero
+     * @param value The amount to validate
+     */
+    modifier validateAmount(uint256 value) {
+        require(value > 0, FLError.FlashLeverage__AmountCannotBeZero());
+        _;
+    }
+
+    /// @notice Validates that the collateral token is supported for leveraging.
+    /// @param collateralToken The address of the collateral token to validate.
+    modifier validateCollateralToken(address collateralToken) {
+        require(
+            isSupportedCollateralToken(collateralToken),
+            FLError.FlashLeverage__UnsupportedCollateralToken()
         );
         _;
     }
@@ -114,25 +124,20 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
      */
     function leverage(
         address onBehalfOf,
-        uint256 impliedApy,
         LeverageParams calldata leverageParams
     )
         external
         validateOnBehalfOf(onBehalfOf)
+        validateCollateralToken(leverageParams.collateralToken)
         validateAmount(leverageParams.amountCollateral)
     {
-        require(
-            s_pendleMarket[leverageParams.collateralToken] != address(0),
-            FLError.FlashLeverage__UnsupportedCollateralToken()
-        );
-
         _transferIn(
             leverageParams.collateralToken,
             msg.sender,
             leverageParams.amountCollateral
         );
 
-        _leverage(onBehalfOf, impliedApy, leverageParams);
+        _leverage(onBehalfOf, leverageParams);
     }
 
     /**
@@ -143,21 +148,15 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
      */
     function swapAndLeverage(
         address onBehalfOf,
-        uint256 impliedApy,
         SwapParams calldata swapParams,
         LeverageParams calldata leverageParams
     )
         external
         validateOnBehalfOf(onBehalfOf)
+        validateCollateralToken(leverageParams.collateralToken)
         validateAmount(swapParams.amountTokenIn)
         validateAmount(leverageParams.amountCollateral)
     {
-        address collateralToken = leverageParams.collateralToken;
-        require(
-            s_pendleMarket[collateralToken] != address(0),
-            FLError.FlashLeverage__UnsupportedCollateralToken()
-        );
-
         // Transfer tokens from user
         IERC20(swapParams.tokenIn).transferFrom(
             msg.sender,
@@ -166,12 +165,12 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         );
 
         // Swap if needed
-        if (swapParams.tokenIn != collateralToken) {
-            _handleTokenSwap(collateralToken, swapParams);
+        if (swapParams.tokenIn != leverageParams.collateralToken) {
+            _handleTokenSwap(leverageParams.collateralToken, swapParams);
         }
 
         // Call internal leverage
-        _leverage(onBehalfOf, impliedApy, leverageParams);
+        _leverage(onBehalfOf, leverageParams);
     }
 
     /**
@@ -300,7 +299,6 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
      */
     function _leverage(
         address onBehalfOf,
-        uint256 impliedApy,
         LeverageParams calldata leverageParams
     ) internal {
         address collateralToken = leverageParams.collateralToken;
@@ -359,10 +357,9 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
                 desiredLtv: desiredLtv,
                 amountCollateral: amountCollateral,
                 amountCollateralInLoanToken: amountCollateralInLoanToken,
-                amountLeveragedCollateral: amountLeveragedCollateral,
-                sharesBorrowed: sharesBorrowed,
                 positionValueInLoanToken: positionValueInLoanToken,
-                impliedApy: impliedApy
+                amountLeveragedCollateral: amountLeveragedCollateral,
+                sharesBorrowed: sharesBorrowed
             })
         );
 
@@ -434,6 +431,12 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
 
     /////////////////////////
     // View Functions
+
+    function isSupportedCollateralToken(
+        address collateralToken
+    ) public view returns (bool) {
+        return s_pendleMarket[collateralToken] != address(0);
+    }
 
     /**
      * @notice Returns all leverage positions for a specific user.

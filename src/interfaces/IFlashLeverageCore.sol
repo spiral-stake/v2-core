@@ -22,15 +22,25 @@ interface IFlashLeverageCore {
         CollateralTokenConfig[] calldata tokensConfig
     ) external;
 
-    function setManager(address manager, bool value) external;
+    function onMorphoFlashLoan(
+        uint256 amountLoan,
+        bytes calldata data
+    ) external;
+
+    function owner() external returns (address);
+
+    function addManager(address manager) external;
 
     function renounceOwnership() external;
 
     function getOrCreateUserProxy(
-        address user
+        address user,
+        uint256 desiredLtv
     ) external returns (address proxy);
 
     // ======== Public / External View Functions ========
+
+    function isManager(address manager) external view returns (bool);
 
     function calcLeverageFlashLoan(
         uint256 desiredLtv,
@@ -76,7 +86,7 @@ interface IFlashLeverageCore {
 
     function getUserProxy(
         address user,
-        address desiredLtv
+        uint256 desiredLtv
     ) external view returns (address);
 
     function i_morpho() external view returns (address);

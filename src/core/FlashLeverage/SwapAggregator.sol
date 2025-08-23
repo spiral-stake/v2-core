@@ -159,35 +159,6 @@ abstract contract SwapAggregator is TokenHelper {
     }
 
     /**
-     * @notice Returns an empty `LimitOrderData` struct.
-     * @dev Can be used if not leveraging limit orders.
-     */
-    function _createEmptyLimitOrderData()
-        internal
-        pure
-        returns (LimitOrderData memory)
-    {}
-
-    /**
-     * @notice Returns default approximation parameters for slippage-tolerant swaps.
-     * @dev Can be reused for most basic trades.
-     */
-    function _createDefaultApproxParams()
-        internal
-        pure
-        returns (ApproxParams memory)
-    {
-        return
-            ApproxParams({
-                guessMin: 0,
-                guessMax: type(uint256).max,
-                guessOffchain: 0,
-                maxIteration: 256,
-                eps: 1e14
-            });
-    }
-
-    /**
      * @notice Sets swap configuration for a specific collateral token.
      * @param collateralToken Address of the collateral token (e.g., PT).
      * @param pendleMarket Address of the pendle market for PT collateralToken

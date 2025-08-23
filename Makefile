@@ -1,7 +1,7 @@
 # Store the server PID for cleanup
 SERVER_PID_FILE := .server.pid
 
-all: test-setup start-server test-flashLeverage stop-server
+test: test-setup start-server test-flashLeverageCore stop-server
 
 start-server:
 	@echo "Starting swap-api server"

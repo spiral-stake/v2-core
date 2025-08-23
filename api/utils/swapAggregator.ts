@@ -96,7 +96,7 @@ export async function getInternalReswapData(
     slippage,
     tokenIn: collateralToken.address,
     tokenOut: loanTokenAddress,
-    amountIn: String(parseUnits(String(amountLeveragedCollateral), collateralToken.decimals)),
+    amountIn: amountLeveragedCollateral,
     enableAggregator: true,
     aggregators: "odos, okx, paraswap",
   };

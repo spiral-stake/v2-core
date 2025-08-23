@@ -32,18 +32,18 @@ contract Main is Script, WriteAddresses {
     function _initializeConfig() private {
         tokensConfig = new CollateralTokenConfig[](5);
 
-        // PT-cUSDO
-        tokensConfig[0] = CollateralTokenConfig({
-            collateralToken: 0xB10DA2F9147f9cf2B8826877Cd0c95c18A0f42dc,
-            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb,
-            pendleMarket: 0x3F53eb4c57c7E7118BE8566bCd503EA502639581
-        });
-
         // PT-USDe
-        tokensConfig[1] = CollateralTokenConfig({
+        tokensConfig[0] = CollateralTokenConfig({
             collateralToken: 0xBC6736d346a5eBC0dEbc997397912CD9b8FAe10a,
             morphoMarketId: 0x7a5d67805cb78fad2596899e0c83719ba89df353b931582eb7d3041fd5a06dc8,
             pendleMarket: 0x6d98a2b6CDbF44939362a3E99793339Ba2016aF4
+        });
+
+        // PT-cUSDO
+        tokensConfig[1] = CollateralTokenConfig({
+            collateralToken: 0xB10DA2F9147f9cf2B8826877Cd0c95c18A0f42dc,
+            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb,
+            pendleMarket: 0x3F53eb4c57c7E7118BE8566bCd503EA502639581
         });
 
         // PT-slvlUSD

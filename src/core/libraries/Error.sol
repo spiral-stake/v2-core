@@ -3,13 +3,13 @@ pragma solidity 0.8.30;
 
 library FLCError {
     error FlashLeverageCore__UnsupportedCollateralToken();
-    error FlashLeverageCore__AmountCannotBeZero();
+    error FlashLeverageCore__AmountCollateralCannotBeZero();
+    error FlashLeverageCore__SharesToBurnCannotBeZero();
     error FlashLeverageCore__UntrustedLender();
-    error FlashLeverageCore__InsufficientSharesBorrowed();
-    error FlashLeverageCore__InsufficientCollateralDeposited();
+    error FlashLeverageCore__InsufficientSharesToBurn();
+    error FlashLeverageCore__InsufficientCollateralToWithdraw();
     error FlashLeverageCore__ExceedsMaxLTV();
     error FlashLeverageCore__EffectiveLtvTooHigh();
-    error FlashLeverageCore__RenounceOwnershipDisabled();
     error FlashLeverageCore__NotAManager();
     error FlashLeverageCore__InvalidCollateralToken();
     error FlashLeverageCore__InvalidCollateralTokenDecimals();

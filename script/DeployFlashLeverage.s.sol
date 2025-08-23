@@ -23,9 +23,8 @@ contract DeployFlashLeverage is Script {
         );
 
         // Set as Manager in FlashLeverageCore
-        IFlashLeverageCore(flashLeverageCore).setManager(
-            address(flashLeverage),
-            true
+        IFlashLeverageCore(flashLeverageCore).addManager(
+            address(flashLeverage)
         );
 
         // Add supported collateral tokens
