@@ -28,3 +28,6 @@ abi/
 # addresses
 addresses/
 
+# Server
+.server.pid
+

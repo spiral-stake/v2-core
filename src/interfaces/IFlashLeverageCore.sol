@@ -32,4 +32,9 @@ interface IFlashLeverageCore {
         address loanToken,
         uint256 amountCollateral
     ) external view returns (uint256);
+
+    function getMaxLtv(
+        address collateralToken,
+        address loanToken
+    ) external view returns (uint256);
 }

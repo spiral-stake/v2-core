@@ -18,6 +18,7 @@ library FLCError {
 library FLError {
     error FlashLeverage__InvalidOnBehalfOfAddress();
     error FlashLeverage__InvalidAmountCollateral();
+    error FlashLeverage__ExceedsMaxLTV();
     error FlashLeverage__PositionDoesNotExist();
     error FlashLeverage__PositionAlreadyUnleveraged();
     error FlashLeverage__AmountCannotBeZero();

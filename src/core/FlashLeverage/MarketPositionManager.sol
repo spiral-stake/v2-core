@@ -40,6 +40,7 @@ abstract contract MarketPositionManager is
     mapping(address collateralToken => mapping(address loanToken => MarketParams))
         internal s_marketParams;
 
+    // To save gas by reducing external calls
     mapping(address loanToken => uint8) internal s_loanTokenDecimals;
 
     /////////////////////////
@@ -148,7 +149,7 @@ abstract contract MarketPositionManager is
         address userProxy,
         MarketParams memory marketParams,
         uint256 amount
-    ) internal {
+    ) private {
         address onBehalfOf = userProxy;
 
         _safeApprove(marketParams.collateralToken, address(i_morpho), amount);
@@ -166,7 +167,7 @@ abstract contract MarketPositionManager is
         address userProxy,
         MarketParams memory marketParams,
         uint256 amount
-    ) internal returns (uint256 sharesBorrowed) {
+    ) private returns (uint256 sharesBorrowed) {
         uint256 shares;
         address onBehalf = userProxy;
         address receiver = address(this);
@@ -201,7 +202,7 @@ abstract contract MarketPositionManager is
         MarketParams memory marketParams,
         uint256 amount,
         uint256 sharesBorrowed
-    ) internal returns (uint256 assetsRepaid, uint256 sharesRepaid) {
+    ) private returns (uint256 assetsRepaid, uint256 sharesRepaid) {
         _forceApprove(marketParams.loanToken, address(i_morpho), amount);
 
         address onBehalf = userProxy;
@@ -224,7 +225,7 @@ abstract contract MarketPositionManager is
         address userProxy,
         MarketParams memory marketParams,
         uint256 amount
-    ) internal {
+    ) private {
         address onBehalf = userProxy;
         address receiver = address(this);
 
@@ -282,7 +283,7 @@ abstract contract MarketPositionManager is
      * @param sharesBorrowed Shares representing the borrowed position.
      *
      * @return Equivalent amount in loan token
-     * @dev scaled to 18 decimals
+     * @dev scaled to 18 decimals for standardisation in calculations
      */
     function getSharesValueInLoanToken(
         address collateralToken,

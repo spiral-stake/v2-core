@@ -1,117 +1,213 @@
-// // SPDX-License-Identifier: GPL-3.0-or-later
-// pragma solidity 0.8.30;
+// SPDX-License-Identifier: GPL-3.0-or-later
+pragma solidity 0.8.30;
 
-// import {Test} from "forge-std/Test.sol";
-// import {console} from "forge-std/console.sol";
+import "./TestBase.t.sol";
 
-// import {Math} from "../src/core/libraries/Math.sol";
-// import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
-// import {Setup} from "./Setup.t.sol";
-// import {LeveragePosition} from "../src/core/structs/LeveragePosition.sol";
-// import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
-// import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
-// import {FLError} from "../src/core/libraries/Error.sol";
+/**
+ * @title FlashLeverage Test Suite
+ * @notice Test coverage for FlashLeverage contract functionality
+ * @dev All tests follow the AAA (Arrange, Act, Assert) pattern for consistency
+ */
+contract TestFlashLeverage is TestBase {
+    using Math for uint256;
 
-// contract TestFlashLeverage is Test, Setup {
-//     using Math for uint256;
+    /*//////////////////////////////////////////////////////////////
+                        STATEFUL TESTING MODIFIERS
+    //////////////////////////////////////////////////////////////*/
 
-//     /////////////////////////
-//     // Default Values
+    modifier withLeveragedPosition() {
+        _executeLeverageOperation();
+        _;
+    }
 
-//     address USER = 0x925109e0AfFe306c31B55d8181e766D53aF7A778; // PT-USDE-WHALE
-//     uint256 DESIRED_LTV = 80e16;
-//     address COLLATERAL_TOKEN = 0xBC6736d346a5eBC0dEbc997397912CD9b8FAe10a; // PT-USDE
-//     address LOAN_TOKEN = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC
-//     uint256 AMOUNT_COLLATERAL = 100e18;
+    /*//////////////////////////////////////////////////////////////
+                           LEVERAGE TESTS
+    //////////////////////////////////////////////////////////////*/
 
-//     /////////////////////////
-//     // Modifiers
+    function test_leverage_RevertsWhen_CollateralTokenUnsupported() external {
+        // Arrange
+        LeverageParams memory params = _buildDefaultLeverageParams();
+        params.collateralToken = RANDOM_ADDRESS;
 
-//     modifier leverage() {
-//         bytes memory leverageCallData = getLeverageCalldata(
-//             USER,
-//             DESIRED_LTV,
-//             COLLATERAL_TOKEN,
-//             LOAN_TOKEN,
-//             AMOUNT_COLLATERAL
-//         );
+        // Act & Assert
+        vm.expectRevert(
+            FLError.FlashLeverage__UnsupportedCollateralToken.selector
+        );
+        fl.leverage(USER, params);
+    }
 
-//         vm.startPrank(USER);
+    function test_leverage_RevertsWhen_CollateralAmountIsZero() external {
+        // Arrange
+        LeverageParams memory params = _buildDefaultLeverageParams();
+        params.amountCollateral = 0;
 
-//         IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
-//         (bool success, ) = address(fl).call(leverageCallData);
-//         require(success == true, "Leverage Call Failed");
+        // Act & Assert
+        vm.expectRevert(FLError.FlashLeverage__AmountCannotBeZero.selector);
+        fl.leverage(USER, params);
+    }
 
-//         vm.stopPrank();
-//         _;
-//     }
+    function test_leverage_RevertsWhen_DesiredLtvExceedsMaxLtv() external {
+        // Arrange
+        LeverageParams memory params = _buildDefaultLeverageParams();
+        uint256 EXCESSIVE_LTV = 90e16;
+        params.desiredLtv = EXCESSIVE_LTV;
 
-//     /////////////////////////
-//     // External Functions
+        // Act & Assert
+        vm.expectRevert(FLError.FlashLeverage__ExceedsMaxLTV.selector);
+        fl.leverage(USER, params);
+    }
 
-//     function testLeverage() external leverage {
-//         LeveragePosition memory leveragePosition = fl.getUserLeveragePosition(
-//             USER,
-//             0
-//         );
-//         assertEq(leveragePosition.amountCollateral, AMOUNT_COLLATERAL);
-//     }
+    function test_leverage_SuccessfullyCreatesPosition() external {
+        // Arrange
+        _setupLeverageConditions();
 
-//     /////////////////////////
-//     // Public and External View Functions
+        // Act
+        _executeLeverageOperation();
 
-//     function testPendleRouterAddress() external view {
-//         address expectedPendleRouter = pendleRouter;
-//         address actualPendleRouter = address(fl.i_pendleRouter());
-//         assertEq(actualPendleRouter, expectedPendleRouter);
-//     }
+        // Assert
+        LeveragePosition memory leveragePosition = fl.getUserLeveragePosition(
+            USER,
+            0
+        );
 
-//     function testFlashLeverageCoreAddress() external view {
-//         address expectedFlashLeverage = address(flc);
-//         address actualFlashLeverageCore = address(fl.i_flashLeverageCore());
-//         assertEq(actualFlashLeverageCore, expectedFlashLeverage);
-//     }
+        CoreLeveragePosition memory coreLeveragePosition = flc
+            .getUserCoreLeveragePosition(
+                USER,
+                DESIRED_LTV,
+                COLLATERAL_TOKEN,
+                LOAN_TOKEN
+            );
 
-//     function testTreasuryAddress() external view {
-//         address expectedTreasury = treasury;
-//         address actualTreasury = fl.getTreasury();
-//         assertEq(actualTreasury, expectedTreasury);
-//     }
+        assertEq(leveragePosition.open, true);
+        assertEq(leveragePosition.desiredLtv, DESIRED_LTV);
+        assertEq(leveragePosition.collateralToken, COLLATERAL_TOKEN);
+        assertEq(leveragePosition.loanToken, LOAN_TOKEN);
+        assertEq(leveragePosition.amountCollateral, AMOUNT_COLLATERAL);
+        assertEq(
+            leveragePosition.amountCollateralInLoanToken,
+            flc
+                .getCollateralValueInLoanToken(
+                    COLLATERAL_TOKEN,
+                    LOAN_TOKEN,
+                    AMOUNT_COLLATERAL
+                )
+                .scaleTo(Math.STANDARD_DECIMALS, LOAN_TOKEN_DECIMALS)
+        );
+        assertEq(
+            leveragePosition.amountLeveragedCollateral,
+            coreLeveragePosition.amountCollateral
+        );
+        assertEq(
+            leveragePosition.sharesBorrowed,
+            coreLeveragePosition.sharesBorrowed
+        );
+    }
 
-//     function testIsSupportedCollateralToken() external {
-//         for (uint256 i; i < tokensConfig.length; ++i) {
-//             address collateralToken = tokensConfig[i].collateralToken;
-//             assertTrue(fl.isSupportedCollateralToken(collateralToken));
-//         }
+    /*//////////////////////////////////////////////////////////////
+                           UNLEVERAGE FUNCTION TESTS
+    //////////////////////////////////////////////////////////////*/
 
-//         // For Unsupported Collateral Token
-//         address unsupportedCollateralToken = makeAddr("randomAddress");
-//         assertFalse(fl.isSupportedCollateralToken(unsupportedCollateralToken));
-//     }
+    function test_unleverage_RevertsWhen_PositionDoesNotExist() external {
+        // Arrange
+        uint256 positionId = 0;
+        address pendleSwap;
+        address tokenRedeemSy;
+        SwapData memory swapData;
+        LimitOrderData memory limitOrderData;
 
-//     /////////////////////////
-//     // Utils
+        // Act & Assert
+        vm.expectRevert(FLError.FlashLeverage__PositionDoesNotExist.selector);
+        fl.unleverage(
+            positionId,
+            pendleSwap,
+            tokenRedeemSy,
+            swapData,
+            limitOrderData
+        );
+    }
 
-//     function makeUnleverageCall(
-//         address user,
-//         uint256 positionId,
-//         uint256 desiredLtv,
-//         address collateralToken,
-//         address loanToken,
-//         uint256 amountCollateral
-//     ) internal {
-//         bytes memory leverageCalldata = getLeverageCalldata(
-//             user,
-//             desiredLtv,
-//             collateralToken,
-//             loanToken,
-//             amountCollateral
-//         );
+    function test_unleverage_SucessfullyClosesPosition_AndRevertsForAlreadyClosedPosition()
+        external
+    {}
 
-//         vm.prank(user);
-//         IERC20(collateralToken).approve(address(fl), amountCollateral);
+    /*//////////////////////////////////////////////////////////////
+                           VIEW FUNCTION TESTS
+    //////////////////////////////////////////////////////////////*/
 
-//         (bool success, ) = address(fl).call(leverageCalldata);
-//         require(success == true, "Leverage Call Failed");
-//     }
-// }
+    function test_pendleRouterAddress_IsSetCorrectly() external view {
+        // Arrange
+        address expectedPendleRouter = pendleRouter;
+
+        // Act
+        address actualPendleRouter = address(fl.i_pendleRouter());
+
+        // Assert
+        assertEq(actualPendleRouter, expectedPendleRouter);
+    }
+
+    function test_flashLeverageCoreAddress_IsSetCorrectly() external view {
+        // Arrange
+        address expectedFlashLeverage = address(flc);
+
+        // Act
+        address actualFlashLeverageCore = address(fl.i_flashLeverageCore());
+
+        // Assert
+        assertEq(actualFlashLeverageCore, expectedFlashLeverage);
+    }
+
+    function test_treasuryAddress_IsSetCorrectly() external view {
+        // Arrange
+        address expectedTreasury = treasury;
+
+        // Act
+        address actualTreasury = fl.getTreasury();
+
+        // Assert
+        assertEq(actualTreasury, expectedTreasury);
+    }
+
+    function test_isSupportedCollateralToken_CorrectlyIdentifiesTokens()
+        external
+    {
+        // Arrange & Act & Assert
+        for (uint256 i; i < tokensConfig.length; ++i) {
+            address collateralToken = tokensConfig[i].collateralToken;
+            assertTrue(fl.isSupportedCollateralToken(collateralToken));
+        }
+
+        // For unsupported collateral token
+        address unsupportedCollateralToken = makeAddr("randomAddress");
+        assertFalse(fl.isSupportedCollateralToken(unsupportedCollateralToken));
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                           HELPER FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    function _setupLeverageConditions() internal {
+        vm.prank(USER);
+        IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
+    }
+
+    function _executeLeverageOperation() internal {
+        // Arrange
+        bytes memory leverageCallData = getLeverageCalldata(
+            USER,
+            DESIRED_LTV,
+            COLLATERAL_TOKEN,
+            LOAN_TOKEN,
+            AMOUNT_COLLATERAL
+        );
+
+        vm.prank(USER);
+        IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
+
+        // Act
+        vm.prank(USER);
+        (bool success, ) = address(fl).call(leverageCallData);
+
+        // Assert
+        require(success, "Leverage Call Failed");
+    }
+}

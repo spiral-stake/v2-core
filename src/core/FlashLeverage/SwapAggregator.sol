@@ -56,13 +56,13 @@ abstract contract SwapAggregator is TokenHelper {
             s_pendleMarket[collateralToken],
             0,
             approxParams,
-            _createTokenInputSimple(
-                loanToken,
-                amountLoan,
-                tokenMintSy,
-                pendleSwap,
-                swapData
-            ),
+            TokenInput({
+                tokenIn: loanToken,
+                netTokenIn: amountLoan,
+                tokenMintSy: tokenMintSy,
+                pendleSwap: pendleSwap,
+                swapData: swapData
+            }),
             limitOrderData
         );
     }
@@ -95,67 +95,15 @@ abstract contract SwapAggregator is TokenHelper {
             address(this),
             s_pendleMarket[collateralToken],
             amountCollateral,
-            _createTokenOutputSimple(
-                loanToken,
-                0,
-                tokenRedeemSy,
-                pendleSwap,
-                swapData
-            ),
-            limitOrderData
-        );
-    }
-
-    /**
-     * @notice Creates a TokenInput struct for token → PT swaps.
-     * @param tokenIn Base token being swapped.
-     * @param netTokenIn Amount of tokenIn to send.
-     * @param tokenMintSy Token to mint PT from.
-     * @param pendleSwap Swap router address.
-     * @param swapData Swap route/configuration.
-     * @return tokenInput Pendle-compatible token input.
-     */
-    function _createTokenInputSimple(
-        address tokenIn,
-        uint256 netTokenIn,
-        address tokenMintSy,
-        address pendleSwap,
-        SwapData memory swapData
-    ) internal pure returns (TokenInput memory) {
-        return
-            TokenInput({
-                tokenIn: tokenIn,
-                netTokenIn: netTokenIn,
-                tokenMintSy: tokenMintSy,
-                pendleSwap: pendleSwap,
-                swapData: swapData
-            });
-    }
-
-    /**
-     * @notice Creates a TokenOutput struct for PT → token swaps.
-     * @param tokenOut Desired output token.
-     * @param minTokenOut Minimum acceptable output.
-     * @param tokenRedeemSy Token to redeem PT into.
-     * @param pendleSwap Swap router address.
-     * @param swapData Swap route/configuration.
-     * @return tokenOutput Pendle-compatible token output.
-     */
-    function _createTokenOutputSimple(
-        address tokenOut,
-        uint256 minTokenOut,
-        address tokenRedeemSy,
-        address pendleSwap,
-        SwapData memory swapData
-    ) internal pure returns (TokenOutput memory) {
-        return
             TokenOutput({
-                tokenOut: tokenOut,
-                minTokenOut: minTokenOut,
+                tokenOut: loanToken,
+                minTokenOut: 0,
                 tokenRedeemSy: tokenRedeemSy,
                 pendleSwap: pendleSwap,
                 swapData: swapData
-            });
+            }),
+            limitOrderData
+        );
     }
 
     /**

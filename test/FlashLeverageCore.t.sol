@@ -13,19 +13,6 @@ contract TestFlashLeverageCore is TestBase {
     using Math for uint256;
 
     /*//////////////////////////////////////////////////////////////
-                               CONSTANTS
-    //////////////////////////////////////////////////////////////*/
-
-    address private constant USER = 0x925109e0AfFe306c31B55d8181e766D53aF7A778; // PT-USDE-WHALE
-    uint256 private constant DESIRED_LTV = 80e16; // 80%
-    address private constant COLLATERAL_TOKEN =
-        0xBC6736d346a5eBC0dEbc997397912CD9b8FAe10a; // PT-USDE
-    address private constant LOAN_TOKEN =
-        0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC
-    uint8 private constant LOAN_TOKEN_DECIMALS = 6;
-    uint256 private constant AMOUNT_COLLATERAL = 1000000e18;
-
-    /*//////////////////////////////////////////////////////////////
                         STATEFUL TESTING MODIFIERS
     //////////////////////////////////////////////////////////////*/
 
@@ -68,6 +55,15 @@ contract TestFlashLeverageCore is TestBase {
         // Act & Assert
         vm.expectRevert();
         flc.addManager(newManager);
+    }
+
+    function test_addSupportedCollateralTokens() external {
+        // Arrange
+        // TODO: Create Valid token configuration
+        // Act
+        // TODO: Call addSupportedCollateralTokens
+        // Assert
+        // TODO: Verify if token is now supported
     }
 
     function test_addSupportedCollateralTokens_RevertsWhen_InvalidTokenConfiguration()
@@ -150,17 +146,6 @@ contract TestFlashLeverageCore is TestBase {
         // TODO: Attempt reentrant call
         // Assert
         // TODO: Verify reentrancy protection works
-    }
-
-    function test_leverage_RevertsWhen_InsufficientLiquidityInMarket()
-        external
-    {
-        // Arrange
-        // TODO: Setup low liquidity scenario
-        // Act
-        // TODO: Attempt leverage operation
-        // Assert
-        // TODO: Verify proper revert
     }
 
     function test_leverage_RevertsWhen_EffectiveLtvExceedsSlippageBuffer()
@@ -640,49 +625,6 @@ contract TestFlashLeverageCore is TestBase {
     /*//////////////////////////////////////////////////////////////
                             HELPER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-
-    function _buildDefaultLeverageParams()
-        internal
-        returns (LeverageParams memory)
-    {
-        ApproxParams memory approxParams;
-        SwapData memory swapData;
-        LimitOrderData memory limitOrderData;
-
-        return
-            LeverageParams({
-                desiredLtv: DESIRED_LTV,
-                collateralToken: COLLATERAL_TOKEN,
-                loanToken: LOAN_TOKEN,
-                amountCollateral: AMOUNT_COLLATERAL,
-                approxParams: approxParams,
-                pendleSwap: makeAddr("pendleSwap"),
-                tokenMintSy: makeAddr("tokenMintSy"),
-                swapData: swapData,
-                limitOrderData: limitOrderData
-            });
-    }
-
-    function _buildDefaultUnleverageParams(
-        uint256 sharesToBurn,
-        uint256 amountCollateralToWithdraw
-    ) internal returns (UnleverageParams memory) {
-        SwapData memory swapData;
-        LimitOrderData memory limitOrderData;
-
-        return
-            UnleverageParams({
-                desiredLtv: DESIRED_LTV,
-                collateralToken: COLLATERAL_TOKEN,
-                loanToken: LOAN_TOKEN,
-                sharesToBurn: sharesToBurn,
-                amountCollateralToWithdraw: amountCollateralToWithdraw,
-                pendleSwap: makeAddr("pendleSwap"),
-                tokenRedeemSy: makeAddr("tokenRedeemSy"),
-                swapData: swapData,
-                limitOrderData: limitOrderData
-            });
-    }
 
     function _createLeveragedPosition() internal {
         _setupSuccessfulLeverageConditions();

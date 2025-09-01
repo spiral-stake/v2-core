@@ -76,8 +76,7 @@ contract FlashLeverageCore is
         address loanToken
     ) {
         require(
-            s_marketParams[collateralToken][loanToken].collateralToken !=
-                address(0),
+            isSupportedCollateralToken(collateralToken, loanToken),
             FLCError.FlashLeverageCore__UnsupportedCollateralToken()
         );
         _;
@@ -260,6 +259,7 @@ contract FlashLeverageCore is
     /**
      * @notice Gets an existing user proxy or creates a new one for the specified user and desired LTV.
      * @dev Uses the clone factory pattern to create minimal proxy contracts for gas efficiency.
+     * This function is permissionless and can be safely called by anyone.
      * @param user The address of the user to get or create a proxy for.
      * @param desiredLtv The desired loan-to-value ratio for this proxy.
      * @return proxy The address of the user's proxy contract.
@@ -312,7 +312,7 @@ contract FlashLeverageCore is
     }
 
     /**
-     * @notice Sets or revokes manager status for a given address.
+     * @notice Sets manager status for a given address.
      * @dev Only the contract owner can modify manager permissions.
      * @param manager The address to add manager status for.
      */
@@ -532,8 +532,33 @@ contract FlashLeverageCore is
     /////////////////////////
     // Public and External View Functions
 
+    /**
+     * @notice Checks if an address has manager privileges
+     * @param manager The address to check for manager status
+     * @return bool True if the address is a registered manager, false otherwise
+     * @dev Uses the s_managers mapping to determine manager status. Managers typically have
+     *      elevated permissions for administrative functions.
+     */
     function isManager(address manager) public view returns (bool) {
         return s_managers[manager];
+    }
+
+    /**
+     * @notice Checks if a collateral-loan token pair is supported for leverage operations
+     * @param collateralToken The address of the collateral token to validate
+     * @param loanToken The address of the loan token to validate
+     * @return bool True if the token pair is supported, false otherwise
+     * @dev Validates support by checking if market parameters exist for the token pair.
+     *      A non-zero collateralToken address in the market parameters indicates the pair
+     *      has been configured and is available for leverage operations.
+     */
+    function isSupportedCollateralToken(
+        address collateralToken,
+        address loanToken
+    ) public view returns (bool) {
+        return
+            s_marketParams[collateralToken][loanToken].collateralToken !=
+            address(0);
     }
 
     /**
@@ -568,7 +593,7 @@ contract FlashLeverageCore is
      * @param collateralToken Address of the CollateralToken.
      * @param loanToken Address of the Loan Token.
      * @param amountCollateral Amount of collateral token to value.
-     * @return Value of collateral amount in loan token (scaled to 18 decimals).
+     * @return Value of collateral amount in loan token (Unscaled to only 18 decimals for standardisation in calculations).
      */
     function getCollateralValueInLoanToken(
         address collateralToken,

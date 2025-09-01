@@ -17,7 +17,6 @@ contract UserProxy {
     }
 
     /// @notice Ensures only the FlashLeverageCore contract can call protected functions
-    /// @dev Reverts with custom error message if caller is not the leverage core
     modifier onlyLeverageCore() {
         require(msg.sender == leverageCore, "UserProxy: only leverage core");
         _;
