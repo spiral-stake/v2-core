@@ -25,4 +25,5 @@ library FLError {
     error FlashLeverage__UnsupportedCollateralToken();
     error FlashLeverage__TreasuryCannotBeZero();
     error FlashLeverage__RenounceOwnershipDisabled();
+    error FlashLeverage__OnlyOwnerCanCloseBeforeMaturity();
 }

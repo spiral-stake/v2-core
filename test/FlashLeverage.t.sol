@@ -112,15 +112,18 @@ contract TestFlashLeverage is TestBase {
         uint256 positionId = 0;
         address pendleSwap;
         address tokenRedeemSy;
+        uint256 minTokenOut;
         SwapData memory swapData;
         LimitOrderData memory limitOrderData;
 
         // Act & Assert
         vm.expectRevert(FLError.FlashLeverage__PositionDoesNotExist.selector);
         fl.unleverage(
+            USER,
             positionId,
             pendleSwap,
             tokenRedeemSy,
+            minTokenOut,
             swapData,
             limitOrderData
         );

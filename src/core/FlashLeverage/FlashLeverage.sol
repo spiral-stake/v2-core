@@ -6,10 +6,11 @@ import {IFlashLeverageCore, LeverageParams, UnleverageParams, CoreLeveragePositi
 import {SwapParams} from "../structs/SwapParams.sol";
 import {LeveragePosition} from "../structs/LeveragePosition.sol";
 import {CollateralTokenConfig} from "../structs/CollateralTokenConfig.sol";
-import {TokenHelper, IERC20} from "../libraries/TokenHelper.sol";
+import {TokenHelper} from "../libraries/TokenHelper.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {Math} from "../libraries/Math.sol";
 import {FLError} from "../libraries/Error.sol";
+import {IPendleMarket} from "../../interfaces/IPendleMarket.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 
 /**
@@ -187,11 +188,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         )
     {
         // Transfer tokens from user
-        IERC20(swapParams.tokenIn).transferFrom(
-            msg.sender,
-            address(this),
-            swapParams.amountTokenIn
-        );
+        _transferIn(swapParams.tokenIn, msg.sender, swapParams.amountTokenIn);
 
         // Swap if needed
         if (swapParams.tokenIn != leverageParams.collateralToken) {
@@ -212,14 +209,14 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
      * @dev Public entry point that validates position and delegates to internal implementation
      */
     function unleverage(
+        address user,
         uint256 positionId,
         address pendleSwap,
         address tokenRedeemSy,
+        uint256 minTokenOut,
         SwapData calldata swapData,
         LimitOrderData calldata limitOrderData
     ) external returns (uint256 amountReturned) {
-        address user = msg.sender;
-
         require(
             positionId < s_userLeveragePositions[user].length,
             FLError.FlashLeverage__PositionDoesNotExist()
@@ -228,6 +225,14 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
         ];
+
+        if (_ptNotExpired(position.collateralToken)) {
+            require(
+                msg.sender == user,
+                FLError.FlashLeverage__OnlyOwnerCanCloseBeforeMaturity()
+            );
+        }
+
         require(
             position.open,
             FLError.FlashLeverage__PositionAlreadyUnleveraged()
@@ -240,6 +245,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
                 position,
                 pendleSwap,
                 tokenRedeemSy,
+                minTokenOut,
                 swapData,
                 limitOrderData
             );
@@ -381,6 +387,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         LeveragePosition storage position,
         address pendleSwap,
         address tokenRedeemSy,
+        uint256 minTokenOut,
         SwapData calldata swapData,
         LimitOrderData calldata limitOrderData
     ) internal returns (uint256 amountReturned) {
@@ -395,6 +402,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
                 amountCollateralToWithdraw: position.amountLeveragedCollateral,
                 pendleSwap: pendleSwap,
                 tokenRedeemSy: tokenRedeemSy,
+                minTokenOut: minTokenOut,
                 swapData: swapData,
                 limitOrderData: limitOrderData
             })
@@ -458,7 +466,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         i_pendleRouter.swapExactTokenForPt(
             address(this),
             s_pendleMarket[collateralToken],
-            swapParams.minOut,
+            swapParams.minPtOut,
             swapParams.approxParams,
             TokenInput({
                 tokenIn: swapParams.tokenIn,
@@ -469,6 +477,12 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
             }),
             swapParams.limitOrderData
         );
+    }
+
+    function _ptNotExpired(
+        address collateralToken
+    ) internal view returns (bool) {
+        return !IPendleMarket(s_pendleMarket[collateralToken]).isExpired();
     }
 
     /////////////////////////

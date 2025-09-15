@@ -193,6 +193,7 @@ contract FlashLeverageCore is
             params.approxParams,
             params.pendleSwap,
             params.tokenMintSy,
+            params.minPtOut,
             params.swapData,
             params.limitOrderData
         );
@@ -250,6 +251,7 @@ contract FlashLeverageCore is
             amountCollateralToWithdraw,
             params.pendleSwap,
             params.tokenRedeemSy,
+            params.minTokenOut,
             params.swapData,
             params.limitOrderData
         );
@@ -352,6 +354,7 @@ contract FlashLeverageCore is
             ApproxParams memory approxParams,
             address pendleSwap,
             address tokenMintSy,
+            uint256 minPtOut,
             SwapData memory swapData,
             LimitOrderData memory limitOrderData
         ) = abi.decode(
@@ -366,6 +369,7 @@ contract FlashLeverageCore is
                     ApproxParams,
                     address,
                     address,
+                    uint256,
                     SwapData,
                     LimitOrderData
                 )
@@ -379,6 +383,7 @@ contract FlashLeverageCore is
             approxParams,
             pendleSwap,
             tokenMintSy,
+            minPtOut,
             swapData,
             limitOrderData
         );
@@ -438,6 +443,7 @@ contract FlashLeverageCore is
             uint256 amountCollateralToWithdraw,
             address pendleSwap,
             address tokenRedeemSy,
+            uint256 minTokenOut,
             SwapData memory swapData,
             LimitOrderData memory limitOrderData
         ) = abi.decode(
@@ -452,6 +458,7 @@ contract FlashLeverageCore is
                     uint256,
                     address,
                     address,
+                    uint256,
                     SwapData,
                     LimitOrderData
                 )
@@ -479,6 +486,7 @@ contract FlashLeverageCore is
             amountCollateralToWithdraw,
             pendleSwap,
             tokenRedeemSy,
+            minTokenOut,
             swapData,
             limitOrderData
         );

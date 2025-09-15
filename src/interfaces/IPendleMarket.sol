@@ -6,4 +6,6 @@ interface IPendleMarket {
         external
         view
         returns (address _SY, address _PT, address _YT);
+
+    function isExpired() external view returns (bool);
 }

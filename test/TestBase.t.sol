@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {WriteAddresses} from "../script/WriteAddresses.s.sol";
 import {IMorpho, MarketParams, Id, Position} from "@morpho/interfaces/IMorpho.sol";
@@ -158,6 +159,7 @@ contract TestBase is Test, WriteAddresses {
                 approxParams: approxParams,
                 pendleSwap: makeAddr("pendleSwap"),
                 tokenMintSy: makeAddr("tokenMintSy"),
+                minPtOut: 0,
                 swapData: swapData,
                 limitOrderData: limitOrderData
             });
@@ -179,6 +181,7 @@ contract TestBase is Test, WriteAddresses {
                 amountCollateralToWithdraw: amountCollateralToWithdraw,
                 pendleSwap: makeAddr("pendleSwap"),
                 tokenRedeemSy: makeAddr("tokenRedeemSy"),
+                minTokenOut: 0,
                 swapData: swapData,
                 limitOrderData: limitOrderData
             });

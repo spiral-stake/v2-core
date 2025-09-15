@@ -47,6 +47,7 @@ abstract contract SwapAggregator is TokenHelper {
         ApproxParams memory approxParams,
         address pendleSwap,
         address tokenMintSy,
+        uint256 minPtOut,
         SwapData memory swapData,
         LimitOrderData memory limitOrderData
     ) internal returns (uint256 amountSwappedCollateralToken) {
@@ -54,7 +55,7 @@ abstract contract SwapAggregator is TokenHelper {
         (amountSwappedCollateralToken, , ) = i_pendleRouter.swapExactTokenForPt(
             address(this),
             s_pendleMarket[collateralToken],
-            0,
+            minPtOut,
             approxParams,
             TokenInput({
                 tokenIn: loanToken,
@@ -83,6 +84,7 @@ abstract contract SwapAggregator is TokenHelper {
         uint256 amountCollateral,
         address pendleSwap,
         address tokenRedeemSy,
+        uint256 minTokenOut,
         SwapData memory swapData,
         LimitOrderData memory limitOrderData
     ) internal returns (uint256 amountSwappedLoanToken) {
@@ -97,7 +99,7 @@ abstract contract SwapAggregator is TokenHelper {
             amountCollateral,
             TokenOutput({
                 tokenOut: loanToken,
-                minTokenOut: 0,
+                minTokenOut: minTokenOut,
                 tokenRedeemSy: tokenRedeemSy,
                 pendleSwap: pendleSwap,
                 swapData: swapData
