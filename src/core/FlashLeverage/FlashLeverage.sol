@@ -187,15 +187,12 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
             leverageParams.loanToken
         )
     {
-        // Transfer tokens from user
         _transferIn(swapParams.tokenIn, msg.sender, swapParams.amountTokenIn);
 
-        // Swap if needed
         if (swapParams.tokenIn != leverageParams.collateralToken) {
             _handleTokenSwap(leverageParams.collateralToken, swapParams);
         }
 
-        // Call internal leverage
         _leverage(onBehalfOf, leverageParams);
     }
 

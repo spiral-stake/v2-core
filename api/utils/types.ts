@@ -39,6 +39,7 @@ export interface InternalSwapData {
   approxParams: any;
   pendleSwap: string;
   tokenMintSy: string;
+  minPtOut: bigint;
   swapData: any;
   limitOrderData: any;
 }
@@ -47,8 +48,8 @@ export interface InternalReswapData {
   pendleSwap: string;
   tokenRedeemSy: string;
   swapData: any;
+  minTokenOut: bigint;
   limitOrderData: any;
-  minOut: BigInt;
 }
 
 export type SwapData = { amountOut: string; priceImpact: number };

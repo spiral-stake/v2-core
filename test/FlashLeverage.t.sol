@@ -16,6 +16,7 @@ contract TestFlashLeverage is TestBase {
     //////////////////////////////////////////////////////////////*/
 
     modifier withLeveragedPosition() {
+        _setupLeverageConditions();
         _executeLeverageOperation();
         _;
     }
@@ -131,7 +132,40 @@ contract TestFlashLeverage is TestBase {
 
     function test_unleverage_SucessfullyClosesPosition_AndRevertsForAlreadyClosedPosition()
         external
-    {}
+        withLeveragedPosition
+    {
+        // Arrange
+        uint256 positionId = 0; // 1st position
+        uint256 userUsdcBalanceBefore = IERC20(USDC).balanceOf(USER);
+        LeveragePosition memory positionBefore = fl.getUserLeveragePosition(
+            USER,
+            positionId
+        );
+
+        // Act
+        _executeUnleverageOperation(
+            USER,
+            positionId,
+            positionBefore.amountLeveragedCollateral
+        );
+
+        // Assert
+        uint256 userUsdcBalanceAfter = IERC20(USDC).balanceOf(USER);
+        LeveragePosition memory positionAfter = fl.getUserLeveragePosition(
+            USER,
+            positionId
+        );
+        assertFalse(positionAfter.open);
+
+        // Check USDC balance for user has increased
+        assertGt(userUsdcBalanceAfter, userUsdcBalanceBefore);
+
+        // Revert for already closed position
+        vm.expectRevert(
+            FLError.FlashLeverage__PositionAlreadyUnleveraged.selector
+        );
+        _executeDefaultUnleverageOperation(USER, positionId);
+    }
 
     /*//////////////////////////////////////////////////////////////
                            VIEW FUNCTION TESTS
@@ -212,5 +246,44 @@ contract TestFlashLeverage is TestBase {
 
         // Assert
         require(success, "Leverage Call Failed");
+    }
+
+    function _executeUnleverageOperation(
+        address user,
+        uint256 positionId,
+        uint256 amountLeveragedCollateral
+    ) internal {
+        bytes memory callData = getUnleverageCalldata(
+            user,
+            positionId,
+            COLLATERAL_TOKEN,
+            amountLeveragedCollateral
+        );
+
+        vm.prank(USER);
+        (bool success, ) = address(fl).call(callData);
+        require(success, "Unleverage operation failed");
+    }
+
+    function _executeDefaultUnleverageOperation(
+        address user,
+        uint256 positionId
+    ) internal {
+        address pendleSwap;
+        address tokenRedeemSy;
+        uint256 minTokenOut;
+        SwapData memory swapData;
+        LimitOrderData memory limitOrderData;
+
+        vm.prank(USER);
+        fl.unleverage(
+            user,
+            positionId,
+            pendleSwap,
+            tokenRedeemSy,
+            minTokenOut,
+            swapData,
+            limitOrderData
+        );
     }
 }

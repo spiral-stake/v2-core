@@ -35,7 +35,7 @@ contract TestBase is Test, WriteAddresses {
     address internal constant LOAN_TOKEN =
         0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC
     uint8 internal constant LOAN_TOKEN_DECIMALS = 6;
-    uint256 internal constant AMOUNT_COLLATERAL = 1000000e18;
+    uint256 internal constant AMOUNT_COLLATERAL = 100000e18; // 100k
 
     function setUp() external virtual {
         // Create fork
@@ -86,7 +86,7 @@ contract TestBase is Test, WriteAddresses {
         );
 
         string memory url = string.concat(
-            "http://127.0.0.1:3000/leverage",
+            "http://127.0.0.1:3000/flash-leverage/leverage",
             "?userAddress=",
             vm.toString(user),
             "&desiredLtv=",
@@ -112,13 +112,42 @@ contract TestBase is Test, WriteAddresses {
 
     function getUnleverageCalldata(
         address user,
+        uint256 positionId,
+        address collateralToken,
+        uint256 amountLeveragedCollateral
+    ) internal returns (bytes memory) {
+        string memory url = string.concat(
+            "http://127.0.0.1:3000/flash-leverage/unleverage",
+            "?userAddress=",
+            vm.toString(user),
+            "&positionId=",
+            vm.toString(positionId),
+            "&collateralTokenAddress=",
+            vm.toString(collateralToken),
+            "&amountLeveragedCollateral=",
+            vm.toString(amountLeveragedCollateral)
+        );
+
+        string[] memory inputs = new string[](6);
+        inputs[0] = "curl";
+        inputs[1] = "-s"; // Silent mode - no progress output
+        inputs[2] = "--fail"; // Fail on HTTP errors
+        inputs[3] = "-X";
+        inputs[4] = "GET";
+        inputs[5] = url;
+
+        return vm.ffi(inputs);
+    }
+
+    function getCoreUnleverageCalldata(
+        address user,
         uint256 desiredLtv,
         address collateralToken,
         uint256 sharesToBurn,
         uint256 amountCollateralToWithdraw
     ) internal returns (bytes memory) {
         string memory url = string.concat(
-            "http://127.0.0.1:3000/unleverage",
+            "http://127.0.0.1:3000/flash-leverage-core/unleverage",
             "?userAddress=",
             vm.toString(user),
             "&desiredLtv=",

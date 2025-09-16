@@ -17,14 +17,8 @@ contract TestFlashLeverageCore is TestBase {
     //////////////////////////////////////////////////////////////*/
 
     modifier withLeveragedPosition() {
-        _createLeveragedPosition();
-        _;
-    }
-
-    modifier withMultipleLeveragedPositions() {
-        _createLeveragedPosition();
-        _createLeveragedPosition();
-        _createLeveragedPosition();
+        _setupSuccessfulLeverageConditions();
+        _executeLeverageOperation();
         _;
     }
 
@@ -59,22 +53,77 @@ contract TestFlashLeverageCore is TestBase {
 
     function test_addSupportedCollateralTokens() external {
         // Arrange
-        // TODO: Create Valid token configuration
+        address flcOwner = flc.owner();
+        CollateralTokenConfig[]
+            memory newTokenConfig = new CollateralTokenConfig[](1);
+        // PT-cUSD-29JAN2026
+        newTokenConfig[0] = CollateralTokenConfig({
+            collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
+            morphoMarketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789,
+            pendleMarket: 0x307c15f808914Df5a5DbE17E5608f84953fFa023
+        });
+
         // Act
-        // TODO: Call addSupportedCollateralTokens
+        vm.prank(flcOwner);
+        flc.addSupportedCollateralTokens(newTokenConfig);
+
         // Assert
-        // TODO: Verify if token is now supported
+        bool supported = flc.isSupportedCollateralToken(
+            newTokenConfig[0].collateralToken,
+            USDC
+        );
+        assertTrue(supported);
     }
 
     function test_addSupportedCollateralTokens_RevertsWhen_InvalidTokenConfiguration()
         external
     {
         // Arrange
-        // TODO: Create invalid token configuration
-        // Act
-        // TODO: Call addSupportedCollateralTokens with invalid config
-        // Assert
-        // TODO: Verify proper revert
+        address flcOwner = flc.owner();
+        CollateralTokenConfig[]
+            memory newTokenConfig = new CollateralTokenConfig[](1);
+
+        // Case 1 - Invalid Collateral Token for given morpho Market
+        newTokenConfig[0] = CollateralTokenConfig({
+            collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
+            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb,
+            pendleMarket: 0x307c15f808914Df5a5DbE17E5608f84953fFa023
+        });
+
+        // Act & Assert
+        vm.prank(flcOwner);
+        vm.expectRevert(
+            FLCError.FlashLeverageCore__InvalidCollateralToken.selector
+        );
+        flc.addSupportedCollateralTokens(newTokenConfig);
+
+        // Case 2 - Collateral Token is not PT
+        newTokenConfig[0] = CollateralTokenConfig({
+            collateralToken: 0x3EAf6C8425b40c554099BEEd4DcB9f4601942fcb,
+            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb,
+            pendleMarket: 0x307c15f808914Df5a5DbE17E5608f84953fFa023
+        });
+
+        // Act & Assert
+        vm.prank(flcOwner);
+        vm.expectRevert(
+            FLCError.FlashLeverageCore__InvalidCollateralToken.selector
+        );
+        flc.addSupportedCollateralTokens(newTokenConfig);
+
+        // Case 3 - Collateral Token has 6 decimals
+        newTokenConfig[0] = CollateralTokenConfig({
+            collateralToken: 0x00026E3311937BAd48D9Ab894c42134306E1698D,
+            morphoMarketId: 0xa315e92e30a1f0e76df5e18d05a1b5c021fe809f989a9d7c0a5585a0f94e34ed,
+            pendleMarket: 0x8f7EdDFa1A03D872Da73d9588B040b608238f863
+        });
+
+        // Act & Assert
+        vm.prank(flcOwner);
+        vm.expectRevert(
+            FLCError.FlashLeverageCore__InvalidCollateralTokenDecimals.selector
+        );
+        flc.addSupportedCollateralTokens(newTokenConfig);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -137,27 +186,6 @@ contract TestFlashLeverageCore is TestBase {
         vm.expectRevert("ERC20: transfer amount exceeds balance");
         vm.prank(address(fl));
         flc.leverage(USER, params);
-    }
-
-    function test_leverage_RevertsWhen_ReentrantCallAttempted() external {
-        // Arrange
-        // TODO: Setup reentrancy attack scenario
-        // Act
-        // TODO: Attempt reentrant call
-        // Assert
-        // TODO: Verify reentrancy protection works
-    }
-
-    function test_leverage_RevertsWhen_EffectiveLtvExceedsSlippageBuffer()
-        external
-    {
-        // Not Possible to mimick //
-        // Arrange
-        // Note: This scenario is difficult to simulate due to price oracle dependencies
-        // Act
-        // TODO: Create conditions where slippage is excessive
-        // Assert
-        // TODO: Verify slippage protection works
     }
 
     function test_leverage_SuccessfullyCreatesPosition() external {
@@ -227,17 +255,6 @@ contract TestFlashLeverageCore is TestBase {
         );
     }
 
-    function test_leverage_PositionRemainsConsistent_AfterMultipleOperations()
-        external
-    {
-        // Arrange
-        // TODO: Setup for multiple operations
-        // Act
-        // TODO: Execute multiple leverage operations
-        // Assert
-        // TODO: Verify position consistency
-    }
-
     /*//////////////////////////////////////////////////////////////
                            UNLEVERAGE FUNCTION TESTS
     //////////////////////////////////////////////////////////////*/
@@ -298,15 +315,6 @@ contract TestFlashLeverageCore is TestBase {
         );
         vm.prank(address(fl));
         flc.unleverage(USER, params);
-    }
-
-    function test_unleverage_RevertsWhen_ReentrantCallAttempted() external {
-        // Arrange
-        // TODO: Setup reentrancy attack scenario
-        // Act
-        // TODO: Attempt reentrant call
-        // Assert
-        // TODO: Verify reentrancy protection works
     }
 
     function test_unleverage_SuccessfullyReducesPosition()
@@ -626,11 +634,6 @@ contract TestFlashLeverageCore is TestBase {
                             HELPER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    function _createLeveragedPosition() internal {
-        _setupSuccessfulLeverageConditions();
-        _executeLeverageOperation();
-    }
-
     function _setupSuccessfulLeverageConditions() internal {
         vm.prank(USER);
         IERC20(COLLATERAL_TOKEN).transfer(address(fl), AMOUNT_COLLATERAL);
@@ -657,7 +660,7 @@ contract TestFlashLeverageCore is TestBase {
         uint256 sharesToBurn,
         uint256 amountCollateralToWithdraw
     ) internal {
-        bytes memory callData = getUnleverageCalldata(
+        bytes memory callData = getCoreUnleverageCalldata(
             USER,
             DESIRED_LTV,
             COLLATERAL_TOKEN,

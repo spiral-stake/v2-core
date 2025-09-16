@@ -17,13 +17,11 @@ library FLCError {
 
 library FLError {
     error FlashLeverage__InvalidOnBehalfOfAddress();
-    error FlashLeverage__InvalidAmountCollateral();
     error FlashLeverage__ExceedsMaxLTV();
     error FlashLeverage__PositionDoesNotExist();
     error FlashLeverage__PositionAlreadyUnleveraged();
     error FlashLeverage__AmountCannotBeZero();
     error FlashLeverage__UnsupportedCollateralToken();
     error FlashLeverage__TreasuryCannotBeZero();
-    error FlashLeverage__RenounceOwnershipDisabled();
     error FlashLeverage__OnlyOwnerCanCloseBeforeMaturity();
 }

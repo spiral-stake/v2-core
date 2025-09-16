@@ -1,11 +1,11 @@
 # Store the server PID for cleanup
 SERVER_PID_FILE := .server.pid
 
-test: test-base start-server test-flashLeverageCore stop-server
+test: test-base start-server test-flashLeverage test-flashLeverageCore stop-server
 
 start-server:
 	@echo "Starting swap-api server"
-	@ts-node api/index.ts & echo $$! > $(SERVER_PID_FILE)
+	@cd api && npx ts-node index.ts & echo $$! > ../$(SERVER_PID_FILE)
 	@sleep 2
 
 test-base: 	
