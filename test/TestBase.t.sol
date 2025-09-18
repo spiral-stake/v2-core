@@ -17,7 +17,8 @@ contract TestBase is Test, WriteAddresses {
     FlashLeverage fl;
     IMorpho morpho;
     address pendleRouter;
-    CollateralTokenConfig[] tokensConfig;
+    CollateralTokenConfig[] tokenConfigs;
+    address[] tokenWhales;
     uint256 liquidationBuffer;
     uint256 slippageBuffer;
     address treasury;
@@ -25,17 +26,17 @@ contract TestBase is Test, WriteAddresses {
     address RANDOM_ADDRESS;
 
     /*//////////////////////////////////////////////////////////////
-                               CONSTANTS
+                               CONSTANTS & IMMUTABLES
     //////////////////////////////////////////////////////////////*/
 
-    address internal constant USER = 0x925109e0AfFe306c31B55d8181e766D53aF7A778; // PT-USDE-WHALE
+    uint256 internal constant AMOUNT_COLLATERAL = 10000e18; // 10k
     uint256 internal constant DESIRED_LTV = 80e16; // 80%
-    address internal constant COLLATERAL_TOKEN =
-        0xBC6736d346a5eBC0dEbc997397912CD9b8FAe10a; // PT-USDE
-    address internal constant LOAN_TOKEN =
-        0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC
-    uint8 internal constant LOAN_TOKEN_DECIMALS = 6;
-    uint256 internal constant AMOUNT_COLLATERAL = 100000e18; // 100k
+
+    uint256 internal constant TOKEN_INDEX = 0;
+    address internal USER;
+    address internal COLLATERAL_TOKEN;
+    address internal LOAN_TOKEN;
+    uint8 internal LOAN_TOKEN_DECIMALS;
 
     function setUp() external virtual {
         // Create fork
@@ -54,16 +55,24 @@ contract TestBase is Test, WriteAddresses {
 
         morpho = IMorpho(main.morpho());
         pendleRouter = main.pendleRouter();
-        tokensConfig = main.getCollateralTokensConfig();
+        tokenConfigs = main.getCollateralTokenConfigs();
+        tokenWhales = main.getCollateralTokenWhales();
         liquidationBuffer = main.liquidationBuffer();
         slippageBuffer = main.slippageBuffer();
         treasury = main.treasury();
         USDC = main.USDC();
         RANDOM_ADDRESS = makeAddr("Random Address");
 
+        USER = tokenWhales[TOKEN_INDEX];
+        COLLATERAL_TOKEN = tokenConfigs[TOKEN_INDEX].collateralToken;
+        LOAN_TOKEN = morpho
+            .idToMarketParams(Id.wrap(tokenConfigs[TOKEN_INDEX].morphoMarketId))
+            .loanToken;
+        LOAN_TOKEN_DECIMALS = IERC20Metadata(LOAN_TOKEN).decimals();
+
         _writeAddresses(
             address(morpho),
-            tokensConfig,
+            tokenConfigs,
             USDC,
             address(flc),
             address(fl),

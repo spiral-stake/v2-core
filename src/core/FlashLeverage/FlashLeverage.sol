@@ -250,14 +250,14 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
 
     /**
      * @notice Allows owner to add support for new collateral tokens.
-     * @param tokensConfig Array of token configurations including swap and market parameters.
+     * @param tokenConfigs Array of token configurations including swap and market parameters.
      * @dev For each token, maps it to its Pendle market and approves max spending to flash leverage core
      */
     function addSupportedCollateralTokens(
-        CollateralTokenConfig[] calldata tokensConfig
+        CollateralTokenConfig[] calldata tokenConfigs
     ) external onlyOwner {
-        for (uint256 i; i < tokensConfig.length; ++i) {
-            CollateralTokenConfig memory config = tokensConfig[i];
+        for (uint256 i; i < tokenConfigs.length; ++i) {
+            CollateralTokenConfig memory config = tokenConfigs[i];
             s_pendleMarket[config.collateralToken] = config.pendleMarket;
 
             // Safe approve max collateral token to i_flashLeverage for lifetime

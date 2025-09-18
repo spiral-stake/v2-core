@@ -136,7 +136,7 @@ contract TestFlashLeverage is TestBase {
     {
         // Arrange
         uint256 positionId = 0; // 1st position
-        uint256 userUsdcBalanceBefore = IERC20(USDC).balanceOf(USER);
+        uint256 userLoanTokenBalBefore = IERC20(LOAN_TOKEN).balanceOf(USER);
         LeveragePosition memory positionBefore = fl.getUserLeveragePosition(
             USER,
             positionId
@@ -150,15 +150,15 @@ contract TestFlashLeverage is TestBase {
         );
 
         // Assert
-        uint256 userUsdcBalanceAfter = IERC20(USDC).balanceOf(USER);
+        uint256 userLoanTokenBalAfter = IERC20(LOAN_TOKEN).balanceOf(USER);
         LeveragePosition memory positionAfter = fl.getUserLeveragePosition(
             USER,
             positionId
         );
         assertFalse(positionAfter.open);
 
-        // Check USDC balance for user has increased
-        assertGt(userUsdcBalanceAfter, userUsdcBalanceBefore);
+        // Check loan token balance for user has increased
+        assertGt(userLoanTokenBalAfter, userLoanTokenBalBefore);
 
         // Revert for already closed position
         vm.expectRevert(
@@ -208,8 +208,8 @@ contract TestFlashLeverage is TestBase {
         external
     {
         // Arrange & Act & Assert
-        for (uint256 i; i < tokensConfig.length; ++i) {
-            address collateralToken = tokensConfig[i].collateralToken;
+        for (uint256 i; i < tokenConfigs.length; ++i) {
+            address collateralToken = tokenConfigs[i].collateralToken;
             assertTrue(fl.isSupportedCollateralToken(collateralToken));
         }
 

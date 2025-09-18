@@ -9,7 +9,10 @@ library FLCError {
     error FlashLeverageCore__InsufficientSharesToBurn();
     error FlashLeverageCore__InsufficientCollateralToWithdraw();
     error FlashLeverageCore__ExceedsMaxLTV();
-    error FlashLeverageCore__EffectiveLtvTooHigh();
+    error FlashLeverageCore__EffectiveLtvTooHigh(
+        uint256 desiredLtv,
+        uint256 effectiveLtv
+    );
     error FlashLeverageCore__NotAManager();
     error FlashLeverageCore__InvalidCollateralToken();
     error FlashLeverageCore__InvalidCollateralTokenDecimals();

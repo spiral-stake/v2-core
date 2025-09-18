@@ -11,7 +11,7 @@ contract DeployFlashLeverageCore is Script {
         address pendleRouter,
         uint256 liquidationBuffer,
         uint256 slippageBuffer,
-        CollateralTokenConfig[] memory tokensConfig
+        CollateralTokenConfig[] memory tokenConfigs
     ) external returns (address flashLeverageAddress) {
         vm.startBroadcast();
 
@@ -24,7 +24,7 @@ contract DeployFlashLeverageCore is Script {
         );
 
         // Add supported collateral tokens
-        flashLeverageCore.addSupportedCollateralTokens(tokensConfig);
+        flashLeverageCore.addSupportedCollateralTokens(tokenConfigs);
 
         vm.stopBroadcast();
 

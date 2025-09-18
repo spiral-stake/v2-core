@@ -9,7 +9,7 @@ import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
 contract WriteAddresses is Script {
     function _writeAddresses(
         address morphoAddress,
-        CollateralTokenConfig[] memory tokensConfig,
+        CollateralTokenConfig[] memory tokenConfigs,
         address USDC,
         address flashLeverageCoreAddress,
         address flashLeverageAddress,
@@ -42,14 +42,14 @@ contract WriteAddresses is Script {
         // Collateral Tokens
 
         string memory collateralTokens = "collateralTokens";
-        for (uint256 i; i < tokensConfig.length; ++i) {
+        for (uint256 i; i < tokenConfigs.length; ++i) {
             string memory tokenObj = "tokenObj";
 
             IERC20Metadata token = IERC20Metadata(
-                tokensConfig[i].collateralToken
+                tokenConfigs[i].collateralToken
             );
             MarketParams memory marketParams = morpho.idToMarketParams(
-                Id.wrap(tokensConfig[i].morphoMarketId)
+                Id.wrap(tokenConfigs[i].morphoMarketId)
             );
 
             // Create loan token metadata object
@@ -73,13 +73,13 @@ contract WriteAddresses is Script {
             vm.serializeBytes32(
                 tokenObj,
                 "morphoMarketId",
-                tokensConfig[i].morphoMarketId
+                tokenConfigs[i].morphoMarketId
             );
             vm.serializeString(tokenObj, "loanToken", loanTokenObj);
             tokenObj = vm.serializeAddress(
                 tokenObj,
                 "pendleMarket",
-                tokensConfig[i].pendleMarket
+                tokenConfigs[i].pendleMarket
             );
 
             vm.serializeString(
@@ -87,7 +87,7 @@ contract WriteAddresses is Script {
                 vm.toString(address(token)),
                 tokenObj
             );
-            if (i == tokensConfig.length - 1) {
+            if (i == tokenConfigs.length - 1) {
                 collateralTokens = vm.serializeString(
                     collateralTokens,
                     vm.toString(address(token)),

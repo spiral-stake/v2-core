@@ -56,6 +56,8 @@ contract TestFlashLeverageCore is TestBase {
         address flcOwner = flc.owner();
         CollateralTokenConfig[]
             memory newTokenConfig = new CollateralTokenConfig[](1);
+
+        // Intentional
         // PT-cUSD-29JAN2026
         newTokenConfig[0] = CollateralTokenConfig({
             collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
@@ -239,7 +241,7 @@ contract TestFlashLeverageCore is TestBase {
         // 3. Verify user position isolation through userProxy
         address userProxy = flc.getUserProxy(USER, DESIRED_LTV);
         Position memory morphoPosition = morpho.position(
-            Id.wrap(tokensConfig[0].morphoMarketId),
+            Id.wrap(tokenConfigs[TOKEN_INDEX].morphoMarketId),
             userProxy
         );
 
@@ -486,7 +488,7 @@ contract TestFlashLeverageCore is TestBase {
 
     function test_getLiqLtv_ReturnsCorrectValue() external view {
         // Arrange
-        CollateralTokenConfig memory config = tokensConfig[0];
+        CollateralTokenConfig memory config = tokenConfigs[TOKEN_INDEX];
         MarketParams memory marketParams = morpho.idToMarketParams(
             Id.wrap(config.morphoMarketId)
         );
@@ -507,7 +509,7 @@ contract TestFlashLeverageCore is TestBase {
 
     function test_getMaxLtv_ReturnsLiqLtvMinusBuffer() external view {
         // Arrange
-        CollateralTokenConfig memory config = tokensConfig[0];
+        CollateralTokenConfig memory config = tokenConfigs[TOKEN_INDEX];
         MarketParams memory marketParams = morpho.idToMarketParams(
             Id.wrap(config.morphoMarketId)
         );
@@ -534,7 +536,7 @@ contract TestFlashLeverageCore is TestBase {
         // Arrange & Act & Assert
         // Test across multiple token configurations for comprehensive coverage
         for (uint256 i; i < 4; ++i) {
-            CollateralTokenConfig memory config = tokensConfig[i];
+            CollateralTokenConfig memory config = tokenConfigs[i];
             MarketParams memory marketParams = morpho.idToMarketParams(
                 Id.wrap(config.morphoMarketId)
             );
@@ -584,7 +586,10 @@ contract TestFlashLeverageCore is TestBase {
         );
         uint256 expectedAmount = ((
             collateralValue.divDown(Math.ONE - DESIRED_LTV)
-        ) - collateralValue).scaleTo(18, 6);
+        ) - collateralValue).scaleTo(
+                Math.STANDARD_DECIMALS,
+                LOAN_TOKEN_DECIMALS
+            );
 
         // Act
         uint256 actualAmount = flc.calcLeverageFlashLoan(
