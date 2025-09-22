@@ -14,6 +14,7 @@ library FLCError {
         uint256 effectiveLtv
     );
     error FlashLeverageCore__NotAManager();
+    error FlashLeverageCore__CannotBeZeroAddress();
     error FlashLeverageCore__InvalidCollateralToken();
     error FlashLeverageCore__InvalidCollateralTokenDecimals();
 }
@@ -27,4 +28,7 @@ library FLError {
     error FlashLeverage__UnsupportedCollateralToken();
     error FlashLeverage__TreasuryCannotBeZero();
     error FlashLeverage__OnlyOwnerCanCloseBeforeMaturity();
+    error FlashLeverage__AmountMismatch();
+    error FlashLeverage__CannotBeZeroAddress();
+    error FlashLeverage__InvalidCollateralToken();
 }

@@ -129,6 +129,14 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         address pendleRouter,
         address treasury
     ) Ownable(msg.sender) {
+        if (
+            flashLeverageCore == address(0) ||
+            pendleRouter == address(0) ||
+            treasury == address(0)
+        ) {
+            revert FLError.FlashLeverage__CannotBeZeroAddress();
+        }
+
         i_flashLeverageCore = IFlashLeverageCore(flashLeverageCore);
         i_pendleRouter = IPAllActionV3(pendleRouter);
         s_treasury = treasury;
@@ -191,6 +199,17 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
 
         if (swapParams.tokenIn != leverageParams.collateralToken) {
             _handleTokenSwap(leverageParams.collateralToken, swapParams);
+            _transferBackRemaining(
+                leverageParams.collateralToken,
+                _selfBalance(leverageParams.collateralToken),
+                leverageParams.amountCollateral
+            );
+        } else {
+            // Handling edge case
+            require(
+                swapParams.amountTokenIn == leverageParams.amountCollateral,
+                FLError.FlashLeverage__AmountMismatch()
+            );
         }
 
         _leverage(onBehalfOf, leverageParams);
@@ -258,11 +277,24 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
     ) external onlyOwner {
         for (uint256 i; i < tokenConfigs.length; ++i) {
             CollateralTokenConfig memory config = tokenConfigs[i];
-            s_pendleMarket[config.collateralToken] = config.pendleMarket;
+            address collateralToken = config.collateralToken;
+
+            s_pendleMarket[collateralToken] = config.pendleMarket;
+
+            require(
+                collateralToken != address(0),
+                FLError.FlashLeverage__CannotBeZeroAddress()
+            );
+
+            (, address PT, ) = IPendleMarket(config.pendleMarket).readTokens();
+            require(
+                collateralToken == PT,
+                FLError.FlashLeverage__InvalidCollateralToken()
+            );
 
             // Safe approve max collateral token to i_flashLeverage for lifetime
             _safeApprove(
-                config.collateralToken,
+                collateralToken,
                 address(i_flashLeverageCore),
                 type(uint256).max
             );
@@ -474,6 +506,20 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
             }),
             swapParams.limitOrderData
         );
+    }
+
+    function _transferBackRemaining(
+        address token,
+        uint256 actualSwapped,
+        uint256 expectedAmount
+    ) internal {
+        if (actualSwapped > expectedAmount) {
+            uint256 amountRemaining;
+            unchecked {
+                amountRemaining = actualSwapped - expectedAmount;
+            }
+            _transferOut(token, msg.sender, amountRemaining);
+        }
     }
 
     function _ptNotExpired(

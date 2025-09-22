@@ -18,8 +18,6 @@ contract Main is Script, WriteAddresses {
     address public morpho = 0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb;
     address public pendleRouter = 0x888888888889758F76e7103c6CbF23ABbF58F946;
 
-    uint256 public liquidationBuffer = 25e15;
-    uint256 public slippageBuffer = 1e16;
     address public treasury = 0x4d45d0079968F50630E2643E4090A551DCAecA68;
 
     address public WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
@@ -67,8 +65,6 @@ contract Main is Script, WriteAddresses {
         flashLeverageCoreAddress = new DeployFlashLeverageCore().run(
             morpho,
             pendleRouter,
-            liquidationBuffer,
-            slippageBuffer,
             tokenConfigs
         );
     }

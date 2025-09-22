@@ -19,8 +19,6 @@ contract TestBase is Test, WriteAddresses {
     address pendleRouter;
     CollateralTokenConfig[] tokenConfigs;
     address[] tokenWhales;
-    uint256 liquidationBuffer;
-    uint256 slippageBuffer;
     address treasury;
     address USDC;
     address RANDOM_ADDRESS;
@@ -57,8 +55,6 @@ contract TestBase is Test, WriteAddresses {
         pendleRouter = main.pendleRouter();
         tokenConfigs = main.getCollateralTokenConfigs();
         tokenWhales = main.getCollateralTokenWhales();
-        liquidationBuffer = main.liquidationBuffer();
-        slippageBuffer = main.slippageBuffer();
         treasury = main.treasury();
         USDC = main.USDC();
         RANDOM_ADDRESS = makeAddr("Random Address");

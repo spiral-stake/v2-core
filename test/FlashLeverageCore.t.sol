@@ -214,7 +214,7 @@ contract TestFlashLeverageCore is TestBase {
         assertGt(position.sharesBorrowed, 0, "Should have borrowed shares");
 
         // 2. Verify effective LTV stays within acceptable bounds
-        uint256 maxEffectiveLtv = DESIRED_LTV + slippageBuffer;
+        uint256 maxEffectiveLtv = DESIRED_LTV + flc.SLIPPAGE_BUFFER();
         uint256 collateralValue = flc.getCollateralValueInLoanToken(
             COLLATERAL_TOKEN,
             LOAN_TOKEN,
@@ -469,23 +469,6 @@ contract TestFlashLeverageCore is TestBase {
         );
     }
 
-    function test_bufferValues_AreSetCorrectly() external view {
-        // Arrange
-        // Contract should be properly initialized
-
-        // Act
-        uint256 liqBuffer = flc.i_liquidationBuffer();
-        uint256 slipBuffer = flc.i_slippageBuffer();
-
-        // Assert
-        assertEq(
-            liqBuffer,
-            liquidationBuffer,
-            "Liquidation buffer should match"
-        );
-        assertEq(slipBuffer, slippageBuffer, "Slippage buffer should match");
-    }
-
     function test_getLiqLtv_ReturnsCorrectValue() external view {
         // Arrange
         CollateralTokenConfig memory config = tokenConfigs[TOKEN_INDEX];
@@ -513,6 +496,7 @@ contract TestFlashLeverageCore is TestBase {
         MarketParams memory marketParams = morpho.idToMarketParams(
             Id.wrap(config.morphoMarketId)
         );
+        uint256 liquidationBuffer = flc.LIQUIDATION_BUFFER();
         uint256 expectedMaxLtv = marketParams.lltv - liquidationBuffer;
 
         // Act

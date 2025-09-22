@@ -31,10 +31,10 @@ contract FlashLeverageCore is
     // Constants and Immutables
 
     /// @notice Buffer subtracted from liquidation LTV to determine the max LTV (18 decimals)
-    uint256 public immutable i_liquidationBuffer;
+    uint256 public constant LIQUIDATION_BUFFER = 25e15; // 2.5%
 
     /// @notice Maximum allowed change in final LTV after slippage (18 decimals)
-    uint256 public immutable i_slippageBuffer;
+    uint256 public constant SLIPPAGE_BUFFER = 1e16; // 1%
 
     /// @notice Implementation contract for user proxies
     address public immutable i_userProxyImplementation;
@@ -130,21 +130,18 @@ contract FlashLeverageCore is
      * @notice Initializes the FlashLeverage contract.
      * @param morphoAddress Address of the Morpho protocol contract.
      * @param pendleRouter Address of the Pendle router for swap execution.
-     * @param liquidationBuffer Buffer subtracted from liquidation LTV to determine max safe LTV.
-     * @param slippageBuffer Maximum allowed change in final LTV after slippage.
      */
     constructor(
         address morphoAddress,
-        address pendleRouter,
-        uint256 liquidationBuffer,
-        uint256 slippageBuffer
+        address pendleRouter
     )
         Ownable(msg.sender)
         SwapAggregator(pendleRouter)
         MarketPositionManager(morphoAddress)
     {
-        i_liquidationBuffer = liquidationBuffer;
-        i_slippageBuffer = slippageBuffer;
+        if (morphoAddress == address(0) || pendleRouter == address(0)) {
+            revert FLCError.FlashLeverageCore__CannotBeZeroAddress();
+        }
 
         // Deploy the implementation contract to clone user proxies from
         i_userProxyImplementation = address(new UserProxy(address(this)));
@@ -298,6 +295,11 @@ contract FlashLeverageCore is
         for (uint256 i; i < tokenConfigs.length; ++i) {
             CollateralTokenConfig memory config = tokenConfigs[i];
             address collateralToken = config.collateralToken;
+
+            require(
+                collateralToken != address(0),
+                FLCError.FlashLeverageCore__CannotBeZeroAddress()
+            );
 
             (, address PT, ) = IPendleMarket(config.pendleMarket).readTokens();
             MarketParams memory marketParams = i_morpho.idToMarketParams(
@@ -556,7 +558,7 @@ contract FlashLeverageCore is
         uint256 effectiveLtv = amountLoan.divDown(amountCollateralInLoanToken);
 
         require(
-            effectiveLtv <= desiredLtv + i_slippageBuffer,
+            effectiveLtv <= desiredLtv + SLIPPAGE_BUFFER,
             FLCError.FlashLeverageCore__EffectiveLtvTooHigh(
                 desiredLtv,
                 effectiveLtv
@@ -620,7 +622,7 @@ contract FlashLeverageCore is
         address collateralToken,
         address loanToken
     ) public view returns (uint256) {
-        return getLiqLtv(collateralToken, loanToken) - i_liquidationBuffer;
+        return getLiqLtv(collateralToken, loanToken) - LIQUIDATION_BUFFER;
     }
 
     /**

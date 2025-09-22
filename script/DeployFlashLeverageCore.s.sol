@@ -9,8 +9,6 @@ contract DeployFlashLeverageCore is Script {
     function run(
         address morpho,
         address pendleRouter,
-        uint256 liquidationBuffer,
-        uint256 slippageBuffer,
         CollateralTokenConfig[] memory tokenConfigs
     ) external returns (address flashLeverageAddress) {
         vm.startBroadcast();
@@ -18,9 +16,7 @@ contract DeployFlashLeverageCore is Script {
         // Deploy
         FlashLeverageCore flashLeverageCore = new FlashLeverageCore(
             morpho,
-            pendleRouter,
-            liquidationBuffer,
-            slippageBuffer
+            pendleRouter
         );
 
         // Add supported collateral tokens
