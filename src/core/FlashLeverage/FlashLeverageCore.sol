@@ -351,6 +351,14 @@ contract FlashLeverageCore is
     }
 
     /**
+     * @notice Recovers any ERC20 tokens accidentally sent to this contract
+     * @param token The address of the token to recover
+     */
+    function recover(address token) external onlyOwner {
+        _transferOut(token, msg.sender, _selfBalance(token));
+    }
+
+    /**
      * @notice Overrides renounceOwnership to prevent ownership renunciation.
      * @dev Intentionally disabled to retain upgradeability and collateral support management.
      */

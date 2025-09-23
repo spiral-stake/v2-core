@@ -205,6 +205,14 @@ abstract contract MarketPositionManager is
     ) private returns (uint256 assetsRepaid, uint256 sharesRepaid) {
         _forceApprove(marketParams.loanToken, address(i_morpho), amount);
 
+        uint256 borrowSharesLeft = i_morpho
+            .position(Id.wrap(keccak256(abi.encode(marketParams))), userProxy)
+            .borrowShares;
+
+        sharesBorrowed = borrowSharesLeft < sharesBorrowed
+            ? borrowSharesLeft
+            : sharesBorrowed;
+
         address onBehalf = userProxy;
         (assetsRepaid, sharesRepaid) = i_morpho.repay(
             marketParams,

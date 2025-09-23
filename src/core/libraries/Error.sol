@@ -31,4 +31,5 @@ library FLError {
     error FlashLeverage__AmountMismatch();
     error FlashLeverage__CannotBeZeroAddress();
     error FlashLeverage__InvalidCollateralToken();
+    error FlashLeverage__InvalidYieldFee();
 }

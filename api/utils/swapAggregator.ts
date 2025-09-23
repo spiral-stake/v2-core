@@ -5,7 +5,7 @@ import { InternalReswapData } from "./types.ts";
 import { parseUnits } from "./formatUnits.ts";
 
 const HOSTED_SDK_URL = "https://api-v2.pendle.finance/core";
-const slippage = 0.005; // 0.5%
+const slippage = 0.01; // 1%
 const chainId = 1;
 
 type MethodReturnType<Data> = {

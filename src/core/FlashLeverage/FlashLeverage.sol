@@ -25,8 +25,8 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
     /////////////////////////
     // Constants and Immutables
 
-    /// @notice Fee percentage in basis points (10%)
-    uint256 public constant YIELD_FEE = 10e16;
+    /// @notice Max Fee percentage in basis points (10%)
+    uint256 private constant MAX_YIELD_FEE = 10e16;
 
     /// @notice Pendle router for executing token swaps
     IPAllActionV3 public immutable i_pendleRouter;
@@ -39,6 +39,8 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
 
     /// @notice Treasury address to receive fees
     address private s_treasury;
+
+    uint256 private s_yieldFee;
 
     /// @notice Mapping of PT collateral tokens to their pendle market
     mapping(address collateralToken => address pendleMarket)
@@ -140,6 +142,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         i_flashLeverageCore = IFlashLeverageCore(flashLeverageCore);
         i_pendleRouter = IPAllActionV3(pendleRouter);
         s_treasury = treasury;
+        s_yieldFee = MAX_YIELD_FEE;
     }
 
     /////////////////////////
@@ -316,10 +319,33 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
     }
 
     /**
+     * @notice Updates the protocol yield fee.
+     * @param newYieldFee The new yield fee to be set in basis points of 1e18 precision.
+     * @dev Can only be called by the contract owner.
+     *      Reverts if the new fee is zero or exceeds `MAX_YIELD_FEE`.
+     */
+    function updateYieldFee(uint256 newYieldFee) external onlyOwner {
+        require(
+            newYieldFee != 0 && newYieldFee <= MAX_YIELD_FEE,
+            FLError.FlashLeverage__InvalidYieldFee()
+        );
+
+        s_yieldFee = newYieldFee;
+    }
+
+    /**
      * @notice Overrides renounceOwnership to prevent ownership renunciation
      * @dev Intentionally disabled to retain upgradeability and integration support management
      */
     function renounceOwnership() public override(Ownable) {}
+
+    /**
+     * @notice Recovers any ERC20 tokens accidentally sent to this contract
+     * @param token The address of the token to recover
+     */
+    function recover(address token) external onlyOwner {
+        _transferOut(token, msg.sender, _selfBalance(token));
+    }
 
     /////////////////////////
     // Internal Functions
@@ -456,7 +482,7 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
         uint256 amountFee;
         if (totalAmountReceived > totalAmountDeposited) {
             uint256 yieldGenerated = totalAmountReceived - totalAmountDeposited;
-            amountFee = yieldGenerated.mulDown(YIELD_FEE);
+            amountFee = yieldGenerated.mulDown(s_yieldFee);
             _transferOut(
                 position.loanToken,
                 s_treasury,
@@ -567,5 +593,13 @@ contract FlashLeverage is TokenHelper, Ownable2Step {
      */
     function getTreasury() public view returns (address) {
         return s_treasury;
+    }
+
+    /**
+     * @notice Returns the current yield fee configured in the protocol.
+     * @return yieldFee The yield fee is a percentage value expressed in basis points
+     */
+    function getYieldFee() public view returns (uint256) {
+        return s_yieldFee;
     }
 }
