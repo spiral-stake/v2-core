@@ -14,7 +14,6 @@ import {CoreLeveragePosition} from "../structs/CoreLeveragePosition.sol";
 import {CollateralTokenConfig} from "../structs/CollateralTokenConfig.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
-import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {IPendleMarket} from "../../interfaces/IPendleMarket.sol";
 import {IOracle} from "@morpho/interfaces/IOracle.sol";
 
@@ -22,8 +21,7 @@ contract FlashLeverageCore is
     MarketPositionManager,
     SwapAggregator,
     ReentrancyGuard,
-    Ownable2Step,
-    Pausable
+    Ownable2Step
 {
     using Math for uint256;
 
@@ -161,7 +159,6 @@ contract FlashLeverageCore is
     )
         external
         onlyManager
-        whenNotPaused
         validateCollateralToken(params.collateralToken, params.loanToken)
         validateAmountCollateral(params.amountCollateral)
         validateDesiredLtv(
@@ -209,12 +206,7 @@ contract FlashLeverageCore is
     function unleverage(
         address onBehalfOf,
         UnleverageParams calldata params
-    )
-        external
-        onlyManager
-        whenNotPaused
-        validateSharesToBurn(params.sharesToBurn)
-    {
+    ) external onlyManager validateSharesToBurn(params.sharesToBurn) {
         address collateralToken = params.collateralToken;
         address loanToken = params.loanToken;
         uint256 sharesToBurn = params.sharesToBurn;
@@ -332,30 +324,6 @@ contract FlashLeverageCore is
         if (!isManager(manager)) {
             s_managers[manager] = true;
         }
-    }
-
-    /**
-     * @notice Pauses the contract, preventing leverage and unleverage operations.
-     * @dev Can only be called by the contract owner. When paused, leverage and unleverage functions will revert.
-     */
-    function pause() external onlyOwner {
-        _pause();
-    }
-
-    /**
-     * @notice Unpauses the contract, allowing leverage and unleverage operations to resume.
-     * @dev Can only be called by the contract owner.
-     */
-    function unpause() external onlyOwner {
-        _unpause();
-    }
-
-    /**
-     * @notice Recovers any ERC20 tokens accidentally sent to this contract
-     * @param token The address of the token to recover
-     */
-    function recover(address token) external onlyOwner {
-        _transferOut(token, msg.sender, _selfBalance(token));
     }
 
     /**

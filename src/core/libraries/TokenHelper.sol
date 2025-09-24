@@ -13,15 +13,6 @@ abstract contract TokenHelper {
         IERC20(token).safeTransferFrom(from, address(this), amount);
     }
 
-    function _transferFrom(
-        IERC20 token,
-        address from,
-        address to,
-        uint256 amount
-    ) internal {
-        if (amount != 0) token.safeTransferFrom(from, to, amount);
-    }
-
     function _selfBalance(address token) internal view returns (uint256) {
         return
             (token == NATIVE)

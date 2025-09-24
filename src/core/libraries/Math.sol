@@ -18,7 +18,6 @@ pragma solidity 0.8.30;
 
 library Math {
     uint256 internal constant ONE = 1e18; // 18 decimal places
-    int256 internal constant IONE = 1e18; // 18 decimal places
     uint8 internal constant STANDARD_DECIMALS = 18;
 
     function mulDown(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -28,22 +27,8 @@ library Math {
         }
     }
 
-    function mulDown(int256 a, int256 b) internal pure returns (int256) {
-        int256 product = a * b;
-        unchecked {
-            return product / IONE;
-        }
-    }
-
     function divDown(uint256 a, uint256 b) internal pure returns (uint256) {
         uint256 aInflated = a * ONE;
-        unchecked {
-            return aInflated / b;
-        }
-    }
-
-    function divDown(int256 a, int256 b) internal pure returns (int256) {
-        int256 aInflated = a * IONE;
         unchecked {
             return aInflated / b;
         }
