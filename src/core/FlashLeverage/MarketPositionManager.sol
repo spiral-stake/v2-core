@@ -173,7 +173,6 @@ abstract contract MarketPositionManager is
         address receiver = address(this);
 
         bytes memory result = UserProxy(userProxy).execute(
-            address(i_morpho),
             abi.encodeWithSignature(
                 "borrow((address,address,address,address,uint256),uint256,uint256,address,address)",
                 marketParams,
@@ -238,7 +237,6 @@ abstract contract MarketPositionManager is
         address receiver = address(this);
 
         UserProxy(userProxy).execute(
-            address(i_morpho),
             abi.encodeWithSignature(
                 "withdrawCollateral((address,address,address,address,uint256),uint256,address,address)",
                 marketParams,

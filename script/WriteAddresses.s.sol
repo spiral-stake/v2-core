@@ -6,6 +6,17 @@ import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.
 import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
 import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
 
+interface IPendleMarket {
+    function readTokens()
+        external
+        view
+        returns (address _SY, address _PT, address _YT);
+
+    function isExpired() external view returns (bool);
+
+    function expiry() external view returns (uint256);
+}
+
 contract WriteAddresses is Script {
     function _writeAddresses(
         address morphoAddress,
@@ -66,6 +77,12 @@ contract WriteAddresses is Script {
                 loanToken.decimals()
             );
 
+            (, , address YT) = IPendleMarket(tokenConfigs[i].pendleMarket)
+                .readTokens();
+
+            uint256 expiry = IPendleMarket(tokenConfigs[i].pendleMarket)
+                .expiry();
+
             vm.serializeAddress(tokenObj, "address", address(token));
             vm.serializeString(tokenObj, "name", token.name());
             vm.serializeString(tokenObj, "symbol", token.symbol());
@@ -76,6 +93,8 @@ contract WriteAddresses is Script {
                 tokenConfigs[i].morphoMarketId
             );
             vm.serializeString(tokenObj, "loanToken", loanTokenObj);
+            vm.serializeAddress(tokenObj, "YT", YT);
+            vm.serializeUint(tokenObj, "expiryTimestamp", expiry);
             tokenObj = vm.serializeAddress(
                 tokenObj,
                 "pendleMarket",

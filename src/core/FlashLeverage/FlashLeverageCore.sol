@@ -54,6 +54,9 @@ contract FlashLeverageCore is
     mapping(address userProxy => mapping(address collateralToken => mapping(address loanToken => CoreLeveragePosition)))
         private s_positions;
 
+    /// @notice Flag to enable user direct control of their proxies
+    bool public recoveryMode;
+
     /////////////////////////
     // Modifiers
 
@@ -142,7 +145,9 @@ contract FlashLeverageCore is
         }
 
         // Deploy the implementation contract to clone user proxies from
-        i_userProxyImplementation = address(new UserProxy(address(this)));
+        i_userProxyImplementation = address(
+            new UserProxy(address(this), morphoAddress)
+        );
     }
 
     /////////////////////////
@@ -271,6 +276,7 @@ contract FlashLeverageCore is
 
         if (proxy == address(0)) {
             proxy = Clones.clone(i_userProxyImplementation);
+            UserProxy(proxy).initialize(user);
             s_userProxies[user][desiredLtv] = proxy;
         }
 
@@ -324,6 +330,10 @@ contract FlashLeverageCore is
         if (!isManager(manager)) {
             s_managers[manager] = true;
         }
+    }
+
+    function setRecoveryMode(bool _enabled) external onlyOwner {
+        recoveryMode = _enabled;
     }
 
     /**

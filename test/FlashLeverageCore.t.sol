@@ -431,15 +431,14 @@ contract TestFlashLeverageCore is TestBase {
     function test_userProxy_OnlyExecutableByFlashLeverageCore() external {
         // Arrange
         UserProxy userProxy = UserProxy(flc.i_userProxyImplementation());
-        address randomAddress = makeAddr("random");
 
         // Act & Assert - Should succeed when called by FLC
         vm.prank(address(flc));
-        userProxy.execute(randomAddress, "0x");
+        userProxy.execute("0x");
 
         // Should revert when called by anyone else
         vm.expectRevert();
-        userProxy.execute(randomAddress, "0x");
+        userProxy.execute("0x");
     }
 
     /*//////////////////////////////////////////////////////////////

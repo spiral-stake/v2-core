@@ -18,7 +18,8 @@ contract Main is Script, WriteAddresses {
     address public morpho = 0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb;
     address public pendleRouter = 0x888888888889758F76e7103c6CbF23ABbF58F946;
 
-    address public treasury = 0x4d45d0079968F50630E2643E4090A551DCAecA68;
+    // Production
+    address public treasury = 0xeB90258b1F74a846F7941514C7c02Bb03EB249D5;
 
     address public WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address public USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;

@@ -8,6 +8,7 @@ pragma solidity 0.8.30;
 import {IPAllActionV3} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
 import {ApproxParams, TokenInput, TokenOutput, SwapData, LimitOrderData, SwapType, FillOrderParams} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
+import {IPendleMarket} from "../../interfaces/IPendleMarket.sol";
 
 abstract contract SwapAggregator is TokenHelper {
     /////////////////////////
@@ -93,19 +94,41 @@ abstract contract SwapAggregator is TokenHelper {
             address(i_pendleRouter),
             amountCollateral
         );
-        (amountSwappedLoanToken, , ) = i_pendleRouter.swapExactPtForToken(
-            address(this),
-            s_pendleMarket[collateralToken],
-            amountCollateral,
-            TokenOutput({
-                tokenOut: loanToken,
-                minTokenOut: minTokenOut,
-                tokenRedeemSy: tokenRedeemSy,
-                pendleSwap: pendleSwap,
-                swapData: swapData
-            }),
-            limitOrderData
+
+        IPendleMarket pendleMarket = IPendleMarket(
+            s_pendleMarket[collateralToken]
         );
+
+        if (!pendleMarket.isExpired()) {
+            (amountSwappedLoanToken, , ) = i_pendleRouter.swapExactPtForToken(
+                address(this),
+                s_pendleMarket[collateralToken],
+                amountCollateral,
+                TokenOutput({
+                    tokenOut: loanToken,
+                    minTokenOut: minTokenOut,
+                    tokenRedeemSy: tokenRedeemSy,
+                    pendleSwap: pendleSwap,
+                    swapData: swapData
+                }),
+                limitOrderData
+            );
+        } else {
+            (, , address YT) = pendleMarket.readTokens();
+
+            (amountSwappedLoanToken, ) = i_pendleRouter.redeemPyToToken(
+                address(this),
+                YT,
+                amountCollateral,
+                TokenOutput({
+                    tokenOut: loanToken,
+                    minTokenOut: minTokenOut,
+                    tokenRedeemSy: tokenRedeemSy,
+                    pendleSwap: pendleSwap,
+                    swapData: swapData
+                })
+            );
+        }
     }
 
     /**
