@@ -31,3 +31,6 @@ addresses/
 # Server
 .server.pid
 
+# Temp
+script/Run.s.sol
+

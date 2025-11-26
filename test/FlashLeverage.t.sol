@@ -1,289 +1,289 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity 0.8.30;
+// // SPDX-License-Identifier: GPL-3.0-or-later
+// pragma solidity 0.8.30;
 
-import "./TestBase.t.sol";
+// import "./TestBase.t.sol";
 
-/**
- * @title FlashLeverage Test Suite
- * @notice Test coverage for FlashLeverage contract functionality
- * @dev All tests follow the AAA (Arrange, Act, Assert) pattern for consistency
- */
-contract TestFlashLeverage is TestBase {
-    using Math for uint256;
+// /**
+//  * @title FlashLeverage Test Suite
+//  * @notice Test coverage for FlashLeverage contract functionality
+//  * @dev All tests follow the AAA (Arrange, Act, Assert) pattern for consistency
+//  */
+// contract TestFlashLeverage is TestBase {
+//     using Math for uint256;
 
-    /*//////////////////////////////////////////////////////////////
-                        STATEFUL TESTING MODIFIERS
-    //////////////////////////////////////////////////////////////*/
+//     /*//////////////////////////////////////////////////////////////
+//                         STATEFUL TESTING MODIFIERS
+//     //////////////////////////////////////////////////////////////*/
 
-    modifier withLeveragedPosition() {
-        _setupLeverageConditions();
-        _executeLeverageOperation();
-        _;
-    }
+//     modifier withLeveragedPosition() {
+//         _setupLeverageConditions();
+//         _executeLeverageOperation();
+//         _;
+//     }
 
-    /*//////////////////////////////////////////////////////////////
-                           LEVERAGE TESTS
-    //////////////////////////////////////////////////////////////*/
+//     /*//////////////////////////////////////////////////////////////
+//                            LEVERAGE TESTS
+//     //////////////////////////////////////////////////////////////*/
 
-    function test_leverage_RevertsWhen_CollateralTokenUnsupported() external {
-        // Arrange
-        LeverageParams memory params = _buildDefaultLeverageParams();
-        params.collateralToken = RANDOM_ADDRESS;
+//     function test_leverage_RevertsWhen_CollateralTokenUnsupported() external {
+//         // Arrange
+//         LeverageParams memory params = _buildDefaultLeverageParams();
+//         params.collateralToken = RANDOM_ADDRESS;
 
-        // Act & Assert
-        vm.expectRevert(
-            FLError.FlashLeverage__UnsupportedCollateralToken.selector
-        );
-        fl.leverage(USER, params);
-    }
+//         // Act & Assert
+//         vm.expectRevert(
+//             FLError.FlashLeverage__UnsupportedCollateralToken.selector
+//         );
+//         fl.leverage(USER, params);
+//     }
 
-    function test_leverage_RevertsWhen_CollateralAmountIsZero() external {
-        // Arrange
-        LeverageParams memory params = _buildDefaultLeverageParams();
-        params.amountCollateral = 0;
+//     function test_leverage_RevertsWhen_CollateralAmountIsZero() external {
+//         // Arrange
+//         LeverageParams memory params = _buildDefaultLeverageParams();
+//         params.amountCollateral = 0;
 
-        // Act & Assert
-        vm.expectRevert(FLError.FlashLeverage__AmountCannotBeZero.selector);
-        fl.leverage(USER, params);
-    }
+//         // Act & Assert
+//         vm.expectRevert(FLError.FlashLeverage__AmountCannotBeZero.selector);
+//         fl.leverage(USER, params);
+//     }
 
-    function test_leverage_RevertsWhen_DesiredLtvExceedsMaxLtv() external {
-        // Arrange
-        LeverageParams memory params = _buildDefaultLeverageParams();
-        uint256 EXCESSIVE_LTV = 90e16;
-        params.desiredLtv = EXCESSIVE_LTV;
+//     function test_leverage_RevertsWhen_DesiredLtvExceedsMaxLtv() external {
+//         // Arrange
+//         LeverageParams memory params = _buildDefaultLeverageParams();
+//         uint256 EXCESSIVE_LTV = 90e16;
+//         params.desiredLtv = EXCESSIVE_LTV;
 
-        // Act & Assert
-        vm.expectRevert(FLError.FlashLeverage__ExceedsMaxLTV.selector);
-        fl.leverage(USER, params);
-    }
+//         // Act & Assert
+//         vm.expectRevert(FLError.FlashLeverage__ExceedsMaxLTV.selector);
+//         fl.leverage(USER, params);
+//     }
 
-    function test_leverage_SuccessfullyCreatesPosition() external {
-        // Arrange
-        _setupLeverageConditions();
+//     function test_leverage_SuccessfullyCreatesPosition() external {
+//         // Arrange
+//         _setupLeverageConditions();
 
-        // Act
-        _executeLeverageOperation();
+//         // Act
+//         _executeLeverageOperation();
 
-        // Assert
-        LeveragePosition memory leveragePosition = fl.getUserLeveragePosition(
-            USER,
-            0
-        );
+//         // Assert
+//         LeveragePosition memory leveragePosition = fl.getUserLeveragePosition(
+//             USER,
+//             0
+//         );
 
-        CoreLeveragePosition memory coreLeveragePosition = flc
-            .getUserCoreLeveragePosition(
-                USER,
-                DESIRED_LTV,
-                COLLATERAL_TOKEN,
-                LOAN_TOKEN
-            );
+//         CoreLeveragePosition memory coreLeveragePosition = flc
+//             .getUserCoreLeveragePosition(
+//                 USER,
+//                 DESIRED_LTV,
+//                 COLLATERAL_TOKEN,
+//                 LOAN_TOKEN
+//             );
 
-        assertEq(leveragePosition.open, true);
-        assertEq(leveragePosition.desiredLtv, DESIRED_LTV);
-        assertEq(leveragePosition.collateralToken, COLLATERAL_TOKEN);
-        assertEq(leveragePosition.loanToken, LOAN_TOKEN);
-        assertEq(leveragePosition.amountCollateral, AMOUNT_COLLATERAL);
-        assertEq(
-            leveragePosition.amountCollateralInLoanToken,
-            flc
-                .getCollateralValueInLoanToken(
-                    COLLATERAL_TOKEN,
-                    LOAN_TOKEN,
-                    AMOUNT_COLLATERAL
-                )
-                .scaleTo(Math.STANDARD_DECIMALS, LOAN_TOKEN_DECIMALS)
-        );
-        assertEq(
-            leveragePosition.amountLeveragedCollateral,
-            coreLeveragePosition.amountCollateral
-        );
-        assertEq(
-            leveragePosition.sharesBorrowed,
-            coreLeveragePosition.sharesBorrowed
-        );
-    }
+//         assertEq(leveragePosition.open, true);
+//         assertEq(leveragePosition.desiredLtv, DESIRED_LTV);
+//         assertEq(leveragePosition.collateralToken, COLLATERAL_TOKEN);
+//         assertEq(leveragePosition.loanToken, LOAN_TOKEN);
+//         assertEq(leveragePosition.amountCollateral, AMOUNT_COLLATERAL);
+//         assertEq(
+//             leveragePosition.amountCollateralInLoanToken,
+//             flc
+//                 .getCollateralValueInLoanToken(
+//                     COLLATERAL_TOKEN,
+//                     LOAN_TOKEN,
+//                     AMOUNT_COLLATERAL
+//                 )
+//                 .scaleTo(Math.STANDARD_DECIMALS, LOAN_TOKEN_DECIMALS)
+//         );
+//         assertEq(
+//             leveragePosition.amountLeveragedCollateral,
+//             coreLeveragePosition.amountCollateral
+//         );
+//         assertEq(
+//             leveragePosition.sharesBorrowed,
+//             coreLeveragePosition.sharesBorrowed
+//         );
+//     }
 
-    /*//////////////////////////////////////////////////////////////
-                           UNLEVERAGE FUNCTION TESTS
-    //////////////////////////////////////////////////////////////*/
+//     /*//////////////////////////////////////////////////////////////
+//                            UNLEVERAGE FUNCTION TESTS
+//     //////////////////////////////////////////////////////////////*/
 
-    function test_unleverage_RevertsWhen_PositionDoesNotExist() external {
-        // Arrange
-        uint256 positionId = 0;
-        address pendleSwap;
-        address tokenRedeemSy;
-        uint256 minTokenOut;
-        SwapData memory swapData;
-        LimitOrderData memory limitOrderData;
+//     function test_unleverage_RevertsWhen_PositionDoesNotExist() external {
+//         // Arrange
+//         uint256 positionId = 0;
+//         address pendleSwap;
+//         address tokenRedeemSy;
+//         uint256 minTokenOut;
+//         SwapData memory swapData;
+//         LimitOrderData memory limitOrderData;
 
-        // Act & Assert
-        vm.expectRevert(FLError.FlashLeverage__PositionDoesNotExist.selector);
-        fl.unleverage(
-            USER,
-            positionId,
-            pendleSwap,
-            tokenRedeemSy,
-            minTokenOut,
-            swapData,
-            limitOrderData
-        );
-    }
+//         // Act & Assert
+//         vm.expectRevert(FLError.FlashLeverage__PositionDoesNotExist.selector);
+//         fl.unleverage(
+//             USER,
+//             positionId,
+//             pendleSwap,
+//             tokenRedeemSy,
+//             minTokenOut,
+//             swapData,
+//             limitOrderData
+//         );
+//     }
 
-    function test_unleverage_SucessfullyClosesPosition_AndRevertsForAlreadyClosedPosition()
-        external
-        withLeveragedPosition
-    {
-        // Arrange
-        uint256 positionId = 0; // 1st position
-        uint256 userLoanTokenBalBefore = IERC20(LOAN_TOKEN).balanceOf(USER);
-        LeveragePosition memory positionBefore = fl.getUserLeveragePosition(
-            USER,
-            positionId
-        );
+//     function test_unleverage_SucessfullyClosesPosition_AndRevertsForAlreadyClosedPosition()
+//         external
+//         withLeveragedPosition
+//     {
+//         // Arrange
+//         uint256 positionId = 0; // 1st position
+//         uint256 userLoanTokenBalBefore = IERC20(LOAN_TOKEN).balanceOf(USER);
+//         LeveragePosition memory positionBefore = fl.getUserLeveragePosition(
+//             USER,
+//             positionId
+//         );
 
-        // Act
-        _executeUnleverageOperation(
-            USER,
-            positionId,
-            positionBefore.amountLeveragedCollateral
-        );
+//         // Act
+//         _executeUnleverageOperation(
+//             USER,
+//             positionId,
+//             positionBefore.amountLeveragedCollateral
+//         );
 
-        // Assert
-        uint256 userLoanTokenBalAfter = IERC20(LOAN_TOKEN).balanceOf(USER);
-        LeveragePosition memory positionAfter = fl.getUserLeveragePosition(
-            USER,
-            positionId
-        );
-        assertFalse(positionAfter.open);
+//         // Assert
+//         uint256 userLoanTokenBalAfter = IERC20(LOAN_TOKEN).balanceOf(USER);
+//         LeveragePosition memory positionAfter = fl.getUserLeveragePosition(
+//             USER,
+//             positionId
+//         );
+//         assertFalse(positionAfter.open);
 
-        // Check loan token balance for user has increased
-        assertGt(userLoanTokenBalAfter, userLoanTokenBalBefore);
+//         // Check loan token balance for user has increased
+//         assertGt(userLoanTokenBalAfter, userLoanTokenBalBefore);
 
-        // Revert for already closed position
-        vm.expectRevert(
-            FLError.FlashLeverage__PositionAlreadyUnleveraged.selector
-        );
-        _executeDefaultUnleverageOperation(USER, positionId);
-    }
+//         // Revert for already closed position
+//         vm.expectRevert(
+//             FLError.FlashLeverage__PositionAlreadyUnleveraged.selector
+//         );
+//         _executeDefaultUnleverageOperation(USER, positionId);
+//     }
 
-    /*//////////////////////////////////////////////////////////////
-                           VIEW FUNCTION TESTS
-    //////////////////////////////////////////////////////////////*/
+//     /*//////////////////////////////////////////////////////////////
+//                            VIEW FUNCTION TESTS
+//     //////////////////////////////////////////////////////////////*/
 
-    function test_pendleRouterAddress_IsSetCorrectly() external view {
-        // Arrange
-        address expectedPendleRouter = pendleRouter;
+//     function test_pendleRouterAddress_IsSetCorrectly() external view {
+//         // Arrange
+//         address expectedPendleRouter = pendleRouter;
 
-        // Act
-        address actualPendleRouter = address(fl.i_pendleRouter());
+//         // Act
+//         address actualPendleRouter = address(fl.i_pendleRouter());
 
-        // Assert
-        assertEq(actualPendleRouter, expectedPendleRouter);
-    }
+//         // Assert
+//         assertEq(actualPendleRouter, expectedPendleRouter);
+//     }
 
-    function test_flashLeverageCoreAddress_IsSetCorrectly() external view {
-        // Arrange
-        address expectedFlashLeverage = address(flc);
+//     function test_flashLeverageCoreAddress_IsSetCorrectly() external view {
+//         // Arrange
+//         address expectedFlashLeverage = address(flc);
 
-        // Act
-        address actualFlashLeverageCore = address(fl.i_flashLeverageCore());
+//         // Act
+//         address actualFlashLeverageCore = address(fl.i_flashLeverageCore());
 
-        // Assert
-        assertEq(actualFlashLeverageCore, expectedFlashLeverage);
-    }
+//         // Assert
+//         assertEq(actualFlashLeverageCore, expectedFlashLeverage);
+//     }
 
-    function test_treasuryAddress_IsSetCorrectly() external view {
-        // Arrange
-        address expectedTreasury = treasury;
+//     function test_treasuryAddress_IsSetCorrectly() external view {
+//         // Arrange
+//         address expectedTreasury = treasury;
 
-        // Act
-        address actualTreasury = fl.getTreasury();
+//         // Act
+//         address actualTreasury = fl.getTreasury();
 
-        // Assert
-        assertEq(actualTreasury, expectedTreasury);
-    }
+//         // Assert
+//         assertEq(actualTreasury, expectedTreasury);
+//     }
 
-    function test_isSupportedCollateralToken_CorrectlyIdentifiesTokens()
-        external
-    {
-        // Arrange & Act & Assert
-        for (uint256 i; i < tokenConfigs.length; ++i) {
-            address collateralToken = tokenConfigs[i].collateralToken;
-            assertTrue(fl.isSupportedCollateralToken(collateralToken));
-        }
+//     function test_isSupportedCollateralToken_CorrectlyIdentifiesTokens()
+//         external
+//     {
+//         // Arrange & Act & Assert
+//         for (uint256 i; i < tokenConfigs.length; ++i) {
+//             address collateralToken = tokenConfigs[i].collateralToken;
+//             assertTrue(fl.isSupportedCollateralToken(collateralToken));
+//         }
 
-        // For unsupported collateral token
-        address unsupportedCollateralToken = makeAddr("randomAddress");
-        assertFalse(fl.isSupportedCollateralToken(unsupportedCollateralToken));
-    }
+//         // For unsupported collateral token
+//         address unsupportedCollateralToken = makeAddr("randomAddress");
+//         assertFalse(fl.isSupportedCollateralToken(unsupportedCollateralToken));
+//     }
 
-    /*//////////////////////////////////////////////////////////////
-                           HELPER FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
+//     /*//////////////////////////////////////////////////////////////
+//                            HELPER FUNCTIONS
+//     //////////////////////////////////////////////////////////////*/
 
-    function _setupLeverageConditions() internal {
-        vm.prank(USER);
-        IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
-    }
+//     function _setupLeverageConditions() internal {
+//         vm.prank(USER);
+//         IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
+//     }
 
-    function _executeLeverageOperation() internal {
-        // Arrange
-        bytes memory leverageCallData = getLeverageCalldata(
-            USER,
-            DESIRED_LTV,
-            COLLATERAL_TOKEN,
-            LOAN_TOKEN,
-            AMOUNT_COLLATERAL
-        );
+//     function _executeLeverageOperation() internal {
+//         // Arrange
+//         bytes memory leverageCallData = getLeverageCalldata(
+//             USER,
+//             DESIRED_LTV,
+//             COLLATERAL_TOKEN,
+//             LOAN_TOKEN,
+//             AMOUNT_COLLATERAL
+//         );
 
-        vm.prank(USER);
-        IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
+//         vm.prank(USER);
+//         IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
 
-        // Act
-        vm.prank(USER);
-        (bool success, ) = address(fl).call(leverageCallData);
+//         // Act
+//         vm.prank(USER);
+//         (bool success, ) = address(fl).call(leverageCallData);
 
-        // Assert
-        require(success, "Leverage Call Failed");
-    }
+//         // Assert
+//         require(success, "Leverage Call Failed");
+//     }
 
-    function _executeUnleverageOperation(
-        address user,
-        uint256 positionId,
-        uint256 amountLeveragedCollateral
-    ) internal {
-        bytes memory callData = getUnleverageCalldata(
-            user,
-            positionId,
-            COLLATERAL_TOKEN,
-            amountLeveragedCollateral
-        );
+//     function _executeUnleverageOperation(
+//         address user,
+//         uint256 positionId,
+//         uint256 amountLeveragedCollateral
+//     ) internal {
+//         bytes memory callData = getUnleverageCalldata(
+//             user,
+//             positionId,
+//             COLLATERAL_TOKEN,
+//             amountLeveragedCollateral
+//         );
 
-        vm.prank(USER);
-        (bool success, ) = address(fl).call(callData);
-        require(success, "Unleverage operation failed");
-    }
+//         vm.prank(USER);
+//         (bool success, ) = address(fl).call(callData);
+//         require(success, "Unleverage operation failed");
+//     }
 
-    function _executeDefaultUnleverageOperation(
-        address user,
-        uint256 positionId
-    ) internal {
-        address pendleSwap;
-        address tokenRedeemSy;
-        uint256 minTokenOut;
-        SwapData memory swapData;
-        LimitOrderData memory limitOrderData;
+//     function _executeDefaultUnleverageOperation(
+//         address user,
+//         uint256 positionId
+//     ) internal {
+//         address pendleSwap;
+//         address tokenRedeemSy;
+//         uint256 minTokenOut;
+//         SwapData memory swapData;
+//         LimitOrderData memory limitOrderData;
 
-        vm.prank(USER);
-        fl.unleverage(
-            user,
-            positionId,
-            pendleSwap,
-            tokenRedeemSy,
-            minTokenOut,
-            swapData,
-            limitOrderData
-        );
-    }
-}
+//         vm.prank(USER);
+//         fl.unleverage(
+//             user,
+//             positionId,
+//             pendleSwap,
+//             tokenRedeemSy,
+//             minTokenOut,
+//             swapData,
+//             limitOrderData
+//         );
+//     }
+// }

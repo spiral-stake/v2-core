@@ -4,14 +4,14 @@ pragma solidity 0.8.30;
 /// @title MarketPositionManager Abstract Contract
 /// @notice Handles core collateral and borrowing logic using the Morpho protocol.
 /// @dev This contract must be inherited and extended with leverage/unleverage logic.
-///      Integrates Morpho flashloans, supply/borrow/repay/withdraw flows, and market configuration.
+/// Integrates Morpho flashloans, supply/borrow/repay/withdraw flows, and market configuration.
 
 import {IMorphoFlashLoanCallback} from "@morpho/interfaces/IMorphoCallbacks.sol";
 import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
 import {MorphoBalancesLib, SharesMathLib} from "@morpho/libraries/periphery/MorphoBalancesLib.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
-import {FLCError} from "../libraries/Error.sol";
+import {FLError} from "../libraries/Error.sol";
 import {Math} from "../libraries/Math.sol";
 import {UserProxy} from "./UserProxy.sol";
 
@@ -66,7 +66,7 @@ abstract contract MarketPositionManager is
     ) external override {
         require(
             msg.sender == address(i_morpho),
-            FLCError.FlashLeverageCore__UntrustedLender()
+            FLError.FlashLeverage__UntrustedLender()
         );
 
         Action action = abi.decode(data, (Action));
@@ -74,7 +74,7 @@ abstract contract MarketPositionManager is
         if (action == Action.LEVERAGE) {
             _handleLeverage(amountLoan, data);
         } else {
-            _handleUnleverage(amountLoan, data);
+            _handleDeleverage(amountLoan, data);
         }
     }
 
@@ -275,10 +275,10 @@ abstract contract MarketPositionManager is
      * @param amountLoan Amount of flashloan received.
      * @param data Encoded context for unleverage.
      */
-    function _handleUnleverage(
+    function _handleDeleverage(
         uint256 amountLoan,
         bytes calldata data
-    ) internal virtual {}
+    ) internal virtual returns (uint256 userAmountReturned) {}
 
     /////////////////////////
     // Public View Functions

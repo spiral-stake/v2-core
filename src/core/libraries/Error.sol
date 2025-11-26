@@ -1,35 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
-library FLCError {
-    error FlashLeverageCore__UnsupportedCollateralToken();
-    error FlashLeverageCore__AmountCollateralCannotBeZero();
-    error FlashLeverageCore__SharesToBurnCannotBeZero();
-    error FlashLeverageCore__UntrustedLender();
-    error FlashLeverageCore__InsufficientSharesToBurn();
-    error FlashLeverageCore__InsufficientCollateralToWithdraw();
-    error FlashLeverageCore__ExceedsMaxLTV();
-    error FlashLeverageCore__EffectiveLtvTooHigh(
+library FLError {
+    // Common
+    error FlashLeverage__CannotBeZeroAddress();
+    error FlashLeverage__AmountCannotBeZero();
+
+    // Specific
+    error FlashLeverage__UntrustedLender();
+    error FlashLeverage__ExceedsMaxLTV();
+    error FlashLeverage__UnsupportedCollateralToken();
+    error FlashLeverage__InvalidCollateralToken();
+    error FlashLeverage__InvalidCollateralTokenDecimals();
+    error FlashLeverage__InvalidYieldFee();
+    error FlashLeverage__EffectiveLtvTooHigh(
         uint256 desiredLtv,
         uint256 effectiveLtv
     );
-    error FlashLeverageCore__NotAManager();
-    error FlashLeverageCore__CannotBeZeroAddress();
-    error FlashLeverageCore__InvalidCollateralToken();
-    error FlashLeverageCore__InvalidCollateralTokenDecimals();
-}
-
-library FLError {
-    error FlashLeverage__InvalidOnBehalfOfAddress();
-    error FlashLeverage__ExceedsMaxLTV();
-    error FlashLeverage__PositionDoesNotExist();
-    error FlashLeverage__PositionAlreadyUnleveraged();
-    error FlashLeverage__AmountCannotBeZero();
-    error FlashLeverage__UnsupportedCollateralToken();
-    error FlashLeverage__TreasuryCannotBeZero();
-    error FlashLeverage__OnlyOwnerCanCloseBeforeMaturity();
-    error FlashLeverage__AmountMismatch();
-    error FlashLeverage__CannotBeZeroAddress();
-    error FlashLeverage__InvalidCollateralToken();
-    error FlashLeverage__InvalidYieldFee();
 }

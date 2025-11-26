@@ -4,10 +4,8 @@ pragma solidity 0.8.30;
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 
-import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
-import {TokenConfigs} from "./TokenConfigs.sol";
-import {DeployFlashLeverageCore} from "./DeployFlashLeverageCore.s.sol";
 import {DeployFlashLeverage} from "./DeployFlashLeverage.s.sol";
+import {CollateralTokenConfig} from "./CollateralTokenConfig.s.sol";
 import {WriteAddresses} from "./WriteAddresses.s.sol";
 
 interface IWETH {
@@ -15,17 +13,15 @@ interface IWETH {
 }
 
 contract Main is Script, WriteAddresses {
-    address public morpho = 0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb;
-    address public pendleRouter = 0x888888888889758F76e7103c6CbF23ABbF58F946;
+    address public morpho = 0x1bF0c2541F820E775182832f06c0B7Fc27A25f67;
+    address public swapRouter = 0x6131B5fae19EA4f9D964eAc0408E4408b66337b5;
 
     // Production
     address public treasury = 0xeB90258b1F74a846F7941514C7c02Bb03EB249D5;
-
-    address public WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address public USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address public WETH = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;
 
     // Token configuration contract
-    TokenConfigs public tokenConfigsContract;
+    CollateralTokenConfig public collateralTokenConfig;
 
     function setUp() external {
         if (block.chainid == 31337) {
@@ -35,70 +31,39 @@ contract Main is Script, WriteAddresses {
         }
     }
 
-    function run()
-        external
-        returns (address flashLeverageCoreAddress, address flashLeverageAddress)
-    {
-        tokenConfigsContract = new TokenConfigs();
+    function run() external returns (address flashLeverageAddress) {
+        collateralTokenConfig = new CollateralTokenConfig();
 
-        CollateralTokenConfig[] memory tokenConfigs = tokenConfigsContract
-            .getTokenConfigs();
+        (
+            address[] memory collateralTokens,
+            bytes32[] memory morphoMarketIds
+        ) = collateralTokenConfig.getTokenConfigs();
 
-        flashLeverageCoreAddress = _deployFlashLeverageCore(tokenConfigs);
         flashLeverageAddress = _deployFlashLeverage(
-            flashLeverageCoreAddress,
-            tokenConfigs
+            collateralTokens,
+            morphoMarketIds
         );
 
         _writeAddresses(
             morpho,
-            tokenConfigs,
-            USDC,
-            flashLeverageCoreAddress,
+            collateralTokens,
+            morphoMarketIds,
+            WETH,
             flashLeverageAddress,
             "./addresses/"
         );
     }
 
-    function _deployFlashLeverageCore(
-        CollateralTokenConfig[] memory tokenConfigs
-    ) private returns (address flashLeverageCoreAddress) {
-        flashLeverageCoreAddress = new DeployFlashLeverageCore().run(
-            morpho,
-            pendleRouter,
-            tokenConfigs
-        );
-    }
-
     function _deployFlashLeverage(
-        address flashLeverageCoreAddress,
-        CollateralTokenConfig[] memory tokenConfigs
+        address[] memory collateralTokens,
+        bytes32[] memory morphoMarketIds
     ) private returns (address flashLeverageAddress) {
         flashLeverageAddress = new DeployFlashLeverage().run(
-            flashLeverageCoreAddress,
-            pendleRouter,
+            morpho,
+            swapRouter,
             treasury,
-            tokenConfigs
+            collateralTokens,
+            morphoMarketIds
         );
-    }
-
-    /**
-     * @dev Returns all collateral token configurations
-     * @return Array of CollateralTokenConfig structs
-     */
-    function getCollateralTokenConfigs()
-        external
-        view
-        returns (CollateralTokenConfig[] memory)
-    {
-        return tokenConfigsContract.getTokenConfigs();
-    }
-
-    function getCollateralTokenWhales()
-        external
-        view
-        returns (address[] memory)
-    {
-        return tokenConfigsContract.getTokenWhales();
     }
 }

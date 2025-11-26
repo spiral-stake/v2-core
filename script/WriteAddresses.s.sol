@@ -3,26 +3,14 @@ pragma solidity 0.8.30;
 
 import {Script} from "forge-std/Script.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
-import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
 import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
-
-interface IPendleMarket {
-    function readTokens()
-        external
-        view
-        returns (address _SY, address _PT, address _YT);
-
-    function isExpired() external view returns (bool);
-
-    function expiry() external view returns (uint256);
-}
 
 contract WriteAddresses is Script {
     function _writeAddresses(
         address morphoAddress,
-        CollateralTokenConfig[] memory tokenConfigs,
-        address USDC,
-        address flashLeverageCoreAddress,
+        address[] memory tokens,
+        bytes32[] memory morphoMarketIds,
+        address WETH,
         address flashLeverageAddress,
         string memory path
     ) internal {
@@ -31,36 +19,29 @@ contract WriteAddresses is Script {
 
         vm.serializeAddress(
             addresses,
-            "flashLeverageCoreAddress",
-            flashLeverageCoreAddress
-        );
-        vm.serializeAddress(
-            addresses,
             "flashLeverageAddress",
             flashLeverageAddress
         );
 
-        // USDC
-        string memory usdcToken = "USDC";
-        IERC20Metadata usdc = IERC20Metadata(USDC);
-        vm.serializeAddress(usdcToken, "address", address(usdc));
-        vm.serializeString(usdcToken, "name", usdc.name());
-        vm.serializeString(usdcToken, "symbol", usdc.symbol());
+        // WETH
+        string memory usdcToken = "WETH";
+        IERC20Metadata weth = IERC20Metadata(WETH);
+        vm.serializeAddress(usdcToken, "address", address(weth));
+        vm.serializeString(usdcToken, "name", weth.name());
+        vm.serializeString(usdcToken, "symbol", weth.symbol());
         vm.serializeUint(usdcToken, "valueInUsd", 1);
-        usdcToken = vm.serializeUint(usdcToken, "decimals", usdc.decimals());
-        vm.serializeString(addresses, "USDC", usdcToken);
+        usdcToken = vm.serializeUint(usdcToken, "decimals", weth.decimals());
+        vm.serializeString(addresses, "WETH", usdcToken);
 
         // Collateral Tokens
 
         string memory collateralTokens = "collateralTokens";
-        for (uint256 i; i < tokenConfigs.length; ++i) {
+        for (uint256 i; i < tokens.length; ++i) {
             string memory tokenObj = "tokenObj";
 
-            IERC20Metadata token = IERC20Metadata(
-                tokenConfigs[i].collateralToken
-            );
+            IERC20Metadata token = IERC20Metadata(tokens[i]);
             MarketParams memory marketParams = morpho.idToMarketParams(
-                Id.wrap(tokenConfigs[i].morphoMarketId)
+                Id.wrap(morphoMarketIds[i])
             );
 
             // Create loan token metadata object
@@ -77,36 +58,19 @@ contract WriteAddresses is Script {
                 loanToken.decimals()
             );
 
-            (, , address YT) = IPendleMarket(tokenConfigs[i].pendleMarket)
-                .readTokens();
-
-            uint256 expiry = IPendleMarket(tokenConfigs[i].pendleMarket)
-                .expiry();
-
             vm.serializeAddress(tokenObj, "address", address(token));
             vm.serializeString(tokenObj, "name", token.name());
             vm.serializeString(tokenObj, "symbol", token.symbol());
             vm.serializeUint(tokenObj, "decimals", token.decimals());
-            vm.serializeBytes32(
-                tokenObj,
-                "morphoMarketId",
-                tokenConfigs[i].morphoMarketId
-            );
-            vm.serializeString(tokenObj, "loanToken", loanTokenObj);
-            vm.serializeAddress(tokenObj, "YT", YT);
-            vm.serializeUint(tokenObj, "expiryTimestamp", expiry);
-            tokenObj = vm.serializeAddress(
-                tokenObj,
-                "pendleMarket",
-                tokenConfigs[i].pendleMarket
-            );
+            vm.serializeBytes32(tokenObj, "morphoMarketId", morphoMarketIds[i]);
+            tokenObj = vm.serializeString(tokenObj, "loanToken", loanTokenObj);
 
             vm.serializeString(
                 collateralTokens,
                 vm.toString(address(token)),
                 tokenObj
             );
-            if (i == tokenConfigs.length - 1) {
+            if (i == tokens.length - 1) {
                 collateralTokens = vm.serializeString(
                     collateralTokens,
                     vm.toString(address(token)),
