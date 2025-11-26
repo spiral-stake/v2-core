@@ -7,9 +7,9 @@ pragma solidity 0.8.30;
 /// @dev Creates individual position proxy contracts for each user to isolate their positions.
 
 import {MarketPositionManager, MarketParams, Id, UserProxy, IERC20Metadata, FLError, Math} from "./MarketPositionManager.sol";
-import {SwapManager} from "./SwapManager.sol";
+import {SwapManager, SwapData, LimitOrderData, ApproxParams} from "./SwapManager.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
-import {LeverageParams} from "../structs/LeverageParams.sol";
+import {LeverageParams, DeleverageParams} from "../structs/LeverageParams.sol";
 import {SwapParams} from "../structs/SwapParams.sol";
 import {LeveragePosition} from "../structs/LeveragePosition.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -131,18 +131,19 @@ contract FlashLeverage is
     /**
      * @notice Initializes the FlashLeverage contract.
      * @param morphoAddress Address of the Morpho protocol contract.
-     * @param swapRouter Address of the Pendle router for swap execution.
+     * @param pendleRouter Address of the Pendle router for swap execution.
      */
     constructor(
         address morphoAddress,
-        address swapRouter,
+        address pendleRouter,
+        address[] memory swapRouters,
         address treasury
     )
         Ownable(msg.sender)
         MarketPositionManager(morphoAddress)
-        SwapManager(swapRouter)
+        SwapManager(pendleRouter, swapRouters)
     {
-        if (morphoAddress == address(0) || swapRouter == address(0)) {
+        if (morphoAddress == address(0) || pendleRouter == address(0)) {
             revert FLError.FlashLeverage__CannotBeZeroAddress();
         }
 
@@ -158,94 +159,55 @@ contract FlashLeverage is
     /////////////////////////
     // External Functions
 
-    function swapAndLeverage(
-        address onBehalfOf,
-        SwapParams calldata swapParams,
-        LeverageParams calldata params
-    )
-        external
-        validateOnBehalfOf(onBehalfOf)
-        validateDesiredLtv(
-            params.desiredLtv,
-            params.collateralToken,
-            params.loanToken
-        )
-        validateCollateralToken(params.collateralToken, params.loanToken)
-        validateAmount(params.amountCollateral)
-    {
-        _transferIn(swapParams.tokenIn, msg.sender, swapParams.amountIn);
-        _swap(swapParams.tokenIn, swapParams.amountIn, swapParams.swapData);
-        _transferBackRemaining(
-            params.collateralToken,
-            _selfBalance(params.collateralToken),
-            params.amountCollateral
-        );
-
-        _leverage(onBehalfOf, params);
-    }
-
-    function leverage(
-        address onBehalfOf,
-        LeverageParams calldata params
-    )
-        external
-        validateOnBehalfOf(onBehalfOf)
-        validateDesiredLtv(
-            params.desiredLtv,
-            params.collateralToken,
-            params.loanToken
-        )
-        validateCollateralToken(params.collateralToken, params.loanToken)
-        validateAmount(params.amountCollateral)
-    {
-        _transferIn(
-            params.collateralToken,
-            msg.sender,
-            params.amountCollateral
-        );
-
-        _leverage(onBehalfOf, params);
-    }
-
     /**
      * @notice Creates leveraged positions by supplying collateraToken and borrowing via flashloan.
      * @param onBehalfOf The address of the user for whom the position is being created for.
      * @param params Struct containing leverage parameters including collateral, loan token, collateral amount, and other swap tokenConfigs.
      * @dev It is a internal function
      */
-    function _leverage(
+    function leverage(
         address onBehalfOf,
         LeverageParams calldata params
     ) internal {
-        address collateralToken = params.collateralToken;
-        address loanToken = params.loanToken;
-        uint256 amountCollateral = params.amountCollateral;
+        _transferIn(
+            params.collateralToken,
+            msg.sender,
+            params.amountCollateral
+        );
 
         // FlashLoan Related
         uint256 amountFlashLoan = calcLeverageFlashLoan(
             params.desiredLtv,
-            collateralToken,
-            loanToken,
-            amountCollateral
+            params.collateralToken,
+            params.loanToken,
+            params.amountCollateral
         );
-
         bytes memory data = abi.encode(
             Action.LEVERAGE,
             onBehalfOf, // user
             params.desiredLtv,
-            collateralToken,
-            loanToken,
-            amountCollateral,
-            params.swapData
+            params.collateralToken,
+            params.loanToken,
+            params.amountCollateral,
+            params.swapData,
+            params.minTokenOut,
+            params.pendleSwap,
+            params.approxParams,
+            params.tokenMintSy,
+            params.limitOrderData
         );
-        i_morpho.flashLoan(loanToken, amountFlashLoan, data);
+
+        i_morpho.flashLoan(params.loanToken, amountFlashLoan, data);
     }
 
     /**
      * @notice Closes an existing leveraged position and returns the final amount (in loan token) to the user.
      * @dev Only the leverage position's owner can call this function
      */
-    function deleverage(uint256 positionId, bytes memory swapData) external {
+    function deleverage(
+        uint256 positionId,
+        DeleverageParams memory params
+    ) external {
         LeveragePosition storage position = s_userLeveragePositions[msg.sender][
             positionId
         ];
@@ -261,9 +223,14 @@ contract FlashLeverage is
         );
         bytes memory data = abi.encode(
             Action.UNLEVERAGE,
-            msg.sender,
+            msg.sender, // user
             positionId,
-            swapData
+            params.swapData,
+            params.minTokenOut,
+            // Pendle Specific
+            params.pendleSwap,
+            params.tokenRedeemSy,
+            params.limitOrderData
         );
         i_morpho.flashLoan(position.loanToken, amountFlashLoan, data);
     }
@@ -383,18 +350,56 @@ contract FlashLeverage is
             address collateralToken,
             address loanToken,
             uint256 amountCollateral,
-            bytes memory swapData
+            SwapData memory swapData,
+            uint256 minTokenOut,
+            // Pendle Specific
+            address pendleSwap,
+            ApproxParams memory approxParams,
+            address tokenMintSy,
+            LimitOrderData memory limitOrderData
         ) = abi.decode(
                 data,
-                (Action, address, uint256, address, address, uint256, bytes)
+                (
+                    Action,
+                    address,
+                    uint256,
+                    address,
+                    address,
+                    uint256,
+                    SwapData,
+                    uint256,
+                    // Pendle Specific
+                    address,
+                    ApproxParams,
+                    address,
+                    LimitOrderData
+                )
             );
 
         // Swap amount loan -> PT collateral
-        uint256 amountSwappedCollateral = _swap(
-            loanToken,
-            amountLoan,
-            swapData
-        );
+        uint256 amountSwappedCollateral;
+
+        if (s_pendleMarket[collateralToken] != address(0)) {
+            amountSwappedCollateral = _swapTokenToPt(
+                loanToken,
+                collateralToken,
+                amountLoan,
+                swapData,
+                minTokenOut,
+                approxParams,
+                pendleSwap,
+                tokenMintSy,
+                limitOrderData
+            );
+        } else {
+            amountSwappedCollateral = _swapTokenToToken(
+                loanToken,
+                collateralToken,
+                amountLoan,
+                swapData,
+                minTokenOut
+            );
+        }
 
         // Position's final collateral after leveraging
         uint256 amountLeveragedCollateral = amountCollateral +
@@ -462,8 +467,30 @@ contract FlashLeverage is
         uint256 amountLoan,
         bytes calldata data
     ) internal override nonReentrant returns (uint256 userAmountReturned) {
-        (, address user, uint256 positionId, bytes memory swapData) = abi
-            .decode(data, (Action, address, uint256, bytes));
+        (
+            ,
+            address user,
+            uint256 positionId,
+            SwapData memory swapData,
+            uint256 minTokenOut,
+            // Pendle specific
+            address pendleSwap,
+            address tokenRedeemSy,
+            LimitOrderData memory limitOrderData
+        ) = abi.decode(
+                data,
+                (
+                    Action,
+                    address,
+                    uint256,
+                    SwapData,
+                    uint256,
+                    // Pendle Specific
+                    address,
+                    address,
+                    LimitOrderData
+                )
+            );
 
         LeveragePosition memory position = getUserLeveragePosition(
             user,
@@ -481,11 +508,28 @@ contract FlashLeverage is
         );
 
         // Swap withdrawn collateral -> loan token
-        uint256 amountSwappedLoanToken = _swap(
-            position.collateralToken,
-            position.amountLeveragedCollateral,
-            swapData
-        );
+        uint256 amountSwappedLoanToken;
+
+        if (s_pendleMarket[position.collateralToken] != address(0)) {
+            amountSwappedLoanToken = _swapPtToToken(
+                position.collateralToken,
+                position.loanToken,
+                position.amountLeveragedCollateral,
+                swapData,
+                minTokenOut,
+                pendleSwap,
+                tokenRedeemSy,
+                limitOrderData
+            );
+        } else {
+            amountSwappedLoanToken = _swapTokenToToken(
+                position.collateralToken,
+                position.loanToken,
+                position.amountLeveragedCollateral,
+                swapData,
+                minTokenOut
+            );
+        }
 
         // Repay the flash loan, with swapped loan token
         _forceApprove(position.loanToken, address(i_morpho), amountLoan);
