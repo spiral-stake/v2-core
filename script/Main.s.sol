@@ -5,65 +5,49 @@ import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 
 import {DeployFlashLeverage} from "./DeployFlashLeverage.s.sol";
-import {CollateralTokenConfig} from "./CollateralTokenConfig.s.sol";
 import {WriteAddresses} from "./WriteAddresses.s.sol";
+import {Config, ChainConfig, CollateralTokenConfig} from "./Config.s.sol";
 
 interface IWETH {
     function deposit() external payable;
 }
 
-contract Main is Script, WriteAddresses {
-    address public morpho = 0x1bF0c2541F820E775182832f06c0B7Fc27A25f67;
-    address public swapRouter = 0x6131B5fae19EA4f9D964eAc0408E4408b66337b5;
-
-    // Production
-    address public treasury = 0xeB90258b1F74a846F7941514C7c02Bb03EB249D5;
-    address public WETH = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;
-
-    // Token configuration contract
-    CollateralTokenConfig public collateralTokenConfig;
+contract Main is Script, WriteAddresses, Config {
+    ChainConfig private chain;
+    CollateralTokenConfig[] private collateralTokens;
 
     function setUp() external {
+        chain = getChainConfig();
+        collateralTokens = getCollateralTokens();
+
         if (block.chainid == 31337) {
             vm.startBroadcast();
-            IWETH(WETH).deposit{value: 10 ether}();
+            IWETH(chain.WETH).deposit{value: 10 ether}();
             vm.stopBroadcast();
         }
     }
 
     function run() external returns (address flashLeverageAddress) {
-        collateralTokenConfig = new CollateralTokenConfig();
-
-        (
-            address[] memory collateralTokens,
-            bytes32[] memory morphoMarketIds
-        ) = collateralTokenConfig.getTokenConfigs();
-
-        flashLeverageAddress = _deployFlashLeverage(
-            collateralTokens,
-            morphoMarketIds
-        );
+        flashLeverageAddress = _deployFlashLeverage(collateralTokens);
 
         _writeAddresses(
-            morpho,
+            chain.morpho,
             collateralTokens,
-            morphoMarketIds,
-            WETH,
+            chain.USDC,
             flashLeverageAddress,
             "./addresses/"
         );
     }
 
     function _deployFlashLeverage(
-        address[] memory collateralTokens,
-        bytes32[] memory morphoMarketIds
+        CollateralTokenConfig[] memory collateralTokenConfig
     ) private returns (address flashLeverageAddress) {
         flashLeverageAddress = new DeployFlashLeverage().run(
-            morpho,
-            swapRouter,
-            treasury,
-            collateralTokens,
-            morphoMarketIds
+            chain.morpho,
+            chain.pendleRouter,
+            chain.swapRouters,
+            chain.treasury,
+            collateralTokenConfig
         );
     }
 }

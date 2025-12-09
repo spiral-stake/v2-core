@@ -6,8 +6,8 @@ struct LeveragePosition {
     address collateralToken;
     address loanToken;
     uint256 amountCollateral;
-    uint256 amountLeveragedCollateral; // Required when closing the position
-    uint256 sharesBorrowed; // Required when closing the position
+    uint256 amountLeveragedCollateral; // Required when deleveraging
+    uint256 sharesBorrowed; // Required when deleveraging
     address userProxy; // Each Position is a separate proxy contract
-    uint256 amountCollateralInLoanToken; // Required for yield tracking and fees
+    uint256 amountCollateralInLoanToken; // Required for calc yield generated and fees
 }

@@ -13,8 +13,6 @@ library FLError {
     error FlashLeverage__InvalidCollateralToken();
     error FlashLeverage__InvalidCollateralTokenDecimals();
     error FlashLeverage__InvalidYieldFee();
-    error FlashLeverage__EffectiveLtvTooHigh(
-        uint256 desiredLtv,
-        uint256 effectiveLtv
-    );
+    error FlashLeverage__PositionAlreadyClosed();
+    error FlashLeverage__SlippageExceeded();
 }

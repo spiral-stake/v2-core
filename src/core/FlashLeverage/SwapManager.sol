@@ -7,56 +7,44 @@ pragma solidity 0.8.30;
  * @dev Currently only using kyberswap
  */
 
-import {TokenHelper} from "../libraries/TokenHelper.sol";
-import {IPAllActionV3} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
-import {ApproxParams, TokenInput, TokenOutput, SwapData, LimitOrderData, SwapType, FillOrderParams} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
-import {TokenHelper} from "../libraries/TokenHelper.sol";
+import {IPAllActionV3, ApproxParams, TokenInput, TokenOutput, SwapData, LimitOrderData} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
 import {IPendleMarket} from "../../interfaces/IPendleMarket.sol";
+import {TokenHelper} from "../libraries/TokenHelper.sol";
 
 contract SwapManager is TokenHelper {
     /////////////////////////
-    // Constants and Immutables
-
-    IPAllActionV3 public immutable i_pendleRouter;
-
-    /////////////////////////
     // Storage
+
+    IPAllActionV3 public s_pendleRouter;
 
     mapping(address collateralToken => address pendleMarket)
         public s_pendleMarket;
 
     // List of router contracts from swap aggregators like kyberswap, odos... for swapping of non-PTs
-    mapping(address => bool) public s_isRouter;
+    mapping(address => bool) public s_isSwapRouter;
 
     constructor(address pendleRouter, address[] memory routers) {
-        i_pendleRouter = IPAllActionV3(pendleRouter);
+        s_pendleRouter = IPAllActionV3(pendleRouter);
 
         for (uint256 i; i < routers.length; i++) {
-            s_isRouter[routers[i]] = true;
+            s_isSwapRouter[routers[i]] = true;
         }
     }
 
     function _swapTokenToToken(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        SwapData memory swapData,
-        uint256 minTokenOut
+        address tokenIn, // For approval
+        uint256 amountIn, // For approval
+        SwapData memory swapData
     ) internal returns (uint256 returnAmount) {
-        require(s_isRouter[swapData.extRouter], "Unsupported Swap Router");
+        require(s_isSwapRouter[swapData.extRouter], "Unsupported Swap Router");
 
         _forceApprove(tokenIn, address(swapData.extRouter), amountIn);
         (bool success, bytes memory result) = swapData.extRouter.call(
             swapData.extCalldata
         );
-        require(success, "Swap router call failed");
 
+        require(success, "Swap router call failed");
         (returnAmount, ) = abi.decode(result, (uint256, uint256));
-        require(
-            _selfBalance(tokenOut) >= minTokenOut && // This is not neccessary
-                returnAmount >= minTokenOut,
-            "Slippage: output amount too low"
-        );
     }
 
     /**
@@ -81,8 +69,8 @@ contract SwapManager is TokenHelper {
         address tokenMintSy,
         LimitOrderData memory limitOrderData
     ) internal returns (uint256 amountPtOut) {
-        _forceApprove(tokenIn, address(i_pendleRouter), amountIn);
-        (amountPtOut, , ) = i_pendleRouter.swapExactTokenForPt(
+        _forceApprove(tokenIn, address(s_pendleRouter), amountIn);
+        (amountPtOut, , ) = s_pendleRouter.swapExactTokenForPt(
             address(this),
             s_pendleMarket[PT],
             minPtOut,
@@ -118,12 +106,12 @@ contract SwapManager is TokenHelper {
         address tokenRedeemSy,
         LimitOrderData memory limitOrderData
     ) internal returns (uint256 amountTokenOut) {
-        _safeApprove(PT, address(i_pendleRouter), amountPt);
+        _safeApprove(PT, address(s_pendleRouter), amountPt);
 
         IPendleMarket pendleMarket = IPendleMarket(s_pendleMarket[PT]);
 
         if (!pendleMarket.isExpired()) {
-            (amountTokenOut, , ) = i_pendleRouter.swapExactPtForToken(
+            (amountTokenOut, , ) = s_pendleRouter.swapExactPtForToken(
                 address(this),
                 s_pendleMarket[PT],
                 amountPt,
@@ -139,7 +127,7 @@ contract SwapManager is TokenHelper {
         } else {
             (, , address YT) = pendleMarket.readTokens();
 
-            (amountTokenOut, ) = i_pendleRouter.redeemPyToToken(
+            (amountTokenOut, ) = s_pendleRouter.redeemPyToToken(
                 address(this),
                 YT,
                 amountPt,
@@ -163,5 +151,11 @@ contract SwapManager is TokenHelper {
         s_pendleMarket[PT] = pendleMarket;
     }
 
-    // function addRouter(address router) external onlyOwner {}
+    function _updatePendleRouter(address pendleRouter) internal {
+        s_pendleRouter = IPAllActionV3(pendleRouter);
+    }
+
+    function _addSwapRouter(address router) internal {
+        s_isSwapRouter[router] = true;
+    }
 }

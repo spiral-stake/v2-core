@@ -7,16 +7,14 @@ pragma solidity 0.8.30;
 /// @dev Creates individual position proxy contracts for each user to isolate their positions.
 
 import {MarketPositionManager, MarketParams, Id, UserProxy, IERC20Metadata, FLError, Math} from "./MarketPositionManager.sol";
-import {SwapManager, SwapData, LimitOrderData, ApproxParams} from "./SwapManager.sol";
+import {SwapManager, IPendleMarket, SwapData, LimitOrderData, ApproxParams} from "./SwapManager.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {LeverageParams, DeleverageParams} from "../structs/LeverageParams.sol";
-import {SwapParams} from "../structs/SwapParams.sol";
 import {LeveragePosition} from "../structs/LeveragePosition.sol";
+import {CollateralTokenConfig} from "../structs/CollateralTokenConfig.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {IOracle} from "@morpho/interfaces/IOracle.sol";
-
-import {console} from "forge-std/console.sol";
 
 contract FlashLeverage is
     MarketPositionManager,
@@ -32,11 +30,8 @@ contract FlashLeverage is
     /// @notice Buffer subtracted from liquidation LTV to determine the max LTV (18 decimals)
     uint256 public constant LIQUIDATION_BUFFER = 25e15; // 2.5%
 
-    /// @notice Maximum allowed change in effective LTV after slippage from the swap (18 decimals)
-    uint256 public constant SLIPPAGE_BUFFER = 1e16; // 1%
-
-    /// @notice Max Fee percentage in basis points (10%)
-    uint256 private constant MAX_YIELD_FEE = 10e16;
+    /// @notice Max Fee percentage in basis points (18 decimals)
+    uint256 private constant MAX_YIELD_FEE = 10e16; // 10%
 
     /// @notice Implementation contract for creating individual user proxies
     address public immutable i_userProxyImplementation;
@@ -44,6 +39,7 @@ contract FlashLeverage is
     /////////////////////////
     // Storage
 
+    /// @notice Leverage positions of each user
     mapping(address user => LeveragePosition[]) private s_userLeveragePositions;
 
     /// @notice Treasury address to receive fees
@@ -51,9 +47,6 @@ contract FlashLeverage is
 
     /// @notice Performance based yield fees on the effective yield generated
     uint256 private s_yieldFee;
-
-    /// @notice Flag to enable user direct control of their proxies
-    bool public recoveryMode;
 
     /////////////////////////
     // Events
@@ -143,7 +136,7 @@ contract FlashLeverage is
         MarketPositionManager(morphoAddress)
         SwapManager(pendleRouter, swapRouters)
     {
-        if (morphoAddress == address(0) || pendleRouter == address(0)) {
+        if (morphoAddress == address(0)) {
             revert FLError.FlashLeverage__CannotBeZeroAddress();
         }
 
@@ -168,7 +161,7 @@ contract FlashLeverage is
     function leverage(
         address onBehalfOf,
         LeverageParams calldata params
-    ) internal {
+    ) external {
         _transferIn(
             params.collateralToken,
             msg.sender,
@@ -185,7 +178,6 @@ contract FlashLeverage is
         bytes memory data = abi.encode(
             Action.LEVERAGE,
             onBehalfOf, // user
-            params.desiredLtv,
             params.collateralToken,
             params.loanToken,
             params.amountCollateral,
@@ -212,11 +204,11 @@ contract FlashLeverage is
             positionId
         ];
 
-        // Closing the position
+        require(position.open, FLError.FlashLeverage__PositionAlreadyClosed());
         position.open = false;
 
         // Flash Loan Related
-        uint256 amountFlashLoan = calcUnleverageFlashLoan(
+        uint256 amountFlashLoan = calcDeleverageFlashLoan(
             position.collateralToken,
             position.loanToken,
             position.sharesBorrowed
@@ -249,36 +241,69 @@ contract FlashLeverage is
 
     /**
      * @notice Allows owner to add support for new collateral tokens.
-     * @param collateralToken Address of the collateralToken to be leveraged
-     * @param morphoMarketId Address of the morphoMarketId for the collateralToken
+     * @param tokenConfigs Array of token configurations including swap and market parameters.
      */
-    function addSupportedCollateralToken(
-        address collateralToken,
-        bytes32 morphoMarketId
+    function addSupportedCollateralTokens(
+        CollateralTokenConfig[] calldata tokenConfigs
     ) external onlyOwner {
-        // Zero Address check
+        for (uint256 i; i < tokenConfigs.length; ++i) {
+            CollateralTokenConfig memory config = tokenConfigs[i];
+            address collateralToken = config.collateralToken;
+
+            require(
+                collateralToken != address(0),
+                FLError.FlashLeverage__CannotBeZeroAddress()
+            );
+
+            // Morpho related
+            MarketParams memory marketParams = i_morpho.idToMarketParams(
+                Id.wrap(config.morphoMarketId)
+            );
+            require(
+                collateralToken == marketParams.collateralToken,
+                FLError.FlashLeverage__InvalidCollateralToken()
+            );
+            _updateMarketParams(marketParams);
+
+            // Pendle Related
+            if (config.pendleMarket != address(0)) {
+                (, address PT, ) = IPendleMarket(config.pendleMarket)
+                    .readTokens();
+                require(
+                    collateralToken == PT,
+                    FLError.FlashLeverage__InvalidCollateralToken()
+                );
+                _updatePendleMarket(collateralToken, config.pendleMarket);
+            }
+        }
+    }
+
+    /**
+     * @notice Updates the pendle router address
+     * @param pendleRouter The new pendle router address
+     * @dev Only callable by the contract owner. Validates that the new pendle router is not zero address.
+     */
+    function updatePendleRouter(address pendleRouter) external onlyOwner {
         require(
-            collateralToken != address(0),
+            pendleRouter != address(0),
             FLError.FlashLeverage__CannotBeZeroAddress()
         );
 
-        // Morpho market check
-        MarketParams memory marketParams = i_morpho.idToMarketParams(
-            Id.wrap(morphoMarketId)
-        );
+        _updatePendleRouter(pendleRouter);
+    }
+
+    /**
+     * @notice Adds a new valid swapRouter to execute the internal swaps
+     * @param swapRouter The new swapRouter address
+     * @dev Only callable by the contract owner. Validates that the new swap router is not zero address.
+     */
+    function addSwapRouter(address swapRouter) external onlyOwner {
         require(
-            collateralToken == marketParams.collateralToken,
-            FLError.FlashLeverage__InvalidCollateralToken()
+            swapRouter != address(0),
+            FLError.FlashLeverage__CannotBeZeroAddress()
         );
 
-        // Token Decimal check (only tokens with 18 decimals)
-        require(
-            IERC20Metadata(collateralToken).decimals() ==
-                Math.STANDARD_DECIMALS,
-            FLError.FlashLeverage__InvalidCollateralTokenDecimals()
-        );
-
-        _updateMarketParams(marketParams);
+        _addSwapRouter(swapRouter);
     }
 
     /**
@@ -319,8 +344,8 @@ contract FlashLeverage is
     }
 
     /// @notice onlyOwner
-    function setRecoveryMode(bool _enabled) external onlyOwner {
-        recoveryMode = _enabled;
+    function enableRecoveryMode(address userProxy) external onlyOwner {
+        UserProxy(userProxy).enableRecoveryMode();
     }
 
     /**
@@ -346,7 +371,6 @@ contract FlashLeverage is
         (
             ,
             address user,
-            uint256 desiredLtv,
             address collateralToken,
             address loanToken,
             uint256 amountCollateral,
@@ -362,7 +386,6 @@ contract FlashLeverage is
                 (
                     Action,
                     address,
-                    uint256,
                     address,
                     address,
                     uint256,
@@ -394,25 +417,19 @@ contract FlashLeverage is
         } else {
             amountSwappedCollateral = _swapTokenToToken(
                 loanToken,
-                collateralToken,
                 amountLoan,
-                swapData,
-                minTokenOut
+                swapData
             );
         }
+
+        require(
+            amountSwappedCollateral >= minTokenOut,
+            FLError.FlashLeverage__SlippageExceeded()
+        );
 
         // Position's final collateral after leveraging
         uint256 amountLeveragedCollateral = amountCollateral +
             amountSwappedCollateral;
-
-        // Revert if effective ltv is too high, accounting the slippage from swap
-        _revertIfEffectiveLtvTooHigh(
-            desiredLtv,
-            collateralToken,
-            loanToken,
-            amountLeveragedCollateral,
-            amountLoan
-        );
 
         // Supply total collateral and borrow loan token
         address userProxy = createUserProxy(user);
@@ -524,12 +541,15 @@ contract FlashLeverage is
         } else {
             amountSwappedLoanToken = _swapTokenToToken(
                 position.collateralToken,
-                position.loanToken,
                 position.amountLeveragedCollateral,
-                swapData,
-                minTokenOut
+                swapData
             );
         }
+
+        require(
+            amountSwappedLoanToken >= minTokenOut,
+            FLError.FlashLeverage__SlippageExceeded()
+        );
 
         // Repay the flash loan, with swapped loan token
         _forceApprove(position.loanToken, address(i_morpho), amountLoan);
@@ -562,39 +582,6 @@ contract FlashLeverage is
         _transferOut(position.loanToken, user, userAmountReturned);
 
         emit LeveragePositionClosed(user, positionId, userAmountReturned);
-    }
-
-    /**
-     * @dev Validates that the actual LTV after leverage/unleverage doesn't exceed the max LTV.
-     * @param collateralToken Address of the collateral token.
-     * @param loanToken Address of the loan token.
-     * @param amountCollateral Total amount of collateral after leverage/unleverage.
-     * @param amountLoan Amount Loan in loan token decimals
-     */
-    function _revertIfEffectiveLtvTooHigh(
-        uint256 desiredLtv,
-        address collateralToken,
-        address loanToken,
-        uint256 amountCollateral,
-        uint256 amountLoan
-    ) internal view {
-        uint256 amountCollateralInLoanToken = getCollateralValueInLoanToken(
-            collateralToken,
-            loanToken,
-            amountCollateral
-        );
-
-        amountLoan = amountLoan.scaleTo(
-            s_loanTokenDecimals[loanToken],
-            Math.STANDARD_DECIMALS
-        );
-
-        uint256 effectiveLtv = amountLoan.divDown(amountCollateralInLoanToken);
-
-        require(
-            effectiveLtv <= desiredLtv + SLIPPAGE_BUFFER,
-            FLError.FlashLeverage__EffectiveLtvTooHigh(desiredLtv, effectiveLtv)
-        );
     }
 
     function _getAmountCollateralInLoanToken(
@@ -672,7 +659,7 @@ contract FlashLeverage is
      * @param sharesToBurn Shares to be burned during unleveraging.
      * @return amountToBorrow Amount of loanToken needed for flashloan (scaled to loanToken decimals).
      */
-    function calcUnleverageFlashLoan(
+    function calcDeleverageFlashLoan(
         address collateralToken,
         address loanToken,
         uint256 sharesToBurn

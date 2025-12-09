@@ -26,9 +26,7 @@ abstract contract MarketPositionManager is
     /// @notice Enum defining available flashloan actions.
     enum Action {
         LEVERAGE,
-        LEVERAGE_PT,
-        UNLEVERAGE,
-        UNLEVERAGE_PT
+        UNLEVERAGE
     }
 
     /////////////////////////

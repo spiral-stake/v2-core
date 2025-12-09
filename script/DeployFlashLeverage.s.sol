@@ -4,34 +4,32 @@ pragma solidity 0.8.30;
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 import {FlashLeverage} from "../src/core/FlashLeverage/FlashLeverage.sol";
+import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
 
 contract DeployFlashLeverage is Script {
     function run(
         address morpho,
-        address swapRouter,
+        address pendleRouter,
+        address[] memory swapRouters,
         address treasury,
-        address[] memory collateralTokens,
-        bytes32[] memory morphoMarketIds
+        CollateralTokenConfig[] memory collateralTokens
     ) external returns (address flashLeverageAddress) {
         vm.startBroadcast();
 
         // Deploy
         FlashLeverage flashLeverage = new FlashLeverage(
             morpho,
-            swapRouter,
+            pendleRouter,
+            swapRouters,
             treasury
         );
 
         // Add supported collateral token
         for (uint256 i; i < collateralTokens.length; ++i) {
-            flashLeverage.addSupportedCollateralToken(
-                collateralTokens[i],
-                morphoMarketIds[i]
-            );
+            flashLeverage.addSupportedCollateralTokens(collateralTokens);
         }
 
         vm.stopBroadcast();
-
         return address(flashLeverage);
     }
 }
