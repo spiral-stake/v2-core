@@ -14,7 +14,7 @@ contract UserProxy {
     address public immutable flashLeverage;
     /// @notice Address of the Morpho contract to borrow and repay
     address public immutable morpho;
-    /// @notice Flag indicating whether recovery mode is active
+    /// @notice Flag indicating whether recovery mode is active for this proxy contract
     bool public recoveryMode;
 
     /// @notice Sets the immutable flashLeverage address

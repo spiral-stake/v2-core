@@ -13,22 +13,17 @@ interface IWETH {
 }
 
 contract Main is Script, WriteAddresses, Config {
-    ChainConfig private chain;
-    CollateralTokenConfig[] private collateralTokens;
-
-    function setUp() external {
-        chain = getChainConfig();
-        collateralTokens = getCollateralTokens();
+    function run() external returns (address flashLeverageAddress) {
+        ChainConfig memory chain = getChainConfig();
+        CollateralTokenConfig[] memory collateralTokens = getCollateralTokens();
 
         if (block.chainid == 31337) {
             vm.startBroadcast();
             IWETH(chain.WETH).deposit{value: 10 ether}();
             vm.stopBroadcast();
         }
-    }
 
-    function run() external returns (address flashLeverageAddress) {
-        flashLeverageAddress = _deployFlashLeverage(collateralTokens);
+        flashLeverageAddress = _deployFlashLeverage(chain, collateralTokens);
 
         _writeAddresses(
             chain.morpho,
@@ -40,6 +35,7 @@ contract Main is Script, WriteAddresses, Config {
     }
 
     function _deployFlashLeverage(
+        ChainConfig memory chain,
         CollateralTokenConfig[] memory collateralTokenConfig
     ) private returns (address flashLeverageAddress) {
         flashLeverageAddress = new DeployFlashLeverage().run(

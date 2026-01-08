@@ -1,7 +1,7 @@
 # Store the server PID for cleanup
 SERVER_PID_FILE := .server.pid
 
-test: start-server test-flashLeverage test-flashLeverageCore stop-server
+test: start-server test-flashLeverage stop-server
 
 start-server:
 	@echo "Starting swap-api server"
@@ -16,10 +16,6 @@ test-base:
 test-flashLeverage:
 	@echo "Testing FlashLeverage"
 	forge test --match-path test/FlashLeverage.t.sol --via-ir -vvv
-
-test-flashLeverageCore:
-	@echo "Testing FlashLeverageCore"
-	forge test --match-path test/FlashLeverageCore.t.sol --via-ir -vvv
 
 stop-server:
 	@echo "Stopping swap-api server"

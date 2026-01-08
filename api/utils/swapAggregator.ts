@@ -51,7 +51,7 @@ export async function getExternalSwapData(
     approxParams: res.contractCallParams[3],
     pendleSwap: res.contractCallParams[4].pendleSwap,
     tokenMintSy: res.contractCallParams[4].tokenMintSy,
-    minPtOut: BigInt(res.contractCallParams[2]),
+    minTokenOut: BigInt(res.contractCallParams[2]),
     swapData: res.contractCallParams[4].swapData,
     limitOrderData: res.contractCallParams[5],
   };
@@ -81,7 +81,7 @@ export async function getInternalSwapData(
     approxParams: res.contractCallParams[3],
     pendleSwap: res.contractCallParams[4].pendleSwap,
     tokenMintSy: res.contractCallParams[4].tokenMintSy,
-    minPtOut: BigInt(res.contractCallParams[2]),
+    minTokenOut: BigInt(res.contractCallParams[2]),
     swapData: res.contractCallParams[4].swapData,
     limitOrderData: res.contractCallParams[5],
   };

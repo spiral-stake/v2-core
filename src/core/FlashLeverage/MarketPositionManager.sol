@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 /// @title MarketPositionManager Abstract Contract
 /// @notice Handles core collateral and borrowing logic using the Morpho protocol.
-/// @dev This contract must be inherited and extended with leverage/unleverage logic.
+/// @dev This contract must be inherited and extended with leverage/deleverage logic.
 /// Integrates Morpho flashloans, supply/borrow/repay/withdraw flows, and market configuration.
 
 import {IMorphoFlashLoanCallback} from "@morpho/interfaces/IMorphoCallbacks.sol";
@@ -56,7 +56,7 @@ abstract contract MarketPositionManager is
 
     /**
      * @notice Morpho flashloan callback handler.
-     * @dev Delegates handling to either _handleLeverage or _handleUnleverage based on Action enum.
+     * @dev Delegates handling to either _handleLeverage or _handleDeleverage based on Action enum.
      * @param amountLoan Amount of flashloan received.
      * @param data Encoded data used to determine action and pass parameters.
      */
@@ -271,14 +271,14 @@ abstract contract MarketPositionManager is
     ) internal virtual {}
 
     /**
-     * @dev Called after receiving a flashloan for unleverage operation.
+     * @dev Called after receiving a flashloan for deleverage operation.
      * @param amountLoan Amount of flashloan received.
-     * @param data Encoded context for unleverage.
+     * @param data Encoded context for deleverage.
      */
     function _handleDeleverage(
         uint256 amountLoan,
         bytes calldata data
-    ) internal virtual returns (uint256 userAmountReturned) {}
+    ) internal virtual {}
 
     /////////////////////////
     // Public View Functions

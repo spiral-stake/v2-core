@@ -19,6 +19,11 @@ struct ChainConfig {
  */
 contract Config {
     function getChainConfig() internal view returns (ChainConfig memory chain) {
+        // Commons
+        chain.treasury = 0xeB90258b1F74a846F7941514C7c02Bb03EB249D5;
+        chain.swapRouters = new address[](1);
+        chain.swapRouters[0] = 0x6131B5fae19EA4f9D964eAc0408E4408b66337b5;
+
         if (block.chainid == 31337 || block.chainid == 1) {
             chain.morpho = 0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb;
             chain.pendleRouter = 0x888888888889758F76e7103c6CbF23ABbF58F946;
@@ -30,9 +35,6 @@ contract Config {
             chain.WETH = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;
             chain.USDC = 0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359;
         }
-
-        chain.swapRouters = new address[](1);
-        chain.swapRouters[0] = 0x6131B5fae19EA4f9D964eAc0408E4408b66337b5;
     }
 
     function getCollateralTokens()
@@ -41,43 +43,47 @@ contract Config {
         returns (CollateralTokenConfig[] memory tokenConfigs)
     {
         if (block.chainid == 31337 || block.chainid == 1) {
-            tokenConfigs = new CollateralTokenConfig[](4);
+            tokenConfigs = new CollateralTokenConfig[](3);
 
             /// STRICT NOTICE  ///
             /// Always put the PTs later ///
 
-            // wstETH
-            // USDC
-            tokenConfigs[0] = CollateralTokenConfig({
-                collateralToken: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0,
-                morphoMarketId: 0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc,
-                pendleMarket: address(0)
-            });
+            // // wstETH
+            // // WETH
+            // tokenConfigs[0] = CollateralTokenConfig({
+            //     collateralToken: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0,
+            //     morphoMarketId: 0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e,
+            //     pendleMarket: address(0)
+            // });
 
-            // wstETH
-            // WETH
-            tokenConfigs[1] = CollateralTokenConfig({
-                collateralToken: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0,
-                morphoMarketId: 0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e,
-                pendleMarket: address(0)
-            });
-
-            // stcUSD
-            // WETH
-            tokenConfigs[2] = CollateralTokenConfig({
-                collateralToken: 0x88887bE419578051FF9F4eb6C858A951921D8888,
-                morphoMarketId: 0xeb17955ea422baeddbfb0b8d8c9086c5be7a9cfdefb292119a102e981a30062e,
-                pendleMarket: address(0)
-            });
+            // // stcUSD
+            // // WETH
+            // tokenConfigs[1] = CollateralTokenConfig({
+            //     collateralToken: 0x88887bE419578051FF9F4eb6C858A951921D8888,
+            //     morphoMarketId: 0xeb17955ea422baeddbfb0b8d8c9086c5be7a9cfdefb292119a102e981a30062e,
+            //     pendleMarket: address(0)
+            // });
 
             // PTs after this //
 
-            // PT-stcUSD
+            // PT-snUSD
             // USDC
-            tokenConfigs[3] = CollateralTokenConfig({
+
+            tokenConfigs[0] = CollateralTokenConfig({
+                collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
+                morphoMarketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789,
+                pendleMarket: 0x307c15f808914Df5a5DbE17E5608f84953fFa023
+            });
+
+            tokenConfigs[1] = CollateralTokenConfig({
                 collateralToken: 0xC3c7E5E277d31CD24a3Ac4cC9af3B6770F30eA33,
                 morphoMarketId: 0x03f715ef1ae508ab3e1faf4dffdbf2a077d1f0ad10c5aad42cf4438d5e3328af,
                 pendleMarket: 0xCC781b043933c10a04409b22aaDa3a3D1A7f29D4
+            });
+            tokenConfigs[2] = CollateralTokenConfig({
+                collateralToken: 0x54Bf2659B5CdFd86b75920e93C0844c0364F5166,
+                morphoMarketId: 0x2a9a5c436719badcfadbad3ad8e8179a160ded758603eaa03a883f922a1790d3,
+                pendleMarket: 0x6D8C4DE7071D5AeE27fc3a810764E62a4a00Ceb9
             });
         } else if (block.chainid == 137) {
             tokenConfigs = new CollateralTokenConfig[](2);
@@ -100,22 +106,15 @@ contract Config {
         }
     }
 
-    function getTokenWhales()
+    function getCollateralTokenWhales()
         internal
         pure
         returns (address[] memory tokenWhales)
     {
-        tokenWhales = new address[](10);
+        tokenWhales = new address[](3);
 
-        tokenWhales[0] = 0xF087C34d81A552D2b82Fe67b8ac3e707a0aDc561; // PT-sUSDE
-        tokenWhales[1] = 0x8c31AF1388666aD031c45f25B31017eAAD4C5239; // PT-USDe
-        tokenWhales[2] = 0xfF43C5727FbFC31Cb96e605dFD7546eb8862064C; // PT-pUSDe
-        tokenWhales[3] = 0x66a4327C7D280aC317A23145a6DEEF1460EE29aC; // PT-USR (bal 100)
-        tokenWhales[4] = 0x5a407865411253E5A991d3e49E8Bc7A1FdBE82B0; // PT-rUSD (bal 9000)
-        tokenWhales[5] = 0x68e7E72938db36a5CBbCa7b52c71DBBaaDfB8264; // PT-cUSD
-        tokenWhales[6] = 0x1fDDD2218dEf78EE99bd2A5cBD8c5F263fbAe632; // PT-stcUSD
-        tokenWhales[7] = 0xc3A1bab8fef2767db914b8c22d0617933a91E3b0; // PT-cUSDL
-        tokenWhales[8] = 0x3c9Ea5C4Fec2A77E23Dd82539f4414266Fe8f757; // PT-cUSDO
-        tokenWhales[9] = 0xf3aC4D503991Ed1aBa52B03F7cB4e7B4210AB92C; // PT-fxSave
+        tokenWhales[0] = 0x8Cc5a546408C6cE3C9eeB99788F9EC3b8FA6b9F3; // PT-cUSD
+        tokenWhales[1] = 0x8Cc5a546408C6cE3C9eeB99788F9EC3b8FA6b9F3; // PT-stcUSD
+        tokenWhales[2] = 0x49E96E255bA418d08E66c35b588E2f2F3766E1d0; // PT-snUSD
     }
 }

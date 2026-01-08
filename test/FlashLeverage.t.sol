@@ -1,289 +1,489 @@
-// // SPDX-License-Identifier: GPL-3.0-or-later
-// pragma solidity 0.8.30;
+// SPDX-License-Identifier: GPL-3.0-or-later
+pragma solidity 0.8.30;
 
-// import "./TestBase.t.sol";
+import "./TestBase.t.sol";
 
-// /**
-//  * @title FlashLeverage Test Suite
-//  * @notice Test coverage for FlashLeverage contract functionality
-//  * @dev All tests follow the AAA (Arrange, Act, Assert) pattern for consistency
-//  */
-// contract TestFlashLeverage is TestBase {
-//     using Math for uint256;
+/**
+ * @title FlashLeverage Test Suite
+ * @notice Comprehensive test coverage for FlashLeverage contract functionality
+ * @dev Tests organized by functional areas: leveraging, deleveraging, access control, and views
+ * @dev All tests follow the AAA (Arrange, Act, Assert) pattern for consistency and readability
+ */
+contract TestFlashLeverage is TestBase {
+    using Math for uint256;
 
-//     /*//////////////////////////////////////////////////////////////
-//                         STATEFUL TESTING MODIFIERS
-//     //////////////////////////////////////////////////////////////*/
+    /*//////////////////////////////////////////////////////////////
+                        STATEFUL TESTING MODIFIERS
+    //////////////////////////////////////////////////////////////*/
 
-//     modifier withLeveragedPosition() {
-//         _setupLeverageConditions();
-//         _executeLeverageOperation();
-//         _;
-//     }
+    modifier withLeveragedPosition() {
+        _setupSuccessfulLeverageConditions();
+        _executeLeverageOperation();
+        _;
+    }
 
-//     /*//////////////////////////////////////////////////////////////
-//                            LEVERAGE TESTS
-//     //////////////////////////////////////////////////////////////*/
+    /*//////////////////////////////////////////////////////////////
+                           ACCESS CONTROL TESTS
+    //////////////////////////////////////////////////////////////*/
 
-//     function test_leverage_RevertsWhen_CollateralTokenUnsupported() external {
-//         // Arrange
-//         LeverageParams memory params = _buildDefaultLeverageParams();
-//         params.collateralToken = RANDOM_ADDRESS;
+    function test_addSupportedCollateralTokens() external {
+        // Arrange
+        address flOwner = fl.owner();
+        CollateralTokenConfig[]
+            memory newTokenConfig = new CollateralTokenConfig[](1);
 
-//         // Act & Assert
-//         vm.expectRevert(
-//             FLError.FlashLeverage__UnsupportedCollateralToken.selector
-//         );
-//         fl.leverage(USER, params);
-//     }
+        // Required
+        // PT-cUSD
+        newTokenConfig[0] = CollateralTokenConfig({
+            collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
+            morphoMarketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789,
+            pendleMarket: 0x307c15f808914Df5a5DbE17E5608f84953fFa023
+        });
 
-//     function test_leverage_RevertsWhen_CollateralAmountIsZero() external {
-//         // Arrange
-//         LeverageParams memory params = _buildDefaultLeverageParams();
-//         params.amountCollateral = 0;
+        // Act
+        vm.prank(flOwner);
+        fl.addSupportedCollateralTokens(newTokenConfig);
 
-//         // Act & Assert
-//         vm.expectRevert(FLError.FlashLeverage__AmountCannotBeZero.selector);
-//         fl.leverage(USER, params);
-//     }
+        // Assert
+        bool supported = fl.isSupportedCollateralToken(
+            newTokenConfig[0].collateralToken,
+            USDC
+        );
+        assertTrue(supported);
+    }
 
-//     function test_leverage_RevertsWhen_DesiredLtvExceedsMaxLtv() external {
-//         // Arrange
-//         LeverageParams memory params = _buildDefaultLeverageParams();
-//         uint256 EXCESSIVE_LTV = 90e16;
-//         params.desiredLtv = EXCESSIVE_LTV;
+    function test_addSupportedCollateralTokens_RevertsWhen_InvalidTokenConfiguration()
+        external
+    {
+        // Arrange
+        address flOwner = fl.owner();
+        CollateralTokenConfig[]
+            memory newTokenConfig = new CollateralTokenConfig[](1);
 
-//         // Act & Assert
-//         vm.expectRevert(FLError.FlashLeverage__ExceedsMaxLTV.selector);
-//         fl.leverage(USER, params);
-//     }
+        // Case 1 - Invalid Collateral Token for given morpho Market
+        newTokenConfig[0] = CollateralTokenConfig({
+            collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
+            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb,
+            pendleMarket: 0x307c15f808914Df5a5DbE17E5608f84953fFa023
+        });
 
-//     function test_leverage_SuccessfullyCreatesPosition() external {
-//         // Arrange
-//         _setupLeverageConditions();
+        // Act & Assert
+        vm.prank(flOwner);
+        vm.expectRevert(FLError.FlashLeverage__InvalidCollateralToken.selector);
+        fl.addSupportedCollateralTokens(newTokenConfig);
+    }
 
-//         // Act
-//         _executeLeverageOperation();
+    /*//////////////////////////////////////////////////////////////
+                           LEVERAGE FUNCTION TESTS
+    //////////////////////////////////////////////////////////////*/
 
-//         // Assert
-//         LeveragePosition memory leveragePosition = fl.getUserLeveragePosition(
-//             USER,
-//             0
-//         );
+    function test_leverage_RevertsWhen_CollateralTokenUnsupported() external {
+        // Arrange
+        LeverageParams memory params = _buildDefaultLeverageParams();
+        params.collateralToken = RANDOM_ADDRESS;
 
-//         CoreLeveragePosition memory coreLeveragePosition = flc
-//             .getUserCoreLeveragePosition(
-//                 USER,
-//                 DESIRED_LTV,
-//                 COLLATERAL_TOKEN,
-//                 LOAN_TOKEN
-//             );
+        // Act & Assert
+        vm.expectRevert(
+            FLError.FlashLeverage__UnsupportedCollateralToken.selector
+        );
+        vm.prank(address(fl));
+        fl.leverage(USER, params);
+    }
 
-//         assertEq(leveragePosition.open, true);
-//         assertEq(leveragePosition.desiredLtv, DESIRED_LTV);
-//         assertEq(leveragePosition.collateralToken, COLLATERAL_TOKEN);
-//         assertEq(leveragePosition.loanToken, LOAN_TOKEN);
-//         assertEq(leveragePosition.amountCollateral, AMOUNT_COLLATERAL);
-//         assertEq(
-//             leveragePosition.amountCollateralInLoanToken,
-//             flc
-//                 .getCollateralValueInLoanToken(
-//                     COLLATERAL_TOKEN,
-//                     LOAN_TOKEN,
-//                     AMOUNT_COLLATERAL
-//                 )
-//                 .scaleTo(Math.STANDARD_DECIMALS, LOAN_TOKEN_DECIMALS)
-//         );
-//         assertEq(
-//             leveragePosition.amountLeveragedCollateral,
-//             coreLeveragePosition.amountCollateral
-//         );
-//         assertEq(
-//             leveragePosition.sharesBorrowed,
-//             coreLeveragePosition.sharesBorrowed
-//         );
-//     }
+    function test_leverage_RevertsWhen_CollateralAmountIsZero() external {
+        // Arrange
+        LeverageParams memory params = _buildDefaultLeverageParams();
+        params.amountCollateral = 0;
 
-//     /*//////////////////////////////////////////////////////////////
-//                            UNLEVERAGE FUNCTION TESTS
-//     //////////////////////////////////////////////////////////////*/
+        // Act & Assert
+        vm.expectRevert(FLError.FlashLeverage__AmountCannotBeZero.selector);
+        vm.prank(address(fl));
+        fl.leverage(USER, params);
+    }
 
-//     function test_unleverage_RevertsWhen_PositionDoesNotExist() external {
-//         // Arrange
-//         uint256 positionId = 0;
-//         address pendleSwap;
-//         address tokenRedeemSy;
-//         uint256 minTokenOut;
-//         SwapData memory swapData;
-//         LimitOrderData memory limitOrderData;
+    function test_leverage_RevertsWhen_DesiredLtvExceedsMaxLtv() external {
+        // Arrange
+        LeverageParams memory params = _buildDefaultLeverageParams();
+        uint256 EXCESSIVE_LTV = 90e16;
+        params.desiredLtv = EXCESSIVE_LTV;
 
-//         // Act & Assert
-//         vm.expectRevert(FLError.FlashLeverage__PositionDoesNotExist.selector);
-//         fl.unleverage(
-//             USER,
-//             positionId,
-//             pendleSwap,
-//             tokenRedeemSy,
-//             minTokenOut,
-//             swapData,
-//             limitOrderData
-//         );
-//     }
+        // Act & Assert
+        vm.expectRevert(FLError.FlashLeverage__ExceedsMaxLTV.selector);
+        vm.prank(address(fl));
+        fl.leverage(USER, params);
+    }
 
-//     function test_unleverage_SucessfullyClosesPosition_AndRevertsForAlreadyClosedPosition()
-//         external
-//         withLeveragedPosition
-//     {
-//         // Arrange
-//         uint256 positionId = 0; // 1st position
-//         uint256 userLoanTokenBalBefore = IERC20(LOAN_TOKEN).balanceOf(USER);
-//         LeveragePosition memory positionBefore = fl.getUserLeveragePosition(
-//             USER,
-//             positionId
-//         );
+    function test_leverage_RevertsWhen_CollateralTransferFails() external {
+        // Arrange
+        LeverageParams memory params = _buildDefaultLeverageParams();
 
-//         // Act
-//         _executeUnleverageOperation(
-//             USER,
-//             positionId,
-//             positionBefore.amountLeveragedCollateral
-//         );
+        // Case 1: USER doesn't have sufficient allowance to the flashLeverage contract
+        // Act & Assert
+        vm.expectRevert("ERC20: insufficient allowance");
+        vm.prank(RANDOM_ADDRESS);
+        fl.leverage(USER, params);
 
-//         // Assert
-//         uint256 userLoanTokenBalAfter = IERC20(LOAN_TOKEN).balanceOf(USER);
-//         LeveragePosition memory positionAfter = fl.getUserLeveragePosition(
-//             USER,
-//             positionId
-//         );
-//         assertFalse(positionAfter.open);
+        // Case 2: USER doesn't have sufficient balance
+        // Act & Assert
+        vm.prank(RANDOM_ADDRESS);
+        IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
 
-//         // Check loan token balance for user has increased
-//         assertGt(userLoanTokenBalAfter, userLoanTokenBalBefore);
+        vm.expectRevert("ERC20: transfer amount exceeds balance");
+        vm.prank(RANDOM_ADDRESS);
+        fl.leverage(USER, params);
+    }
 
-//         // Revert for already closed position
-//         vm.expectRevert(
-//             FLError.FlashLeverage__PositionAlreadyUnleveraged.selector
-//         );
-//         _executeDefaultUnleverageOperation(USER, positionId);
-//     }
+    function test_leverage_SuccessfullyCreatesPosition() external {
+        // Arrange
+        _setupSuccessfulLeverageConditions();
 
-//     /*//////////////////////////////////////////////////////////////
-//                            VIEW FUNCTION TESTS
-//     //////////////////////////////////////////////////////////////*/
+        // Act
+        _executeLeverageOperation();
 
-//     function test_pendleRouterAddress_IsSetCorrectly() external view {
-//         // Arrange
-//         address expectedPendleRouter = pendleRouter;
+        // Assert
+        LeveragePosition memory position = fl.getUserLeveragePosition(USER, 0);
 
-//         // Act
-//         address actualPendleRouter = address(fl.i_pendleRouter());
+        // 1. Verify position creation
+        assertEq(position.open, true);
+        assertEq(position.amountCollateral, AMOUNT_COLLATERAL);
+        assertGt(position.sharesBorrowed, 0, "Shares Borrowed should be gt 0");
 
-//         // Assert
-//         assertEq(actualPendleRouter, expectedPendleRouter);
-//     }
+        // 3. Verify user position isolation through userProxy
+        address userProxy = position.userProxy;
+        Position memory morphoPosition = morpho.position(
+            Id.wrap(tokenConfigs[TOKEN_INDEX].morphoMarketId),
+            userProxy
+        );
 
-//     function test_flashLeverageCoreAddress_IsSetCorrectly() external view {
-//         // Arrange
-//         address expectedFlashLeverage = address(flc);
+        assertEq(
+            morphoPosition.collateral,
+            position.amountLeveragedCollateral,
+            "Morpho position collateral should match core position"
+        );
+        assertEq(
+            morphoPosition.borrowShares,
+            position.sharesBorrowed,
+            "Morpho position shares should match core position"
+        );
+    }
 
-//         // Act
-//         address actualFlashLeverageCore = address(fl.i_flashLeverageCore());
+    /*//////////////////////////////////////////////////////////////
+                           UNLEVERAGE FUNCTION TESTS
+    //////////////////////////////////////////////////////////////*/
 
-//         // Assert
-//         assertEq(actualFlashLeverageCore, expectedFlashLeverage);
-//     }
+    function test_deleverage_SuccessfullyClosesPosition_AndRevertsForAlreadyClosedPosition()
+        external
+        withLeveragedPosition
+    {
+        uint256 positionId = 0;
+        // Arrange
+        LeveragePosition memory positionBefore = fl.getUserLeveragePosition(
+            USER,
+            positionId
+        );
 
-//     function test_treasuryAddress_IsSetCorrectly() external view {
-//         // Arrange
-//         address expectedTreasury = treasury;
+        // Act
+        _executeDeleverageOperation(
+            positionId,
+            positionBefore.amountLeveragedCollateral
+        );
 
-//         // Act
-//         address actualTreasury = fl.getTreasury();
+        // Assert
+        LeveragePosition memory positionAfter = fl.getUserLeveragePosition(
+            USER,
+            positionId
+        );
+        assertEq(positionAfter.open, false);
 
-//         // Assert
-//         assertEq(actualTreasury, expectedTreasury);
-//     }
+        // Revert for already closed position
+        vm.expectRevert(FLError.FlashLeverage__PositionAlreadyClosed.selector);
+        _executeDefaultDeleverageOperation(positionId);
+    }
 
-//     function test_isSupportedCollateralToken_CorrectlyIdentifiesTokens()
-//         external
-//     {
-//         // Arrange & Act & Assert
-//         for (uint256 i; i < tokenConfigs.length; ++i) {
-//             address collateralToken = tokenConfigs[i].collateralToken;
-//             assertTrue(fl.isSupportedCollateralToken(collateralToken));
-//         }
+    function test_deleverage_RevertsWhen_PositionDoesNotExist() external {
+        // Act & Assert
+        vm.expectRevert("panic: array out-of-bounds access (0x32)");
+        _executeDefaultDeleverageOperation(0);
+    }
 
-//         // For unsupported collateral token
-//         address unsupportedCollateralToken = makeAddr("randomAddress");
-//         assertFalse(fl.isSupportedCollateralToken(unsupportedCollateralToken));
-//     }
+    /*//////////////////////////////////////////////////////////////
+                         FLASHLOAN CALLBACK TESTS
+    //////////////////////////////////////////////////////////////*/
 
-//     /*//////////////////////////////////////////////////////////////
-//                            HELPER FUNCTIONS
-//     //////////////////////////////////////////////////////////////*/
+    function test_flashLoanCallback_RevertsWhen_CalledDirectly() external {
+        // Arrange
+        uint256 amountLoan = 100e18;
+        bytes memory data = "0x";
 
-//     function _setupLeverageConditions() internal {
-//         vm.prank(USER);
-//         IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
-//     }
+        // Act & Assert
+        vm.expectRevert(FLError.FlashLeverage__UntrustedLender.selector);
+        fl.onMorphoFlashLoan(amountLoan, data);
+    }
 
-//     function _executeLeverageOperation() internal {
-//         // Arrange
-//         bytes memory leverageCallData = getLeverageCalldata(
-//             USER,
-//             DESIRED_LTV,
-//             COLLATERAL_TOKEN,
-//             LOAN_TOKEN,
-//             AMOUNT_COLLATERAL
-//         );
+    function test_flashLoanCallback_RevertsWhen_CalledWithInvalidData()
+        external
+    {
+        // Arrange
+        uint256 amountLoan = 100e18;
+        bytes memory data = "0x"; // Invalid data format
 
-//         vm.prank(USER);
-//         IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
+        // Act & Assert
+        vm.expectRevert();
+        vm.prank(address(morpho));
+        fl.onMorphoFlashLoan(amountLoan, data);
+    }
 
-//         // Act
-//         vm.prank(USER);
-//         (bool success, ) = address(fl).call(leverageCallData);
+    /*//////////////////////////////////////////////////////////////
+                         USER PROXY TESTS
+    //////////////////////////////////////////////////////////////*/
 
-//         // Assert
-//         require(success, "Leverage Call Failed");
-//     }
+    function test_userProxy_OnlyExecutableByFlashLeverage() external {
+        // Arrange
+        UserProxy userProxy = UserProxy(fl.i_userProxyImplementation());
 
-//     function _executeUnleverageOperation(
-//         address user,
-//         uint256 positionId,
-//         uint256 amountLeveragedCollateral
-//     ) internal {
-//         bytes memory callData = getUnleverageCalldata(
-//             user,
-//             positionId,
-//             COLLATERAL_TOKEN,
-//             amountLeveragedCollateral
-//         );
+        // Should revert when called by anyone else
+        vm.expectRevert("UserProxy: Unauthorised");
+        userProxy.execute("0x");
+    }
 
-//         vm.prank(USER);
-//         (bool success, ) = address(fl).call(callData);
-//         require(success, "Unleverage operation failed");
-//     }
+    /*//////////////////////////////////////////////////////////////
+                           VIEW FUNCTION TESTS
+    //////////////////////////////////////////////////////////////*/
 
-//     function _executeDefaultUnleverageOperation(
-//         address user,
-//         uint256 positionId
-//     ) internal {
-//         address pendleSwap;
-//         address tokenRedeemSy;
-//         uint256 minTokenOut;
-//         SwapData memory swapData;
-//         LimitOrderData memory limitOrderData;
+    function test_contractAddresses_AreSetCorrectly() external view {
+        // Arrange
+        // Contract should be properly initialized
 
-//         vm.prank(USER);
-//         fl.unleverage(
-//             user,
-//             positionId,
-//             pendleSwap,
-//             tokenRedeemSy,
-//             minTokenOut,
-//             swapData,
-//             limitOrderData
-//         );
-//     }
-// }
+        // Act
+        address morphoAddress = address(fl.i_morpho());
+        address pendleRouterAddress = address(fl.s_pendleRouter());
+        address proxyImplementation = fl.i_userProxyImplementation();
+
+        // Assert
+        assertEq(morphoAddress, address(morpho), "Morpho address should match");
+        assertEq(
+            pendleRouterAddress,
+            pendleRouter,
+            "Pendle router address should match"
+        );
+        assertNotEq(
+            proxyImplementation,
+            address(0),
+            "User proxy implementation should be set"
+        );
+    }
+
+    function test_getLiqLtv_ReturnsCorrectValue() external view {
+        // Arrange
+        CollateralTokenConfig memory config = tokenConfigs[TOKEN_INDEX];
+        MarketParams memory marketParams = morpho.idToMarketParams(
+            Id.wrap(config.morphoMarketId)
+        );
+
+        // Act
+        uint256 actualLiqLtv = fl.getLiqLtv(
+            config.collateralToken,
+            marketParams.loanToken
+        );
+
+        // Assert
+        assertEq(
+            actualLiqLtv,
+            marketParams.lltv,
+            "Liquidation LTV should match market parameters"
+        );
+    }
+
+    function test_getMaxLtv_ReturnsLiqLtvMinusBuffer() external view {
+        // Arrange
+        CollateralTokenConfig memory config = tokenConfigs[TOKEN_INDEX];
+        MarketParams memory marketParams = morpho.idToMarketParams(
+            Id.wrap(config.morphoMarketId)
+        );
+        uint256 liquidationBuffer = fl.LIQUIDATION_BUFFER();
+        uint256 expectedMaxLtv = marketParams.lltv - liquidationBuffer;
+
+        // Act
+        uint256 actualMaxLtv = fl.getMaxLtv(
+            config.collateralToken,
+            marketParams.loanToken
+        );
+
+        // Assert
+        assertEq(
+            actualMaxLtv,
+            expectedMaxLtv,
+            "Max LTV should equal liquidation LTV minus buffer"
+        );
+    }
+
+    function test_getCollateralValueInLoanToken_CalculatesCorrectly()
+        external
+        view
+    {
+        // Arrange & Act & Assert
+        // Test across multiple token configurations for comprehensive coverage
+        for (uint256 i; i < tokenConfigs.length; ++i) {
+            CollateralTokenConfig memory config = tokenConfigs[i];
+            MarketParams memory marketParams = morpho.idToMarketParams(
+                Id.wrap(config.morphoMarketId)
+            );
+
+            uint256 amountCollateral = 10e18;
+            address loanToken = marketParams.loanToken;
+            uint8 loanTokenDecimals = IERC20Metadata(loanToken).decimals();
+
+            // Calculate expected value using oracle price
+            uint256 expectedValue = IOracle(marketParams.oracle)
+                .price()
+                .mulDown(amountCollateral)
+                .scaleTo(
+                    Math.STANDARD_DECIMALS + loanTokenDecimals,
+                    Math.STANDARD_DECIMALS
+                );
+
+            uint256 actualValue = fl.getCollateralValueInLoanToken(
+                config.collateralToken,
+                loanToken,
+                amountCollateral
+            );
+
+            assertEq(
+                actualValue,
+                expectedValue,
+                string(
+                    abi.encodePacked(
+                        "Collateral value calculation failed for token ",
+                        vm.toString(i)
+                    )
+                )
+            );
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        FLASH LOAN CALCULATION TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    function test_calcLeverageFlashLoan_ReturnsCorrectAmount() external view {
+        // Arrange
+        uint256 collateralValue = fl.getCollateralValueInLoanToken(
+            COLLATERAL_TOKEN,
+            LOAN_TOKEN,
+            AMOUNT_COLLATERAL
+        );
+        uint256 expectedAmount = ((
+            collateralValue.divDown(Math.ONE - DESIRED_LTV)
+        ) - collateralValue).scaleTo(
+                Math.STANDARD_DECIMALS,
+                LOAN_TOKEN_DECIMALS
+            );
+
+        // Act
+        uint256 actualAmount = fl.calcLeverageFlashLoan(
+            DESIRED_LTV,
+            COLLATERAL_TOKEN,
+            LOAN_TOKEN,
+            AMOUNT_COLLATERAL
+        );
+
+        // Assert
+        assertEq(
+            actualAmount,
+            expectedAmount,
+            "Flash loan amount calculation should be correct"
+        );
+    }
+
+    function test_calcLeverageFlashLoan_ProducesDesiredLtv() external view {
+        // Arrange
+        uint256 collateralValue = fl
+            .getCollateralValueInLoanToken(
+                COLLATERAL_TOKEN,
+                LOAN_TOKEN,
+                AMOUNT_COLLATERAL
+            )
+            .scaleTo(Math.STANDARD_DECIMALS, LOAN_TOKEN_DECIMALS);
+
+        // Act
+        uint256 loanAmount = fl.calcLeverageFlashLoan(
+            DESIRED_LTV,
+            COLLATERAL_TOKEN,
+            LOAN_TOKEN,
+            AMOUNT_COLLATERAL
+        );
+
+        uint256 actualLtv = loanAmount.divDown(collateralValue + loanAmount);
+
+        // Assert
+        assertEq(
+            actualLtv.scaleTo(Math.STANDARD_DECIMALS, LOAN_TOKEN_DECIMALS),
+            DESIRED_LTV.scaleTo(Math.STANDARD_DECIMALS, LOAN_TOKEN_DECIMALS),
+            "Calculated LTV should match desired LTV"
+        );
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            HELPER FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    function _setupSuccessfulLeverageConditions() internal {
+        vm.prank(USER);
+        IERC20(COLLATERAL_TOKEN).transfer(address(fl), AMOUNT_COLLATERAL);
+
+        vm.prank(address(fl));
+        IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
+    }
+
+    function _executeLeverageOperation() internal {
+        bytes memory callData = getLeverageCalldata(
+            USER,
+            DESIRED_LTV,
+            COLLATERAL_TOKEN,
+            LOAN_TOKEN,
+            AMOUNT_COLLATERAL
+        );
+
+        vm.startPrank(USER);
+
+        IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
+        (bool success, ) = address(fl).call(callData);
+        require(success, "Leverage operation failed");
+        vm.stopPrank();
+    }
+
+    function _executeDeleverageOperation(
+        uint256 positionId,
+        uint256 amountLeveragedCollateral
+    ) internal {
+        bytes memory callData = getDeleverageCalldata(
+            positionId,
+            COLLATERAL_TOKEN,
+            amountLeveragedCollateral
+        );
+
+        vm.prank(USER);
+        (bool success, ) = address(fl).call(callData);
+        require(success, "Deleverage operation failed");
+    }
+
+    function _executeDefaultDeleverageOperation(uint256 positionId) internal {
+        address pendleSwap;
+        address tokenRedeemSy;
+        uint256 minTokenOut;
+        SwapData memory swapData;
+        LimitOrderData memory limitOrderData;
+
+        vm.prank(USER);
+        fl.deleverage(
+            positionId,
+            DeleverageParams({
+                pendleSwap: pendleSwap,
+                tokenRedeemSy: tokenRedeemSy,
+                minTokenOut: minTokenOut,
+                swapData: swapData,
+                limitOrderData: limitOrderData
+            })
+        );
+    }
+}

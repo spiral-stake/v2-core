@@ -136,7 +136,7 @@ contract FlashLeverage is
         MarketPositionManager(morphoAddress)
         SwapManager(pendleRouter, swapRouters)
     {
-        if (morphoAddress == address(0)) {
+        if (morphoAddress == address(0) || treasury == address(0)) {
             revert FLError.FlashLeverage__CannotBeZeroAddress();
         }
 
@@ -161,7 +161,17 @@ contract FlashLeverage is
     function leverage(
         address onBehalfOf,
         LeverageParams calldata params
-    ) external {
+    )
+        external
+        validateOnBehalfOf(onBehalfOf)
+        validateCollateralToken(params.collateralToken, params.loanToken)
+        validateAmount(params.amountCollateral)
+        validateDesiredLtv(
+            params.desiredLtv,
+            params.collateralToken,
+            params.loanToken
+        )
+    {
         _transferIn(
             params.collateralToken,
             msg.sender,
@@ -199,8 +209,10 @@ contract FlashLeverage is
     function deleverage(
         uint256 positionId,
         DeleverageParams memory params
-    ) external {
-        LeveragePosition storage position = s_userLeveragePositions[msg.sender][
+    ) external returns (uint256) {
+        address user = msg.sender;
+
+        LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
         ];
 
@@ -215,7 +227,7 @@ contract FlashLeverage is
         );
         bytes memory data = abi.encode(
             Action.UNLEVERAGE,
-            msg.sender, // user
+            user, // user
             positionId,
             params.swapData,
             params.minTokenOut,
@@ -225,6 +237,9 @@ contract FlashLeverage is
             params.limitOrderData
         );
         i_morpho.flashLoan(position.loanToken, amountFlashLoan, data);
+
+        return
+            s_userLeveragePositions[user][positionId].amountReturnedInLoanToken;
     }
 
     /**
@@ -335,14 +350,6 @@ contract FlashLeverage is
         s_yieldFee = newYieldFee;
     }
 
-    /**
-     * @notice Recovers any ERC20 tokens accidentally sent to this contract
-     * @param token The address of the token to recover
-     */
-    function recover(address token) external onlyOwner {
-        _transferOut(token, msg.sender, _selfBalance(token));
-    }
-
     /// @notice onlyOwner
     function enableRecoveryMode(address userProxy) external onlyOwner {
         UserProxy(userProxy).enableRecoveryMode();
@@ -417,15 +424,12 @@ contract FlashLeverage is
         } else {
             amountSwappedCollateral = _swapTokenToToken(
                 loanToken,
+                collateralToken,
                 amountLoan,
-                swapData
+                swapData,
+                minTokenOut
             );
         }
-
-        require(
-            amountSwappedCollateral >= minTokenOut,
-            FLError.FlashLeverage__SlippageExceeded()
-        );
 
         // Position's final collateral after leveraging
         uint256 amountLeveragedCollateral = amountCollateral +
@@ -445,11 +449,11 @@ contract FlashLeverage is
         _forceApprove(loanToken, address(i_morpho), amountLoan);
 
         // Position Tracking Related: Amount Collateral Deposited in loan token
-        uint256 amountCollateralInLoanToken = _getAmountCollateralInLoanToken(
+        uint256 amountDepositedInLoanToken = getCollateralValueInLoanToken(
             collateralToken,
             loanToken,
             amountCollateral
-        );
+        ).scaleTo(Math.STANDARD_DECIMALS, IERC20Metadata(loanToken).decimals());
 
         // Add new Leverage Position for user
         uint256 positionId = s_userLeveragePositions[user].length;
@@ -462,14 +466,15 @@ contract FlashLeverage is
                 amountLeveragedCollateral: amountLeveragedCollateral,
                 sharesBorrowed: sharesBorrowed,
                 userProxy: userProxy,
-                amountCollateralInLoanToken: amountCollateralInLoanToken
+                amountDepositedInLoanToken: amountDepositedInLoanToken,
+                amountReturnedInLoanToken: 0
             })
         );
 
         emit LeveragePositionOpened(
             user,
             positionId,
-            amountCollateralInLoanToken
+            amountDepositedInLoanToken
         );
     }
 
@@ -478,12 +483,12 @@ contract FlashLeverage is
      * @dev Repays existing borrow, withdraws collateral, swaps it to the loan token,
      *      repays the flashloan, and returns excess (initial collateral + leveraged yield)
      * @param amountLoan Amount borrowed via flashloan for debt repayment.
-     * @param data Encoded unleverage action data.
+     * @param data Encoded deleverage action data.
      */
     function _handleDeleverage(
         uint256 amountLoan,
         bytes calldata data
-    ) internal override nonReentrant returns (uint256 userAmountReturned) {
+    ) internal override nonReentrant {
         (
             ,
             address user,
@@ -509,10 +514,9 @@ contract FlashLeverage is
                 )
             );
 
-        LeveragePosition memory position = getUserLeveragePosition(
-            user,
+        LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
-        );
+        ];
 
         // Close the position's existing loan, with the flashloan, to withdraw position's required collateral
         _repayAndWithdrawCollateralViaProxy(
@@ -541,15 +545,12 @@ contract FlashLeverage is
         } else {
             amountSwappedLoanToken = _swapTokenToToken(
                 position.collateralToken,
+                position.loanToken,
                 position.amountLeveragedCollateral,
-                swapData
+                swapData,
+                minTokenOut
             );
         }
-
-        require(
-            amountSwappedLoanToken >= minTokenOut,
-            FLError.FlashLeverage__SlippageExceeded()
-        );
 
         // Repay the flash loan, with swapped loan token
         _forceApprove(position.loanToken, address(i_morpho), amountLoan);
@@ -562,7 +563,7 @@ contract FlashLeverage is
         }
 
         // All calculation are in loanToken decimals
-        uint256 userAmountDeposited = position.amountCollateralInLoanToken;
+        uint256 amountDeposited = position.amountDepositedInLoanToken;
         uint8 loanTokenDecimals = s_loanTokenDecimals[position.loanToken];
         uint256 yieldFee = s_yieldFee.scaleTo(
             Math.STANDARD_DECIMALS,
@@ -571,47 +572,18 @@ contract FlashLeverage is
 
         // Handle yield fee calculation and transfer
         uint256 amountFee;
-        if (totalAmountReturned > userAmountDeposited) {
-            uint256 yieldGenerated = totalAmountReturned - userAmountDeposited;
+        if (totalAmountReturned > amountDeposited) {
+            uint256 yieldGenerated = totalAmountReturned - amountDeposited;
             amountFee = (yieldGenerated * yieldFee) / (10 ** loanTokenDecimals);
             _transferOut(position.loanToken, s_treasury, amountFee);
         }
 
         // Transfer remaining amount to user
-        userAmountReturned = (totalAmountReturned - amountFee);
-        _transferOut(position.loanToken, user, userAmountReturned);
+        uint256 amountReturned = (totalAmountReturned - amountFee);
+        _transferOut(position.loanToken, user, amountReturned);
 
-        emit LeveragePositionClosed(user, positionId, userAmountReturned);
-    }
-
-    function _getAmountCollateralInLoanToken(
-        address collateralToken,
-        address loanToken,
-        uint256 amountCollateral
-    ) internal view returns (uint256) {
-        return
-            getCollateralValueInLoanToken(
-                collateralToken,
-                loanToken,
-                amountCollateral
-            ).scaleTo(
-                    Math.STANDARD_DECIMALS,
-                    IERC20Metadata(loanToken).decimals()
-                );
-    }
-
-    function _transferBackRemaining(
-        address token,
-        uint256 actualSwapped,
-        uint256 expectedAmount
-    ) internal {
-        if (actualSwapped > expectedAmount) {
-            uint256 amountRemaining;
-            unchecked {
-                amountRemaining = actualSwapped - expectedAmount;
-            }
-            _transferOut(token, msg.sender, amountRemaining);
-        }
+        position.amountReturnedInLoanToken = amountReturned;
+        emit LeveragePositionClosed(user, positionId, amountReturned);
     }
 
     /////////////////////////

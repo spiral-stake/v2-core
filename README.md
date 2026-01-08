@@ -20,7 +20,7 @@ Morpho Markets - Morpho serves as our primary lending protocol for the following
 1. FlashLeverageCore - The core engine that handles the logic for our FlashLeverage mechanism
    Key Functions:
    a. leverage()
-   b. unleverage()
+   b. deleverage()
    c. calcFlashLoanAmount()
    d. getCoreLeveragePosition()
    e. getSafeLtv
@@ -29,7 +29,7 @@ Morpho Markets - Morpho serves as our primary lending protocol for the following
    Key Functions:
    a. leverage()
    b. swapAndLeverage()
-   c. unleverage()
+   c. deleverage()
    d. getUserLeveragePositions()
 
 ### FlashLeverage Mechanism

@@ -4,7 +4,6 @@ pragma solidity 0.8.30;
 /**
  * @title SwapAggregator
  * @notice SwapAggregator is the contract that facilatates the token swaps via aggregator(s)
- * @dev Currently only using kyberswap
  */
 
 import {IPAllActionV3, ApproxParams, TokenInput, TokenOutput, SwapData, LimitOrderData} from "@pendle/core-v2/contracts/interfaces/IPAllActionV3.sol";
@@ -15,8 +14,8 @@ contract SwapManager is TokenHelper {
     /////////////////////////
     // Storage
 
+    // Pendle router and PT specific pendle market
     IPAllActionV3 public s_pendleRouter;
-
     mapping(address collateralToken => address pendleMarket)
         public s_pendleMarket;
 
@@ -32,19 +31,20 @@ contract SwapManager is TokenHelper {
     }
 
     function _swapTokenToToken(
-        address tokenIn, // For approval
-        uint256 amountIn, // For approval
-        SwapData memory swapData
-    ) internal returns (uint256 returnAmount) {
-        require(s_isSwapRouter[swapData.extRouter], "Unsupported Swap Router");
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        SwapData memory swapData,
+        uint256 minTokenOut
+    ) internal returns (uint256 amountOut) {
+        require(s_isSwapRouter[swapData.extRouter], "Unsupported Swap Router"); // For Auditor: Is this check required?
 
         _forceApprove(tokenIn, address(swapData.extRouter), amountIn);
-        (bool success, bytes memory result) = swapData.extRouter.call(
-            swapData.extCalldata
-        );
+        (bool success, ) = swapData.extRouter.call(swapData.extCalldata);
+        require(success, "Swap Router Call Failed");
 
-        require(success, "Swap router call failed");
-        (returnAmount, ) = abi.decode(result, (uint256, uint256));
+        amountOut = _selfBalance(tokenOut);
+        require(amountOut >= minTokenOut, "minTokenOut Not Met");
     }
 
     /**
