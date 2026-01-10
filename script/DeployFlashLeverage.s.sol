@@ -9,7 +9,6 @@ import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.s
 contract DeployFlashLeverage is Script {
     function run(
         address morpho,
-        address pendleRouter,
         address[] memory swapRouters,
         address treasury,
         CollateralTokenConfig[] memory collateralTokens
@@ -17,16 +16,16 @@ contract DeployFlashLeverage is Script {
         vm.startBroadcast();
 
         // Deploy
-        FlashLeverage flashLeverage = new FlashLeverage(
-            morpho,
-            pendleRouter,
-            swapRouters,
-            treasury
-        );
+        FlashLeverage flashLeverage = new FlashLeverage(morpho, treasury);
 
         // Add supported collateral token
         for (uint256 i; i < collateralTokens.length; ++i) {
-            flashLeverage.addSupportedCollateralTokens(collateralTokens);
+            flashLeverage.addSupportedCollateralToken(collateralTokens[i]);
+        }
+
+        // Add swap routers
+        for (uint256 i; i < swapRouters.length; ++i) {
+            flashLeverage.addSwapRouter(swapRouters[i]);
         }
 
         vm.stopBroadcast();

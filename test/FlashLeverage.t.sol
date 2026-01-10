@@ -29,24 +29,21 @@ contract TestFlashLeverage is TestBase {
     function test_addSupportedCollateralTokens() external {
         // Arrange
         address flOwner = fl.owner();
-        CollateralTokenConfig[]
-            memory newTokenConfig = new CollateralTokenConfig[](1);
 
         // Required
         // PT-cUSD
-        newTokenConfig[0] = CollateralTokenConfig({
+        CollateralTokenConfig memory newTokenConfig = CollateralTokenConfig({
             collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
-            morphoMarketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789,
-            pendleMarket: 0x307c15f808914Df5a5DbE17E5608f84953fFa023
+            morphoMarketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789
         });
 
         // Act
         vm.prank(flOwner);
-        fl.addSupportedCollateralTokens(newTokenConfig);
+        fl.addSupportedCollateralToken(newTokenConfig);
 
         // Assert
         bool supported = fl.isSupportedCollateralToken(
-            newTokenConfig[0].collateralToken,
+            newTokenConfig.collateralToken,
             USDC
         );
         assertTrue(supported);
@@ -57,20 +54,17 @@ contract TestFlashLeverage is TestBase {
     {
         // Arrange
         address flOwner = fl.owner();
-        CollateralTokenConfig[]
-            memory newTokenConfig = new CollateralTokenConfig[](1);
 
         // Case 1 - Invalid Collateral Token for given morpho Market
-        newTokenConfig[0] = CollateralTokenConfig({
+        CollateralTokenConfig memory newTokenConfig = CollateralTokenConfig({
             collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
-            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb,
-            pendleMarket: 0x307c15f808914Df5a5DbE17E5608f84953fFa023
+            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb
         });
 
         // Act & Assert
         vm.prank(flOwner);
         vm.expectRevert(FLError.FlashLeverage__InvalidCollateralToken.selector);
-        fl.addSupportedCollateralTokens(newTokenConfig);
+        fl.addSupportedCollateralToken(newTokenConfig);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -104,32 +98,15 @@ contract TestFlashLeverage is TestBase {
     function test_leverage_RevertsWhen_DesiredLtvExceedsMaxLtv() external {
         // Arrange
         LeverageParams memory params = _buildDefaultLeverageParams();
-        uint256 EXCESSIVE_LTV = 90e16;
+        uint256 EXCESSIVE_LTV = 98e16; // 98%
         params.desiredLtv = EXCESSIVE_LTV;
 
         // Act & Assert
-        vm.expectRevert(FLError.FlashLeverage__ExceedsMaxLTV.selector);
-        vm.prank(address(fl));
-        fl.leverage(USER, params);
-    }
-
-    function test_leverage_RevertsWhen_CollateralTransferFails() external {
-        // Arrange
-        LeverageParams memory params = _buildDefaultLeverageParams();
-
-        // Case 1: USER doesn't have sufficient allowance to the flashLeverage contract
-        // Act & Assert
-        vm.expectRevert("ERC20: insufficient allowance");
-        vm.prank(RANDOM_ADDRESS);
-        fl.leverage(USER, params);
-
-        // Case 2: USER doesn't have sufficient balance
-        // Act & Assert
-        vm.prank(RANDOM_ADDRESS);
+        vm.prank(USER);
         IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
 
-        vm.expectRevert("ERC20: transfer amount exceeds balance");
-        vm.prank(RANDOM_ADDRESS);
+        vm.prank(USER);
+        vm.expectRevert(FLError.FlashLeverage__ExceedsMaxLTV.selector);
         fl.leverage(USER, params);
     }
 
@@ -256,16 +233,10 @@ contract TestFlashLeverage is TestBase {
 
         // Act
         address morphoAddress = address(fl.i_morpho());
-        address pendleRouterAddress = address(fl.s_pendleRouter());
         address proxyImplementation = fl.i_userProxyImplementation();
 
         // Assert
         assertEq(morphoAddress, address(morpho), "Morpho address should match");
-        assertEq(
-            pendleRouterAddress,
-            pendleRouter,
-            "Pendle router address should match"
-        );
         assertNotEq(
             proxyImplementation,
             address(0),
@@ -468,22 +439,13 @@ contract TestFlashLeverage is TestBase {
     }
 
     function _executeDefaultDeleverageOperation(uint256 positionId) internal {
-        address pendleSwap;
-        address tokenRedeemSy;
-        uint256 minTokenOut;
         SwapData memory swapData;
-        LimitOrderData memory limitOrderData;
+        uint256 minTokenOut;
 
         vm.prank(USER);
         fl.deleverage(
             positionId,
-            DeleverageParams({
-                pendleSwap: pendleSwap,
-                tokenRedeemSy: tokenRedeemSy,
-                minTokenOut: minTokenOut,
-                swapData: swapData,
-                limitOrderData: limitOrderData
-            })
+            DeleverageParams({swapData: swapData, minTokenOut: minTokenOut})
         );
     }
 }

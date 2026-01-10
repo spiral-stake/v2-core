@@ -5,8 +5,7 @@ libs = ["lib"]
 remappings = [
     "@openzeppelin=lib/openzeppelin-contracts",
     "@chainlink=lib/chainlink",
-    "@morpho=lib/morpho-blue/src",
-    "@pendle/core-v2=lib/pendle-core-v2-public",
+    "@morpho=lib/morpho-blue/src"
 ]
 fs_permissions = [{ access = "write", path = "../" }]
 solc_version = "0.8.30"

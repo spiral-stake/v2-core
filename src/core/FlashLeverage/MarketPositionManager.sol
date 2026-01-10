@@ -249,7 +249,7 @@ abstract contract MarketPositionManager is
 
     /**
      * @notice Updates market parameters for a collateral token using Morpho's market ID.
-     * @param params Morpho market params for PT collateral token
+     * @param params Morpho market params for collateral token
      */
     function _updateMarketParams(MarketParams memory params) internal {
         s_marketParams[params.collateralToken][params.loanToken] = params;

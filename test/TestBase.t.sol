@@ -14,7 +14,6 @@ import "../src/core/FlashLeverage/FlashLeverage.sol";
 contract TestBase is Test, WriteAddresses, Config {
     FlashLeverage fl;
     IMorpho morpho;
-    address pendleRouter;
     CollateralTokenConfig[] tokenConfigs;
     address[] tokenWhales;
     address treasury;
@@ -25,10 +24,10 @@ contract TestBase is Test, WriteAddresses, Config {
                                CONSTANTS & IMMUTABLES
     //////////////////////////////////////////////////////////////*/
 
-    uint256 internal constant AMOUNT_COLLATERAL = 1000e18; // 10k
+    uint256 internal constant AMOUNT_COLLATERAL = 10000e18; // 10k
     uint256 internal constant DESIRED_LTV = 70e16; // 70%
 
-    uint256 internal constant TOKEN_INDEX = 0;
+    uint256 internal constant TOKEN_INDEX = 2; // Collateral Token to run the tests on
     address internal USER;
     address internal COLLATERAL_TOKEN;
     address internal LOAN_TOKEN;
@@ -46,7 +45,6 @@ contract TestBase is Test, WriteAddresses, Config {
         ChainConfig memory chain = getChainConfig();
 
         morpho = IMorpho(chain.morpho);
-        pendleRouter = chain.pendleRouter;
         tokenConfigs = getCollateralTokens();
         tokenWhales = getCollateralTokenWhales();
         treasury = chain.treasury;
@@ -136,12 +134,10 @@ contract TestBase is Test, WriteAddresses, Config {
 
     function _buildDefaultLeverageParams()
         internal
+        view
         returns (LeverageParams memory)
     {
-        ApproxParams memory approxParams;
         SwapData memory swapData;
-        LimitOrderData memory limitOrderData;
-
         return
             LeverageParams({
                 desiredLtv: DESIRED_LTV,
@@ -149,29 +145,17 @@ contract TestBase is Test, WriteAddresses, Config {
                 loanToken: LOAN_TOKEN,
                 amountCollateral: AMOUNT_COLLATERAL,
                 swapData: swapData,
-                minTokenOut: 0,
-                pendleSwap: makeAddr("pendleSwap"),
-                approxParams: approxParams,
-                tokenMintSy: makeAddr("tokenMintSy"),
-                limitOrderData: limitOrderData
+                minTokenOut: 0
             });
     }
 
     function _buildDefaultDeleverageParams()
         internal
+        pure
         returns (DeleverageParams memory)
     {
         SwapData memory swapData;
-        LimitOrderData memory limitOrderData;
-
-        return
-            DeleverageParams({
-                swapData: swapData,
-                minTokenOut: 0,
-                pendleSwap: makeAddr("pendleSwap"),
-                tokenRedeemSy: makeAddr("tokenRedeemSy"),
-                limitOrderData: limitOrderData
-            });
+        return DeleverageParams({swapData: swapData, minTokenOut: 0});
     }
 
     function testSetup() external pure {} // To avoid compiler error

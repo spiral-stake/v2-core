@@ -40,7 +40,6 @@ contract Main is Script, WriteAddresses, Config {
     ) private returns (address flashLeverageAddress) {
         flashLeverageAddress = new DeployFlashLeverage().run(
             chain.morpho,
-            chain.pendleRouter,
             chain.swapRouters,
             chain.treasury,
             collateralTokenConfig

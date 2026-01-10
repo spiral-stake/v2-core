@@ -8,17 +8,6 @@ import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
 
 import {console} from "forge-std/console.sol";
 
-interface IPendleMarket {
-    function readTokens()
-        external
-        view
-        returns (address _SY, address _PT, address _YT);
-
-    function isExpired() external view returns (bool);
-
-    function expiry() external view returns (uint256);
-}
-
 contract WriteAddresses is Script {
     function _writeAddresses(
         address morphoAddress,
@@ -72,21 +61,6 @@ contract WriteAddresses is Script {
                 "decimals",
                 loanToken.decimals()
             );
-
-            if (tokenConfigs[i].pendleMarket != address(0)) {
-                (, , address YT) = IPendleMarket(tokenConfigs[i].pendleMarket)
-                    .readTokens();
-                uint256 expiry = IPendleMarket(tokenConfigs[i].pendleMarket)
-                    .expiry();
-
-                vm.serializeAddress(tokenObj, "YT", YT);
-                vm.serializeUint(tokenObj, "maturityTimestamp", expiry);
-                vm.serializeAddress(
-                    tokenObj,
-                    "pendleMarket",
-                    tokenConfigs[i].pendleMarket
-                );
-            }
 
             vm.serializeAddress(tokenObj, "address", address(token));
             vm.serializeString(tokenObj, "name", token.name());

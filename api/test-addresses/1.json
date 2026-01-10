@@ -7,40 +7,33 @@
     "valueInUsd": 1
   },
   "collateralTokens": {
-    "0x545A490f9ab534AdF409A2E682bc4098f49952e3": {
-      "YT": "0x06f946d590010eaB6a5556AD29D9979EB1A7fA3A",
-      "address": "0x545A490f9ab534AdF409A2E682bc4098f49952e3",
-      "decimals": 18,
+    "0x3EAA0F0f0A5d3D595ae4e4b0D27f439d01c3E7b2": {
+      "address": "0x3EAA0F0f0A5d3D595ae4e4b0D27f439d01c3E7b2",
+      "decimals": 6,
       "loanToken": {
         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
         "decimals": 6,
         "name": "USD Coin",
         "symbol": "USDC"
       },
-      "maturityTimestamp": 1769644800,
-      "morphoMarketId": "0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789",
-      "name": "PT cap USD 29JAN2026",
-      "pendleMarket": "0x307c15f808914Df5a5DbE17E5608f84953fFa023",
-      "symbol": "PT-cUSD-29JAN2026"
+      "morphoMarketId": "0x9bc98c2f20ac58287ef2c860eea53a2fdc27c17a7817ff1206c0b7840cc7cd79",
+      "name": "PT reUSD 25JUN2026",
+      "symbol": "PT-reUSD-25JUN2026"
     },
-    "0x54Bf2659B5CdFd86b75920e93C0844c0364F5166": {
-      "YT": "0x08903411e7a3eB500e30aaC3bdD44775055b8C00",
-      "address": "0x54Bf2659B5CdFd86b75920e93C0844c0364F5166",
+    "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0": {
+      "address": "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
       "decimals": 18,
       "loanToken": {
-        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-        "decimals": 6,
-        "name": "USD Coin",
-        "symbol": "USDC"
+        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "decimals": 18,
+        "name": "Wrapped Ether",
+        "symbol": "WETH"
       },
-      "maturityTimestamp": 1772668800,
-      "morphoMarketId": "0x2a9a5c436719badcfadbad3ad8e8179a160ded758603eaa03a883f922a1790d3",
-      "name": "PT Staked NUSD 5MAR2026",
-      "pendleMarket": "0x6D8C4DE7071D5AeE27fc3a810764E62a4a00Ceb9",
-      "symbol": "PT-sNUSD-5MAR2026"
+      "morphoMarketId": "0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e",
+      "name": "Wrapped liquid staked Ether 2.0",
+      "symbol": "wstETH"
     },
     "0xC3c7E5E277d31CD24a3Ac4cC9af3B6770F30eA33": {
-      "YT": "0x8B4A52d28E49a9e8994D563420422e1a26a83df1",
       "address": "0xC3c7E5E277d31CD24a3Ac4cC9af3B6770F30eA33",
       "decimals": 18,
       "loanToken": {
@@ -49,11 +42,22 @@
         "name": "USD Coin",
         "symbol": "USDC"
       },
-      "maturityTimestamp": 1769644800,
       "morphoMarketId": "0x03f715ef1ae508ab3e1faf4dffdbf2a077d1f0ad10c5aad42cf4438d5e3328af",
       "name": "PT Staked cap USD 29JAN2026",
-      "pendleMarket": "0xCC781b043933c10a04409b22aaDa3a3D1A7f29D4",
       "symbol": "PT-stcUSD-29JAN2026"
+    },
+    "0xDBDC1Ef57537E34680B898E1FEBD3D68c7389bCB": {
+      "address": "0xDBDC1Ef57537E34680B898E1FEBD3D68c7389bCB",
+      "decimals": 18,
+      "loanToken": {
+        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "decimals": 6,
+        "name": "USD Coin",
+        "symbol": "USDC"
+      },
+      "morphoMarketId": "0xbbf7ce1b40d32d3e3048f5cf27eeaa6de8cb27b80194690aab191a63381d8c99",
+      "name": "Staked infiniFi USD",
+      "symbol": "siUSD"
     }
   },
   "flashLeverageAddress": "0x34A1D3fff3958843C43aD80F30b94c510645C316"

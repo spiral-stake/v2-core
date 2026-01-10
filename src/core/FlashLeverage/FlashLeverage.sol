@@ -7,7 +7,7 @@ pragma solidity 0.8.30;
 /// @dev Creates individual position proxy contracts for each user to isolate their positions.
 
 import {MarketPositionManager, MarketParams, Id, UserProxy, IERC20Metadata, FLError, Math} from "./MarketPositionManager.sol";
-import {SwapManager, IPendleMarket, SwapData, LimitOrderData, ApproxParams} from "./SwapManager.sol";
+import {SwapManager, SwapData} from "./SwapManager.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {LeverageParams, DeleverageParams} from "../structs/LeverageParams.sol";
 import {LeveragePosition} from "../structs/LeveragePosition.sol";
@@ -123,19 +123,12 @@ contract FlashLeverage is
 
     /**
      * @notice Initializes the FlashLeverage contract.
-     * @param morphoAddress Address of the Morpho protocol contract.
-     * @param pendleRouter Address of the Pendle router for swap execution.
+     * @param morphoAddress Address of the Morpho protocol contract
      */
     constructor(
         address morphoAddress,
-        address pendleRouter,
-        address[] memory swapRouters,
         address treasury
-    )
-        Ownable(msg.sender)
-        MarketPositionManager(morphoAddress)
-        SwapManager(pendleRouter, swapRouters)
-    {
+    ) Ownable(msg.sender) MarketPositionManager(morphoAddress) {
         if (morphoAddress == address(0) || treasury == address(0)) {
             revert FLError.FlashLeverage__CannotBeZeroAddress();
         }
@@ -192,11 +185,7 @@ contract FlashLeverage is
             params.loanToken,
             params.amountCollateral,
             params.swapData,
-            params.minTokenOut,
-            params.pendleSwap,
-            params.approxParams,
-            params.tokenMintSy,
-            params.limitOrderData
+            params.minTokenOut
         );
 
         i_morpho.flashLoan(params.loanToken, amountFlashLoan, data);
@@ -230,11 +219,7 @@ contract FlashLeverage is
             user, // user
             positionId,
             params.swapData,
-            params.minTokenOut,
-            // Pendle Specific
-            params.pendleSwap,
-            params.tokenRedeemSy,
-            params.limitOrderData
+            params.minTokenOut
         );
         i_morpho.flashLoan(position.loanToken, amountFlashLoan, data);
 
@@ -256,55 +241,27 @@ contract FlashLeverage is
 
     /**
      * @notice Allows owner to add support for new collateral tokens.
-     * @param tokenConfigs Array of token configurations including swap and market parameters.
+     * @param tokenConfig Collateral Token address and it's morpho market id
      */
-    function addSupportedCollateralTokens(
-        CollateralTokenConfig[] calldata tokenConfigs
+    function addSupportedCollateralToken(
+        CollateralTokenConfig calldata tokenConfig
     ) external onlyOwner {
-        for (uint256 i; i < tokenConfigs.length; ++i) {
-            CollateralTokenConfig memory config = tokenConfigs[i];
-            address collateralToken = config.collateralToken;
+        address collateralToken = tokenConfig.collateralToken;
 
-            require(
-                collateralToken != address(0),
-                FLError.FlashLeverage__CannotBeZeroAddress()
-            );
-
-            // Morpho related
-            MarketParams memory marketParams = i_morpho.idToMarketParams(
-                Id.wrap(config.morphoMarketId)
-            );
-            require(
-                collateralToken == marketParams.collateralToken,
-                FLError.FlashLeverage__InvalidCollateralToken()
-            );
-            _updateMarketParams(marketParams);
-
-            // Pendle Related
-            if (config.pendleMarket != address(0)) {
-                (, address PT, ) = IPendleMarket(config.pendleMarket)
-                    .readTokens();
-                require(
-                    collateralToken == PT,
-                    FLError.FlashLeverage__InvalidCollateralToken()
-                );
-                _updatePendleMarket(collateralToken, config.pendleMarket);
-            }
-        }
-    }
-
-    /**
-     * @notice Updates the pendle router address
-     * @param pendleRouter The new pendle router address
-     * @dev Only callable by the contract owner. Validates that the new pendle router is not zero address.
-     */
-    function updatePendleRouter(address pendleRouter) external onlyOwner {
         require(
-            pendleRouter != address(0),
+            collateralToken != address(0),
             FLError.FlashLeverage__CannotBeZeroAddress()
         );
 
-        _updatePendleRouter(pendleRouter);
+        // Morpho related
+        MarketParams memory marketParams = i_morpho.idToMarketParams(
+            Id.wrap(tokenConfig.morphoMarketId)
+        );
+        require(
+            collateralToken == marketParams.collateralToken,
+            FLError.FlashLeverage__InvalidCollateralToken()
+        );
+        _updateMarketParams(marketParams);
     }
 
     /**
@@ -382,54 +339,20 @@ contract FlashLeverage is
             address loanToken,
             uint256 amountCollateral,
             SwapData memory swapData,
-            uint256 minTokenOut,
-            // Pendle Specific
-            address pendleSwap,
-            ApproxParams memory approxParams,
-            address tokenMintSy,
-            LimitOrderData memory limitOrderData
+            uint256 minTokenOut
         ) = abi.decode(
                 data,
-                (
-                    Action,
-                    address,
-                    address,
-                    address,
-                    uint256,
-                    SwapData,
-                    uint256,
-                    // Pendle Specific
-                    address,
-                    ApproxParams,
-                    address,
-                    LimitOrderData
-                )
+                (Action, address, address, address, uint256, SwapData, uint256)
             );
 
-        // Swap amount loan -> PT collateral
-        uint256 amountSwappedCollateral;
-
-        if (s_pendleMarket[collateralToken] != address(0)) {
-            amountSwappedCollateral = _swapTokenToPt(
-                loanToken,
-                collateralToken,
-                amountLoan,
-                swapData,
-                minTokenOut,
-                approxParams,
-                pendleSwap,
-                tokenMintSy,
-                limitOrderData
-            );
-        } else {
-            amountSwappedCollateral = _swapTokenToToken(
-                loanToken,
-                collateralToken,
-                amountLoan,
-                swapData,
-                minTokenOut
-            );
-        }
+        // Swap amount loan -> collateral token
+        uint256 amountSwappedCollateral = _swapToken(
+            loanToken,
+            collateralToken,
+            amountLoan,
+            swapData,
+            minTokenOut
+        );
 
         // Position's final collateral after leveraging
         uint256 amountLeveragedCollateral = amountCollateral +
@@ -494,25 +417,8 @@ contract FlashLeverage is
             address user,
             uint256 positionId,
             SwapData memory swapData,
-            uint256 minTokenOut,
-            // Pendle specific
-            address pendleSwap,
-            address tokenRedeemSy,
-            LimitOrderData memory limitOrderData
-        ) = abi.decode(
-                data,
-                (
-                    Action,
-                    address,
-                    uint256,
-                    SwapData,
-                    uint256,
-                    // Pendle Specific
-                    address,
-                    address,
-                    LimitOrderData
-                )
-            );
+            uint256 minTokenOut
+        ) = abi.decode(data, (Action, address, uint256, SwapData, uint256));
 
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
@@ -529,28 +435,13 @@ contract FlashLeverage is
         );
 
         // Swap withdrawn collateral -> loan token
-        uint256 amountSwappedLoanToken;
-
-        if (s_pendleMarket[position.collateralToken] != address(0)) {
-            amountSwappedLoanToken = _swapPtToToken(
-                position.collateralToken,
-                position.loanToken,
-                position.amountLeveragedCollateral,
-                swapData,
-                minTokenOut,
-                pendleSwap,
-                tokenRedeemSy,
-                limitOrderData
-            );
-        } else {
-            amountSwappedLoanToken = _swapTokenToToken(
-                position.collateralToken,
-                position.loanToken,
-                position.amountLeveragedCollateral,
-                swapData,
-                minTokenOut
-            );
-        }
+        uint256 amountSwappedLoanToken = _swapToken(
+            position.collateralToken,
+            position.loanToken,
+            position.amountLeveragedCollateral,
+            swapData,
+            minTokenOut
+        );
 
         // Repay the flash loan, with swapped loan token
         _forceApprove(position.loanToken, address(i_morpho), amountLoan);
