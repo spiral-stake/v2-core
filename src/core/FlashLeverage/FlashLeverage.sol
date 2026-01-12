@@ -228,18 +228,6 @@ contract FlashLeverage is
     }
 
     /**
-     * @notice Creates a new user proxy for each position that user creates
-     * @dev Uses the clone factory pattern to create minimal proxy contracts for gas efficiency.
-     * This function is permissionless and can be safely called by anyone.
-     * @param user The address of the user to get or create a proxy for.
-     * @return proxy The address of the user's proxy contract.
-     */
-    function createUserProxy(address user) public returns (address proxy) {
-        proxy = Clones.clone(i_userProxyImplementation);
-        UserProxy(proxy).initialize(user);
-    }
-
-    /**
      * @notice Allows owner to add support for new collateral tokens.
      * @param tokenConfig Collateral Token address and it's morpho market id
      */
@@ -319,7 +307,7 @@ contract FlashLeverage is
     function renounceOwnership() public override(Ownable) {}
 
     /////////////////////////
-    // Internal Functions
+    // Internal and Private Functions
 
     /**
      * @notice Handles internal logic after flashloan is received for leveraging.
@@ -475,6 +463,18 @@ contract FlashLeverage is
 
         position.amountReturnedInLoanToken = amountReturned;
         emit LeveragePositionClosed(user, positionId, amountReturned);
+    }
+
+    /**
+     * @notice Creates a new user proxy for each position that user creates
+     * @dev Uses the clone factory pattern to create minimal proxy contracts for gas efficiency.
+     * This function is permissionless and can be safely called by anyone.
+     * @param user The address of the user to get or create a proxy for.
+     * @return proxy The address of the user's proxy contract.
+     */
+    function createUserProxy(address user) private returns (address proxy) {
+        proxy = Clones.clone(i_userProxyImplementation);
+        UserProxy(proxy).initialize(user);
     }
 
     /////////////////////////
