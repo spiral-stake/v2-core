@@ -152,7 +152,7 @@ abstract contract MarketPositionManager is
     ) private {
         address onBehalfOf = userProxy;
 
-        _safeApprove(marketParams.collateralToken, address(i_morpho), amount);
+        _forceApprove(marketParams.collateralToken, address(i_morpho), amount);
         i_morpho.supplyCollateral(marketParams, amount, onBehalfOf, hex"");
     }
 
