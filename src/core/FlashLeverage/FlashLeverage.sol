@@ -528,11 +528,7 @@ contract FlashLeverage is
         uint256 sharesToBurn
     ) public view returns (uint256) {
         return
-            getSharesValueInLoanToken(collateralToken, loanToken, sharesToBurn)
-                .scaleTo(
-                    Math.STANDARD_DECIMALS,
-                    s_loanTokenDecimals[loanToken]
-                );
+            getSharesValueInLoanToken(collateralToken, loanToken, sharesToBurn);
     }
 
     /**

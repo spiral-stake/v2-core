@@ -303,12 +303,6 @@ abstract contract MarketPositionManager is
         (, , uint256 totalBorrowAssets, uint256 totalBorrowShares) = i_morpho
             .expectedMarketBalances(marketParams);
 
-        return
-            sharesBorrowed
-                .toAssetsUp(totalBorrowAssets, totalBorrowShares)
-                .scaleTo(
-                    s_loanTokenDecimals[loanToken],
-                    Math.STANDARD_DECIMALS
-                );
+        return sharesBorrowed.toAssetsUp(totalBorrowAssets, totalBorrowShares);
     }
 }
