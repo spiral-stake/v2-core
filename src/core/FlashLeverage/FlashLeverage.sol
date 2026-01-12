@@ -304,7 +304,9 @@ contract FlashLeverage is
      * @notice Overrides renounceOwnership to prevent ownership renunciation.
      * @dev Intentionally disabled to retain upgradeability and collateral support management.
      */
-    function renounceOwnership() public override(Ownable) {}
+    function renounceOwnership() public pure override(Ownable) {
+        revert FLError.FlashLeverage__OwnershipRenunciationDisabled();
+    }
 
     /////////////////////////
     // Internal and Private Functions
