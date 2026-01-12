@@ -267,6 +267,20 @@ contract FlashLeverage is
     }
 
     /**
+     * @notice Removes an existing swapRouter if it becomes compromised, or when we don't want to support it.
+     * @param swapRouter Address of the swapRouter
+     * @dev Only callable by the contract owner. Validates that the new swap router is not zero address.
+     */
+    function removeSwapRouter(address swapRouter) external onlyOwner {
+        require(
+            swapRouter != address(0),
+            FLError.FlashLeverage__CannotBeZeroAddress()
+        );
+
+        _removeSwapRouter(swapRouter);
+    }
+
+    /**
      * @notice Updates the treasury address
      * @param newTreasury The new treasury address
      * @dev Only callable by the contract owner. Validates that the new treasury is not zero address.
@@ -467,10 +481,7 @@ contract FlashLeverage is
         emit LeveragePositionClosed(user, positionId, amountReturned);
     }
 
-    /**
-     * @notice Creates a new user proxy for each position that user creates
-     * @dev Uses the clone factory pattern to create minimal proxy contracts for gas efficiency.
-     * This function is permissionless and can be safely called by anyone.
+    /*
      * @param user The address of the user to get or create a proxy for.
      * @return proxy The address of the user's proxy contract.
      */

@@ -288,8 +288,8 @@ abstract contract MarketPositionManager is
      * @param collateralToken Token used as collateral in the position.
      * @param sharesBorrowed Shares representing the borrowed position.
      *
-     * @return Equivalent amount in loan token
-     * @dev scaled to 18 decimals for standardisation in calculations
+     * @return Equivalent amount in loan token (in s_loanTokenDecimals[loanToken])
+     *
      */
     function getSharesValueInLoanToken(
         address collateralToken,
