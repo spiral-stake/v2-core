@@ -104,23 +104,6 @@ contract FlashLeverage is
         _;
     }
 
-    /// @notice Validates that the desired LTV does not exceed the maximum allowed LTV for the market.
-    /// @dev Prevents positions that would be immediately liquidatable or unsafe.
-    /// @param desiredLtv The desired loan-to-value ratio to validate.
-    /// @param collateralToken The address of the collateral token.
-    /// @param loanToken The address of the loan token.
-    modifier validateDesiredLtv(
-        uint256 desiredLtv,
-        address collateralToken,
-        address loanToken
-    ) {
-        require(
-            desiredLtv <= getMaxLtv(collateralToken, loanToken),
-            FLError.FlashLeverage__ExceedsMaxLTV()
-        );
-        _;
-    }
-
     /**
      * @notice Initializes the FlashLeverage contract.
      * @param morphoAddress Address of the Morpho protocol contract
@@ -159,11 +142,6 @@ contract FlashLeverage is
         validateOnBehalfOf(onBehalfOf)
         validateCollateralToken(params.collateralToken, params.loanToken)
         validateAmount(params.amountCollateral)
-        validateDesiredLtv(
-            params.desiredLtv,
-            params.collateralToken,
-            params.loanToken
-        )
     {
         _transferIn(
             params.collateralToken,
@@ -362,8 +340,15 @@ contract FlashLeverage is
         uint256 amountLeveragedCollateral = amountCollateral +
             amountSwappedCollateral;
 
+        _revertIfEffectiveLtvTooHigh(
+            collateralToken,
+            loanToken,
+            amountLeveragedCollateral,
+            amountLoan
+        );
+
         // Supply total collateral and borrow loan token
-        address userProxy = createUserProxy(user);
+        address userProxy = _createUserProxy(user);
         uint256 sharesBorrowed = _supplyCollateralAndBorrowViaProxy(
             userProxy,
             collateralToken,
@@ -481,11 +466,44 @@ contract FlashLeverage is
         emit LeveragePositionClosed(user, positionId, amountReturned);
     }
 
+    /**
+     * @dev Validates that the final LTV after swap, so that it doesn't exceed the max LTV.
+     * @param collateralToken Address of the collateral token.
+     * @param loanToken Address of the loan token.
+     * @param amountCollateral Total amount of collateral after leverage.
+     * @param amountLoan Amount Loan in loan token decimals
+     */
+    function _revertIfEffectiveLtvTooHigh(
+        address collateralToken,
+        address loanToken,
+        uint256 amountCollateral,
+        uint256 amountLoan
+    ) internal view {
+        amountLoan = amountLoan.scaleTo(
+            s_loanTokenDecimals[loanToken],
+            Math.STANDARD_DECIMALS
+        );
+
+        uint256 amountCollateralInLoanToken = getCollateralValueInLoanToken(
+            collateralToken,
+            loanToken,
+            amountCollateral
+        );
+
+        uint256 effectiveLtv = amountLoan.divDown(amountCollateralInLoanToken);
+        uint256 maxLtv = getMaxLtv(collateralToken, loanToken);
+
+        require(
+            effectiveLtv <= maxLtv,
+            FLError.FlashLeverage__ExceedsMaxLTV(effectiveLtv, maxLtv)
+        );
+    }
+
     /*
      * @param user The address of the user to get or create a proxy for.
      * @return proxy The address of the user's proxy contract.
      */
-    function createUserProxy(address user) private returns (address proxy) {
+    function _createUserProxy(address user) private returns (address proxy) {
         proxy = Clones.clone(i_userProxyImplementation);
         UserProxy(proxy).initialize(user);
     }

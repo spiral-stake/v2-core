@@ -11,7 +11,7 @@ library FLError {
     error FlashLeverage__UntrustedLender(); // Flashloan callback from non-Morpho address
 
     // Position management
-    error FlashLeverage__ExceedsMaxLTV(); // desiredLtv > (liquidationLTV - buffer)
+    error FlashLeverage__ExceedsMaxLTV(uint256 effectiveLtv, uint256 maxLtv);
     error FlashLeverage__PositionAlreadyClosed();
 
     // Configuration
