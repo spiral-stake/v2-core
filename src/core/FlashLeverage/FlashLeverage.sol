@@ -6,7 +6,7 @@ pragma solidity 0.8.30;
 /// @dev Integrates with custom SwapAggregator and MarketPositionManager modules.
 /// @dev Creates individual position proxy contracts for each user to isolate their positions.
 
-import {MarketPositionManager, MarketParams, Id, UserProxy, IERC20Metadata, FLError, Math} from "./MarketPositionManager.sol";
+import {MarketPositionManager, MarketParams, Id, UserProxy, IERC20Metadata, FLError, Math, Position} from "./MarketPositionManager.sol";
 import {SwapManager, SwapData} from "./SwapManager.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {LeverageParams, DeleverageParams} from "../structs/LeverageParams.sol";
@@ -186,16 +186,31 @@ contract FlashLeverage is
         require(position.open, FLError.FlashLeverage__PositionAlreadyClosed());
         position.open = false;
 
+        Position memory morphoPosition = i_morpho.position(
+            Id.wrap(
+                keccak256(
+                    abi.encode(
+                        s_marketParams[position.collateralToken][
+                            position.loanToken
+                        ]
+                    )
+                )
+            ),
+            position.userProxy
+        );
+
         // Flash Loan Related
         uint256 amountFlashLoan = calcDeleverageFlashLoan(
             position.collateralToken,
             position.loanToken,
-            position.sharesBorrowed
+            morphoPosition.borrowShares
         );
         bytes memory data = abi.encode(
             Action.UNLEVERAGE,
             user, // user
             positionId,
+            morphoPosition.borrowShares,
+            morphoPosition.collateral, // amountLeveragedCollateral
             params.swapData,
             params.minTokenOut
         );
@@ -349,7 +364,7 @@ contract FlashLeverage is
 
         // Supply total collateral and borrow loan token
         address userProxy = _createUserProxy(user);
-        uint256 sharesBorrowed = _supplyCollateralAndBorrowViaProxy(
+        _supplyCollateralAndBorrowViaProxy(
             userProxy,
             collateralToken,
             loanToken,
@@ -375,8 +390,6 @@ contract FlashLeverage is
                 collateralToken: collateralToken,
                 loanToken: loanToken,
                 amountCollateral: amountCollateral,
-                amountLeveragedCollateral: amountLeveragedCollateral,
-                sharesBorrowed: sharesBorrowed,
                 userProxy: userProxy,
                 amountDepositedInLoanToken: amountDepositedInLoanToken,
                 amountReturnedInLoanToken: 0
@@ -405,9 +418,14 @@ contract FlashLeverage is
             ,
             address user,
             uint256 positionId,
+            uint256 borrowShares,
+            uint256 amountLeveragedCollateral,
             SwapData memory swapData,
             uint256 minTokenOut
-        ) = abi.decode(data, (Action, address, uint256, SwapData, uint256));
+        ) = abi.decode(
+                data,
+                (Action, address, uint256, uint256, uint256, SwapData, uint256)
+            );
 
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
@@ -419,15 +437,15 @@ contract FlashLeverage is
             position.collateralToken,
             position.loanToken,
             amountLoan,
-            position.amountLeveragedCollateral,
-            position.sharesBorrowed
+            amountLeveragedCollateral,
+            borrowShares
         );
 
         // Swap withdrawn collateral -> loan token
         uint256 amountSwappedLoanToken = _swapToken(
             position.collateralToken,
             position.loanToken,
-            position.amountLeveragedCollateral,
+            amountLeveragedCollateral,
             swapData,
             minTokenOut
         );
@@ -470,13 +488,13 @@ contract FlashLeverage is
      * @dev Validates that the final LTV after swap, so that it doesn't exceed the max LTV.
      * @param collateralToken Address of the collateral token.
      * @param loanToken Address of the loan token.
-     * @param amountCollateral Total amount of collateral after leverage.
+     * @param amountLeveragedCollateral Total amount of collateral after leverage.
      * @param amountLoan Amount Loan in loan token decimals
      */
     function _revertIfEffectiveLtvTooHigh(
         address collateralToken,
         address loanToken,
-        uint256 amountCollateral,
+        uint256 amountLeveragedCollateral,
         uint256 amountLoan
     ) internal view {
         amountLoan = amountLoan.scaleTo(
@@ -487,7 +505,7 @@ contract FlashLeverage is
         uint256 amountCollateralInLoanToken = getCollateralValueInLoanToken(
             collateralToken,
             loanToken,
-            amountCollateral
+            amountLeveragedCollateral
         );
 
         uint256 effectiveLtv = amountLoan.divDown(amountCollateralInLoanToken);
