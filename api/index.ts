@@ -22,20 +22,14 @@ const handleError = (res: Response, error: unknown) => {
 
 app.get("/leverage", async (req: Request, res: Response) => {
   try {
-    const {
-      userAddress,
-      desiredLtv,
-      collateralTokenAddress,
-      amountCollateral,
-      amountLeverageFlashLoan,
-    } = req.query;
+    const { userAddress, collateralTokenAddress, amountCollateral, amountFlashLoan } = req.query;
     const collateralToken = getCollateralToken(collateralTokenAddress as string);
 
     const swapData = await getSwapData(
       addresses.flashLeverageAddress,
       collateralToken.loanToken.address,
       collateralToken.address,
-      amountLeverageFlashLoan as string
+      amountFlashLoan as string
     );
 
     res.send(
@@ -45,10 +39,10 @@ app.get("/leverage", async (req: Request, res: Response) => {
         args: [
           userAddress,
           {
-            desiredLtv,
             collateralToken: collateralToken.address,
             loanToken: collateralToken.loanToken.address,
             amountCollateral,
+            amountFlashLoan,
             swapData,
             minTokenOut: "0",
           },
@@ -76,7 +70,7 @@ app.get("/deleverage", async (req: Request, res: Response) => {
       encodeFunctionData({
         abi: FLASH_LEVERAGE_ABI,
         functionName: "deleverage",
-        args: [positionId, { swapData, minTokenOut: "0" }],
+        args: [positionId, swapData, 0],
       })
     );
   } catch (error) {

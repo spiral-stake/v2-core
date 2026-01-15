@@ -9,7 +9,7 @@ pragma solidity 0.8.30;
 import {MarketPositionManager, MarketParams, Id, UserProxy, IERC20Metadata, FLError, Math, Position} from "./MarketPositionManager.sol";
 import {SwapManager, SwapData} from "./SwapManager.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
-import {LeverageParams, DeleverageParams} from "../structs/LeverageParams.sol";
+import {LeverageParams} from "../structs/LeverageParams.sol";
 import {LeveragePosition} from "../structs/LeveragePosition.sol";
 import {CollateralTokenConfig} from "../structs/CollateralTokenConfig.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -27,10 +27,11 @@ contract FlashLeverage is
     /////////////////////////
     // Constants and Immutables
 
-    /// @notice Buffer subtracted from liquidation LTV to determine the max LTV (18 decimals)
+    /// @notice Safety buffer subtracted from liquidation LTV to determine max allowed LTV (18 decimals).
+    /// @dev Protects positions from immediate liquidation due to price fluctuations after leveraging.
     uint256 public constant LIQUIDATION_BUFFER = 25e15; // 2.5%
 
-    /// @notice Max Fee percentage in basis points (18 decimals)
+    /// @notice Maximum yield fee percentage (18 decimals, where 1e18 = 100%)
     uint256 private constant MAX_YIELD_FEE = 10e16; // 10%
 
     /// @notice Implementation contract for creating individual user proxies
@@ -132,7 +133,6 @@ contract FlashLeverage is
      * @notice Creates leveraged positions by supplying collateraToken and borrowing via flashloan.
      * @param onBehalfOf The address of the user for whom the position is being created for.
      * @param params Struct containing leverage parameters including collateral, loan token, collateral amount, and other swap tokenConfigs.
-     * @dev It is a internal function
      */
     function leverage(
         address onBehalfOf,
@@ -149,13 +149,6 @@ contract FlashLeverage is
             params.amountCollateral
         );
 
-        // FlashLoan Related
-        uint256 amountFlashLoan = calcLeverageFlashLoan(
-            params.desiredLtv,
-            params.collateralToken,
-            params.loanToken,
-            params.amountCollateral
-        );
         bytes memory data = abi.encode(
             Action.LEVERAGE,
             onBehalfOf, // user
@@ -166,7 +159,7 @@ contract FlashLeverage is
             params.minTokenOut
         );
 
-        i_morpho.flashLoan(params.loanToken, amountFlashLoan, data);
+        i_morpho.flashLoan(params.loanToken, params.amountFlashLoan, data);
     }
 
     /**
@@ -175,7 +168,8 @@ contract FlashLeverage is
      */
     function deleverage(
         uint256 positionId,
-        DeleverageParams memory params
+        SwapData memory swapData,
+        uint256 minTokenOut
     ) external returns (uint256) {
         address user = msg.sender;
 
@@ -186,23 +180,19 @@ contract FlashLeverage is
         require(position.open, FLError.FlashLeverage__PositionAlreadyClosed());
         position.open = false;
 
-        Position memory morphoPosition = i_morpho.position(
-            Id.wrap(
-                keccak256(
-                    abi.encode(
-                        s_marketParams[position.collateralToken][
-                            position.loanToken
-                        ]
-                    )
-                )
-            ),
-            position.userProxy
+        address collateralToken = position.collateralToken;
+        address loanToken = position.loanToken;
+
+        Position memory morphoPosition = getMorphoPosition(
+            position.userProxy,
+            collateralToken,
+            loanToken
         );
 
         // Flash Loan Related
-        uint256 amountFlashLoan = calcDeleverageFlashLoan(
-            position.collateralToken,
-            position.loanToken,
+        uint256 amountFlashLoan = getSharesValueInLoanToken(
+            collateralToken,
+            loanToken,
             morphoPosition.borrowShares
         );
         bytes memory data = abi.encode(
@@ -211,13 +201,79 @@ contract FlashLeverage is
             positionId,
             morphoPosition.borrowShares,
             morphoPosition.collateral, // amountLeveragedCollateral
-            params.swapData,
-            params.minTokenOut
+            swapData,
+            minTokenOut
         );
-        i_morpho.flashLoan(position.loanToken, amountFlashLoan, data);
+        i_morpho.flashLoan(loanToken, amountFlashLoan, data);
 
         return
             s_userLeveragePositions[user][positionId].amountReturnedInLoanToken;
+    }
+
+    /**
+     * @notice Supplies additional collateral to an existing leverage position to reduce LTV.
+     * @dev The collateral value is added to amountDepositedInLoanToken for accurate yield fee calculation.
+     * @param user The address of the position owner.
+     * @param positionId The unique identifier of the leverage position.
+     * @param amountCollateral The amount of collateral tokens to supply.
+     */
+    function supplyCollateral(
+        address user,
+        uint256 positionId,
+        uint256 amountCollateral
+    ) external validateAmount(amountCollateral) nonReentrant {
+        LeveragePosition storage position = s_userLeveragePositions[user][
+            positionId
+        ];
+
+        require(position.open, FLError.FlashLeverage__PositionAlreadyClosed());
+
+        address collateralToken = position.collateralToken;
+        address loanToken = position.loanToken;
+
+        _transferIn(collateralToken, msg.sender, amountCollateral);
+        _morphoSupplyCollateral(
+            position.userProxy,
+            s_marketParams[collateralToken][loanToken],
+            amountCollateral
+        );
+
+        position.amountDepositedInLoanToken += getCollateralValueInLoanToken(
+            collateralToken,
+            loanToken,
+            amountCollateral
+        );
+    }
+
+    /**
+     * @notice Repays a portion of the borrowed debt on an existing leverage position to reduce LTV.
+     * @dev The repaid amount is added to amountDepositedInLoanToken for accurate yield fee calculation.
+     * @param user The address of the position owner.
+     * @param positionId The unique identifier of the leverage position.
+     * @param amountRepay The amount of loan tokens to repay.
+     */
+    function repay(
+        address user,
+        uint256 positionId,
+        uint256 amountRepay
+    ) external validateAmount(amountRepay) {
+        LeveragePosition storage position = s_userLeveragePositions[user][
+            positionId
+        ];
+
+        require(position.open, FLError.FlashLeverage__PositionAlreadyClosed());
+
+        address collateralToken = position.collateralToken;
+        address loanToken = position.loanToken;
+
+        _transferIn(loanToken, msg.sender, amountRepay);
+        _morphoRepay(
+            position.userProxy,
+            s_marketParams[collateralToken][loanToken],
+            amountRepay,
+            0 // Not repaying by shares
+        );
+        position.amountDepositedInLoanToken += amountRepay;
     }
 
     /**
@@ -289,7 +345,7 @@ contract FlashLeverage is
 
     /**
      * @notice Updates the protocol yield fee.
-     * @param newYieldFee The new yield fee to be set in basis points of 1e18 precision.
+     * @param newYieldFee The new yield fee percentage (18 decimals, where 1e18 = 100%).
      * @dev Can only be called by the contract owner.
      *      Reverts if the new fee is zero or exceeds `MAX_YIELD_FEE`.
      */
@@ -302,7 +358,11 @@ contract FlashLeverage is
         s_yieldFee = newYieldFee;
     }
 
-    /// @notice onlyOwner
+    /**
+     * @notice Enables recovery mode on a user's proxy contract to allow emergency withdrawals.
+     * @dev Only callable by the contract owner in case of emergencies or stuck funds.
+     * @param userProxy The address of the user proxy contract to enable recovery mode on.
+     */
     function enableRecoveryMode(address userProxy) external onlyOwner {
         UserProxy(userProxy).enableRecoveryMode();
     }
@@ -380,7 +440,7 @@ contract FlashLeverage is
             collateralToken,
             loanToken,
             amountCollateral
-        ).scaleTo(Math.STANDARD_DECIMALS, IERC20Metadata(loanToken).decimals());
+        );
 
         // Add new Leverage Position for user
         uint256 positionId = s_userLeveragePositions[user].length;
@@ -497,8 +557,11 @@ contract FlashLeverage is
         uint256 amountLeveragedCollateral,
         uint256 amountLoan
     ) internal view {
+        // Standardising decimals for calculations
+        uint8 loanTokenDecimals = s_loanTokenDecimals[loanToken];
+
         amountLoan = amountLoan.scaleTo(
-            s_loanTokenDecimals[loanToken],
+            loanTokenDecimals,
             Math.STANDARD_DECIMALS
         );
 
@@ -506,7 +569,7 @@ contract FlashLeverage is
             collateralToken,
             loanToken,
             amountLeveragedCollateral
-        );
+        ).scaleTo(loanTokenDecimals, Math.STANDARD_DECIMALS);
 
         uint256 effectiveLtv = amountLoan.divDown(amountCollateralInLoanToken);
         uint256 maxLtv = getMaxLtv(collateralToken, loanToken);
@@ -517,9 +580,11 @@ contract FlashLeverage is
         );
     }
 
-    /*
-     * @param user The address of the user to get or create a proxy for.
-     * @return proxy The address of the user's proxy contract.
+    /**
+     * @notice Creates a new proxy contract for isolating a user's leverage position.
+     * @dev Clones the implementation contract and initializes it for the user.
+     * @param user The address of the user to create a proxy for.
+     * @return proxy The address of the newly created user proxy contract.
      */
     function _createUserProxy(address user) private returns (address proxy) {
         proxy = Clones.clone(i_userProxyImplementation);
@@ -528,57 +593,6 @@ contract FlashLeverage is
 
     /////////////////////////
     // Public and External View Functions
-
-    /**
-     * @notice Calculates the flashloan amount needed for leveraging based on desired LTV and collateral amount.
-     * @param desiredLtv The desired loan-to-value ratio for the position.
-     * @param collateralToken The token used as collateral.
-     * @param loanToken The stablecoin loan token (eg: USDC, DAI, USR, ...).
-     * @param amountCollateral Amount of collateral being supplied.
-     * @return amountToBorrow Amount of loanToken that can be borrowed (scaled to loanToken decimals).
-     */
-    function calcLeverageFlashLoan(
-        uint256 desiredLtv,
-        address collateralToken,
-        address loanToken,
-        uint256 amountCollateral
-    ) public view returns (uint256) {
-        uint256 collateralValue = getCollateralValueInLoanToken(
-            collateralToken,
-            loanToken,
-            amountCollateral
-        );
-
-        // Total position value = collateralValue / (1 - LTV)
-        uint256 totalPositionValue = collateralValue.divDown(
-            Math.ONE - desiredLtv
-        );
-
-        // Loan amount = total position - collateral
-        uint256 amountLoan = totalPositionValue - collateralValue;
-
-        return
-            amountLoan.scaleTo(
-                Math.STANDARD_DECIMALS,
-                s_loanTokenDecimals[loanToken]
-            );
-    }
-
-    /**
-     * @notice Calculates the flashloan amount needed for unleveraging based on shares to burn.
-     * @param collateralToken The token used as collateral.
-     * @param loanToken The stablecoin loan token (eg: USDC, DAI, USR, ...).
-     * @param sharesToBurn Shares to be burned during unleveraging.
-     * @return amountToBorrow Amount of loanToken needed for flashloan (scaled to loanToken decimals).
-     */
-    function calcDeleverageFlashLoan(
-        address collateralToken,
-        address loanToken,
-        uint256 sharesToBurn
-    ) public view returns (uint256) {
-        return
-            getSharesValueInLoanToken(collateralToken, loanToken, sharesToBurn);
-    }
 
     /**
      * @notice Checks if a collateral-loan token pair is supported for leverage operations
@@ -654,7 +668,7 @@ contract FlashLeverage is
      * @param collateralToken Address of the CollateralToken.
      * @param loanToken Address of the Loan Token.
      * @param amountCollateral Amount of collateral token to value.
-     * @return Value of collateral amount in loan token (Unscaled to only 18 decimals for standardisation in calculations).
+     * @return Equivalent amount in loan token (using the token's native decimals).
      */
     function getCollateralValueInLoanToken(
         address collateralToken,
@@ -671,7 +685,7 @@ contract FlashLeverage is
         return
             totalValue.scaleTo(
                 Math.STANDARD_DECIMALS + s_loanTokenDecimals[loanToken],
-                Math.STANDARD_DECIMALS
+                s_loanTokenDecimals[loanToken]
             );
     }
 
