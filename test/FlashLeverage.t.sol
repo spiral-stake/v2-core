@@ -34,7 +34,8 @@ contract TestFlashLeverage is TestBase {
         // PT-cUSD
         CollateralTokenConfig memory newTokenConfig = CollateralTokenConfig({
             collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
-            morphoMarketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789
+            morphoMarketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789,
+            isCorrelated: true
         });
 
         // Act
@@ -58,7 +59,8 @@ contract TestFlashLeverage is TestBase {
         // Case 1 - Invalid Collateral Token for given morpho Market
         CollateralTokenConfig memory newTokenConfig = CollateralTokenConfig({
             collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
-            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb
+            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb,
+            isCorrelated: true
         });
 
         // Act & Assert

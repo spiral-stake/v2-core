@@ -34,6 +34,9 @@ contract FlashLeverage is
     /// @notice Maximum yield fee percentage (18 decimals, where 1e18 = 100%)
     uint256 private constant MAX_YIELD_FEE = 10e16; // 10%
 
+    /// @notice Maximum deposit fee for non-correlated assets (18 decimals, where 1e18 = 100%)
+    uint256 private constant MAX_DEPOSIT_FEE = 5e15; // 0.5%
+
     /// @notice Implementation contract for creating individual user proxies
     address public immutable i_userProxyImplementation;
 
@@ -44,10 +47,17 @@ contract FlashLeverage is
     mapping(address user => LeveragePosition[]) private s_userLeveragePositions;
 
     /// @notice Treasury address to receive fees
-    address private s_treasury;
+    address public s_treasury;
 
     /// @notice Performance based yield fees on the effective yield generated
-    uint256 private s_yieldFee;
+    uint256 public s_yieldFee;
+
+    /// @notice Deposit fee for non-correlated assets
+    uint256 public s_depositFee;
+
+    /// @notice Tracks if a collateral-loan token pair is correlated
+    mapping(address collateralToken => mapping(address loanToken => bool))
+        public s_isCorrelated;
 
     /////////////////////////
     // Events
@@ -124,6 +134,7 @@ contract FlashLeverage is
 
         s_treasury = treasury;
         s_yieldFee = MAX_YIELD_FEE;
+        s_depositFee = MAX_DEPOSIT_FEE;
     }
 
     /////////////////////////
@@ -149,13 +160,20 @@ contract FlashLeverage is
             params.amountCollateral
         );
 
+        uint256 amountCollateral = _chargeDepositFeeIfNonCorrelated(
+            params.collateralToken,
+            params.collateralToken,
+            params.loanToken,
+            params.amountCollateral
+        );
+
         uint256 positionId = s_userLeveragePositions[onBehalfOf].length;
         s_userLeveragePositions[onBehalfOf].push(
             LeveragePosition({
                 open: true,
                 collateralToken: params.collateralToken,
                 loanToken: params.loanToken,
-                amountCollateral: params.amountCollateral,
+                amountCollateral: amountCollateral,
                 userProxy: address(0), // Will be set in _handleLeverage
                 amountDepositedInLoanToken: 0, // Will be set in _handleLeverage
                 amountReturnedInLoanToken: 0
@@ -166,7 +184,7 @@ contract FlashLeverage is
             Action.LEVERAGE,
             onBehalfOf, // user
             positionId,
-            params.amountCollateral,
+            amountCollateral,
             params.swapData,
             params.minTokenOut
         );
@@ -278,6 +296,14 @@ contract FlashLeverage is
         address loanToken = position.loanToken;
 
         _transferIn(collateralToken, msg.sender, amountCollateral);
+
+        amountCollateral = _chargeDepositFeeIfNonCorrelated(
+            collateralToken,
+            collateralToken,
+            loanToken,
+            amountCollateral
+        );
+
         _morphoSupplyCollateral(
             position.userProxy,
             s_marketParams[collateralToken][loanToken],
@@ -313,6 +339,14 @@ contract FlashLeverage is
         address loanToken = position.loanToken;
 
         _transferIn(loanToken, msg.sender, amountRepay);
+
+        amountRepay = _chargeDepositFeeIfNonCorrelated(
+            loanToken,
+            collateralToken,
+            loanToken,
+            amountRepay
+        );
+
         _morphoRepay(
             position.userProxy,
             s_marketParams[collateralToken][loanToken],
@@ -345,6 +379,9 @@ contract FlashLeverage is
             FLError.FlashLeverage__InvalidCollateralToken()
         );
         _updateMarketParams(marketParams);
+
+        s_isCorrelated[collateralToken][marketParams.loanToken] = tokenConfig
+            .isCorrelated;
     }
 
     /**
@@ -402,6 +439,21 @@ contract FlashLeverage is
         );
 
         s_yieldFee = newYieldFee;
+    }
+
+    /**
+     * @notice Updates the deposit fee for non-correlated assets.
+     * @param newDepositFee The new deposit fee percentage (18 decimals, where 1e18 = 100%).
+     * @dev Can only be called by the contract owner.
+     *      Reverts if the new fee exceeds `MAX_DEPOSIT_FEE`.
+     */
+    function updateDepositFee(uint256 newDepositFee) external onlyOwner {
+        require(
+            newDepositFee <= MAX_DEPOSIT_FEE,
+            FLError.FlashLeverage__InvalidDepositFee()
+        );
+
+        s_depositFee = newDepositFee;
     }
 
     /**
@@ -568,20 +620,23 @@ contract FlashLeverage is
             }
         }
 
-        // All calculation are in loanToken decimals
-        uint256 amountDeposited = position.amountDepositedInLoanToken;
-        uint8 loanTokenDecimals = s_loanTokenDecimals[position.loanToken];
-        uint256 yieldFee = s_yieldFee.scaleTo(
-            Math.STANDARD_DECIMALS,
-            loanTokenDecimals
-        );
+        uint256 amountFee; // Only charge yield fee for correlated assets
+        if (s_isCorrelated[position.collateralToken][position.loanToken]) {
+            // All calculation are in loanToken decimals
+            uint256 amountDeposited = position.amountDepositedInLoanToken;
+            uint8 loanTokenDecimals = s_loanTokenDecimals[position.loanToken];
+            uint256 yieldFee = s_yieldFee.scaleTo(
+                Math.STANDARD_DECIMALS,
+                loanTokenDecimals
+            );
 
-        // Handle yield fee calculation and transfer
-        uint256 amountFee;
-        if (totalAmountReturned > amountDeposited) {
-            uint256 yieldGenerated = totalAmountReturned - amountDeposited;
-            amountFee = (yieldGenerated * yieldFee) / (10 ** loanTokenDecimals);
-            _transferOut(position.loanToken, s_treasury, amountFee);
+            if (totalAmountReturned > amountDeposited) {
+                uint256 yieldGenerated = totalAmountReturned - amountDeposited;
+                amountFee =
+                    (yieldGenerated * yieldFee) /
+                    (10 ** loanTokenDecimals);
+                _transferOut(position.loanToken, s_treasury, amountFee);
+            }
         }
 
         // Transfer remaining amount to user
@@ -590,6 +645,39 @@ contract FlashLeverage is
 
         position.amountReturnedInLoanToken = amountReturned;
         emit LeveragePositionClosed(user, positionId, amountReturned);
+    }
+
+    /**
+     * @notice Charges deposit fee for non-correlated assets.
+     * @param token Address of the token to charge fee on.
+     * @param collateralToken Address of the collateral token (for correlation check).
+     * @param loanToken Address of the loan token (for correlation check).
+     * @param amount The amount on which to charge fee.
+     * @return amountAfterFee The amount after deducting the fee.
+     */
+    function _chargeDepositFeeIfNonCorrelated(
+        address token,
+        address collateralToken,
+        address loanToken,
+        uint256 amount
+    ) internal returns (uint256 amountAfterFee) {
+        if (s_isCorrelated[collateralToken][loanToken]) {
+            return amount;
+        }
+
+        uint8 tokenDecimals = IERC20Metadata(token).decimals();
+        uint256 depositFee = s_depositFee.scaleTo(
+            Math.STANDARD_DECIMALS,
+            tokenDecimals
+        );
+
+        uint256 feeAmount = (amount * depositFee) / (10 ** tokenDecimals);
+
+        if (feeAmount > 0) {
+            _transferOut(token, s_treasury, feeAmount);
+        }
+
+        amountAfterFee = amount - feeAmount;
     }
 
     /**
@@ -752,21 +840,5 @@ contract FlashLeverage is
                 Math.STANDARD_DECIMALS + s_loanTokenDecimals[loanToken],
                 s_loanTokenDecimals[loanToken]
             );
-    }
-
-    /**
-     * @notice Returns the current treasury address
-     * @return treasury The address of the current treasury
-     */
-    function getTreasury() public view returns (address) {
-        return s_treasury;
-    }
-
-    /**
-     * @notice Returns the current yield fee configured in the protocol.
-     * @return yieldFee The yield fee is a percentage value expressed in basis points
-     */
-    function getYieldFee() public view returns (uint256) {
-        return s_yieldFee;
     }
 }

@@ -46,38 +46,44 @@ contract Config {
             // wstETH/WETH - staked ETH
             tokenConfigs[0] = CollateralTokenConfig({
                 collateralToken: 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0,
-                morphoMarketId: 0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e
+                morphoMarketId: 0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e,
+                isCorrelated: true
             });
 
             // siUSD/USDC - staked stablecoin
             tokenConfigs[1] = CollateralTokenConfig({
                 collateralToken: 0xDBDC1Ef57537E34680B898E1FEBD3D68c7389bCB,
-                morphoMarketId: 0xbbf7ce1b40d32d3e3048f5cf27eeaa6de8cb27b80194690aab191a63381d8c99
+                morphoMarketId: 0xbbf7ce1b40d32d3e3048f5cf27eeaa6de8cb27b80194690aab191a63381d8c99,
+                isCorrelated: true
             });
 
             // PT-stcUSD - Stablecoin PT from pendle
             tokenConfigs[2] = CollateralTokenConfig({
                 collateralToken: 0xC3c7E5E277d31CD24a3Ac4cC9af3B6770F30eA33,
-                morphoMarketId: 0x03f715ef1ae508ab3e1faf4dffdbf2a077d1f0ad10c5aad42cf4438d5e3328af
+                morphoMarketId: 0x03f715ef1ae508ab3e1faf4dffdbf2a077d1f0ad10c5aad42cf4438d5e3328af,
+                isCorrelated: true
             });
 
             // PT-reUSD - Stablecoin PT from pendle (with 6 decimals)
             tokenConfigs[3] = CollateralTokenConfig({
                 collateralToken: 0x3EAA0F0f0A5d3D595ae4e4b0D27f439d01c3E7b2,
-                morphoMarketId: 0x9bc98c2f20ac58287ef2c860eea53a2fdc27c17a7817ff1206c0b7840cc7cd79
+                morphoMarketId: 0x9bc98c2f20ac58287ef2c860eea53a2fdc27c17a7817ff1206c0b7840cc7cd79,
+                isCorrelated: true
             });
         } else if (block.chainid == 137) {
             tokenConfigs = new CollateralTokenConfig[](2);
             // wstETH/WETH
             tokenConfigs[0] = CollateralTokenConfig({
                 collateralToken: 0x03b54A6e9a984069379fae1a4fC4dBAE93B3bCCD,
-                morphoMarketId: 0xb8ae474af3b91c8143303723618b31683b52e9c86566aa54c06f0bc27906bcae
+                morphoMarketId: 0xb8ae474af3b91c8143303723618b31683b52e9c86566aa54c06f0bc27906bcae,
+                isCorrelated: true
             });
 
             // MaticX/WPOL
             tokenConfigs[1] = CollateralTokenConfig({
                 collateralToken: 0xfa68FB4628DFF1028CFEc22b4162FCcd0d45efb6,
-                morphoMarketId: 0xa932e0d8a9bf52d45b8feac2584c7738c12cf63ba6dff0e8f199e289fb5ca9bb
+                morphoMarketId: 0xa932e0d8a9bf52d45b8feac2584c7738c12cf63ba6dff0e8f199e289fb5ca9bb,
+                isCorrelated: true
             });
         }
     }

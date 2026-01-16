@@ -18,6 +18,7 @@ library FLError {
     error FlashLeverage__UnsupportedCollateralToken(); // Market not registered for token pair
     error FlashLeverage__InvalidCollateralToken(); // Mismatch between config and Morpho market
     error FlashLeverage__InvalidYieldFee(); // Fee is 0 or exceeds MAX_YIELD_FEE
+    error FlashLeverage__InvalidDepositFee(); // Fee is 0 or exceed MAX_DEPOSIT_FEE
 
     // Ownership
     error FlashLeverage__OwnershipRenunciationDisabled();
