@@ -624,17 +624,10 @@ contract FlashLeverage is
         if (s_isCorrelated[position.collateralToken][position.loanToken]) {
             // All calculation are in loanToken decimals
             uint256 amountDeposited = position.amountDepositedInLoanToken;
-            uint8 loanTokenDecimals = s_loanTokenDecimals[position.loanToken];
-            uint256 yieldFee = s_yieldFee.scaleTo(
-                Math.STANDARD_DECIMALS,
-                loanTokenDecimals
-            );
 
             if (totalAmountReturned > amountDeposited) {
                 uint256 yieldGenerated = totalAmountReturned - amountDeposited;
-                amountFee =
-                    (yieldGenerated * yieldFee) /
-                    (10 ** loanTokenDecimals);
+                amountFee = yieldGenerated.mulDown(s_yieldFee);
                 _transferOut(position.loanToken, s_treasury, amountFee);
             }
         }
@@ -665,13 +658,7 @@ contract FlashLeverage is
             return amount;
         }
 
-        uint8 tokenDecimals = IERC20Metadata(token).decimals();
-        uint256 depositFee = s_depositFee.scaleTo(
-            Math.STANDARD_DECIMALS,
-            tokenDecimals
-        );
-
-        uint256 feeAmount = (amount * depositFee) / (10 ** tokenDecimals);
+        uint256 feeAmount = amount.mulDown(s_depositFee);
 
         if (feeAmount > 0) {
             _transferOut(token, s_treasury, feeAmount);
