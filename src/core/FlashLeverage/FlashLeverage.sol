@@ -74,6 +74,18 @@ contract FlashLeverage is
         uint256 indexed amountReturnedInLoanToken
     );
 
+    event CollateralSupplied(
+        address indexed user,
+        uint256 indexed positionId,
+        uint256 amountSuppliedInLoanToken
+    );
+
+    event LoanRepaid(
+        address indexed user,
+        uint256 indexed positionId,
+        uint256 amountRepaidInLoanToken
+    );
+
     /////////////////////////
     // Modifiers
 
@@ -285,7 +297,7 @@ contract FlashLeverage is
         address user,
         uint256 positionId,
         uint256 amountCollateral
-    ) external validateAmount(amountCollateral) nonReentrant {
+    ) external validateAmount(amountCollateral) {
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
         ];
@@ -310,11 +322,15 @@ contract FlashLeverage is
             amountCollateral
         );
 
-        position.amountDepositedInLoanToken += getCollateralValueInLoanToken(
+        uint256 amountSuppliedInLoanToken = getCollateralValueInLoanToken(
             collateralToken,
             loanToken,
             amountCollateral
         );
+
+        position.amountDepositedInLoanToken += amountSuppliedInLoanToken;
+
+        emit CollateralSupplied(user, positionId, amountSuppliedInLoanToken);
     }
 
     /**
@@ -354,6 +370,8 @@ contract FlashLeverage is
             0 // Not repaying by shares
         );
         position.amountDepositedInLoanToken += amountRepay;
+
+        emit LoanRepaid(user, positionId, amountRepay);
     }
 
     /**
