@@ -130,13 +130,11 @@ abstract contract MarketPositionManager is
 
         _morphoRepay(userProxy, marketParams, amountLoan, borrowShares);
 
-        if (amountCollateral > 0) {
-            _morphoWithdrawCollateralViaProxy(
-                userProxy,
-                marketParams,
-                amountCollateral
-            );
-        }
+        _morphoWithdrawCollateralViaProxy(
+            userProxy,
+            marketParams,
+            amountCollateral
+        );
     }
 
     /**
@@ -150,10 +148,16 @@ abstract contract MarketPositionManager is
         MarketParams memory marketParams,
         uint256 amount
     ) internal {
-        address onBehalfOf = userProxy;
+        if (amount > 0) {
+            address onBehalfOf = userProxy;
 
-        _forceApprove(marketParams.collateralToken, address(i_morpho), amount);
-        i_morpho.supplyCollateral(marketParams, amount, onBehalfOf, hex"");
+            _forceApprove(
+                marketParams.collateralToken,
+                address(i_morpho),
+                amount
+            );
+            i_morpho.supplyCollateral(marketParams, amount, onBehalfOf, hex"");
+        }
     }
 
     /**
@@ -168,22 +172,24 @@ abstract contract MarketPositionManager is
         MarketParams memory marketParams,
         uint256 amount
     ) private returns (uint256 borrowShares) {
-        uint256 shares;
-        address onBehalf = userProxy;
-        address receiver = address(this);
+        if (amount > 0) {
+            uint256 shares;
+            address onBehalf = userProxy;
+            address receiver = address(this);
 
-        bytes memory result = UserProxy(userProxy).execute(
-            abi.encodeWithSignature(
-                "borrow((address,address,address,address,uint256),uint256,uint256,address,address)",
-                marketParams,
-                amount,
-                shares,
-                onBehalf,
-                receiver
-            )
-        );
+            bytes memory result = UserProxy(userProxy).execute(
+                abi.encodeWithSignature(
+                    "borrow((address,address,address,address,uint256),uint256,uint256,address,address)",
+                    marketParams,
+                    amount,
+                    shares,
+                    onBehalf,
+                    receiver
+                )
+            );
 
-        (, borrowShares) = abi.decode(result, (uint256, uint256));
+            (, borrowShares) = abi.decode(result, (uint256, uint256));
+        }
     }
 
     /**
@@ -203,16 +209,18 @@ abstract contract MarketPositionManager is
         uint256 amount,
         uint256 borrowShares
     ) internal returns (uint256 assetsRepaid, uint256 sharesRepaid) {
-        _forceApprove(marketParams.loanToken, address(i_morpho), amount);
+        if (amount > 0) {
+            _forceApprove(marketParams.loanToken, address(i_morpho), amount);
 
-        address onBehalf = userProxy;
-        (assetsRepaid, sharesRepaid) = i_morpho.repay(
-            marketParams,
-            borrowShares == 0 ? amount : 0,
-            borrowShares,
-            onBehalf,
-            hex""
-        );
+            address onBehalf = userProxy;
+            (assetsRepaid, sharesRepaid) = i_morpho.repay(
+                marketParams,
+                borrowShares == 0 ? amount : 0,
+                borrowShares,
+                onBehalf,
+                hex""
+            );
+        }
     }
 
     /**
@@ -226,18 +234,20 @@ abstract contract MarketPositionManager is
         MarketParams memory marketParams,
         uint256 amount
     ) private {
-        address onBehalf = userProxy;
-        address receiver = address(this);
+        if (amount > 0) {
+            address onBehalf = userProxy;
+            address receiver = address(this);
 
-        UserProxy(userProxy).execute(
-            abi.encodeWithSignature(
-                "withdrawCollateral((address,address,address,address,uint256),uint256,address,address)",
-                marketParams,
-                amount,
-                onBehalf,
-                receiver
-            )
-        );
+            UserProxy(userProxy).execute(
+                abi.encodeWithSignature(
+                    "withdrawCollateral((address,address,address,address,uint256),uint256,address,address)",
+                    marketParams,
+                    amount,
+                    onBehalf,
+                    receiver
+                )
+            );
+        }
     }
 
     /**
@@ -270,7 +280,7 @@ abstract contract MarketPositionManager is
      */
     function _handleDeleverage(
         uint256 amountLoan,
-        bytes calldata data
+        bytes memory data
     ) internal virtual {}
 
     /////////////////////////

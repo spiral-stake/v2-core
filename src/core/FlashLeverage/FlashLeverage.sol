@@ -35,7 +35,7 @@ contract FlashLeverage is
     uint256 private constant MAX_YIELD_FEE = 10e16; // 10%
 
     /// @notice Maximum deposit fee for non-correlated assets (18 decimals, where 1e18 = 100%)
-    uint256 private constant MAX_DEPOSIT_FEE = 5e15; // 0.5%
+    uint256 private constant MAX_DEPOSIT_FEE = 1e16; // 1%
 
     /// @notice Implementation contract for creating individual user proxies
     address public immutable i_userProxyImplementation;
@@ -165,6 +165,7 @@ contract FlashLeverage is
         validateOnBehalfOf(onBehalfOf)
         validateCollateralToken(params.collateralToken, params.loanToken)
         validateAmount(params.amountCollateral)
+        validateAmount(params.amountFlashLoan)
     {
         _transferIn(
             params.collateralToken,
@@ -231,12 +232,6 @@ contract FlashLeverage is
             loanToken
         );
 
-        // Flash Loan Related
-        uint256 amountFlashLoan = getSharesValueInLoanToken(
-            collateralToken,
-            loanToken,
-            morphoPosition.borrowShares
-        );
         bytes memory data = abi.encode(
             Action.UNLEVERAGE,
             user, // user
@@ -246,7 +241,19 @@ contract FlashLeverage is
             swapData,
             minTokenOut
         );
-        i_morpho.flashLoan(loanToken, amountFlashLoan, data);
+
+        uint256 amountFlashLoan;
+        if (morphoPosition.borrowShares > 0) {
+            amountFlashLoan = getSharesValueInLoanToken(
+                collateralToken,
+                loanToken,
+                morphoPosition.borrowShares
+            );
+
+            i_morpho.flashLoan(loanToken, amountFlashLoan, data);
+        } else {
+            _handleDeleverage(amountFlashLoan, data);
+        }
 
         return
             s_userLeveragePositions[user][positionId].amountReturnedInLoanToken;
@@ -343,7 +350,8 @@ contract FlashLeverage is
     function repay(
         address user,
         uint256 positionId,
-        uint256 amountRepay
+        uint256 amountRepay,
+        uint256 borrowShares // Can be 0, mostly used for full loan repayment
     ) external validateAmount(amountRepay) {
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
@@ -367,7 +375,7 @@ contract FlashLeverage is
             position.userProxy,
             s_marketParams[collateralToken][loanToken],
             amountRepay,
-            0 // Not repaying by shares
+            borrowShares
         );
         position.amountDepositedInLoanToken += amountRepay;
 
@@ -585,12 +593,12 @@ contract FlashLeverage is
      * @notice Handles internal logic after flashloan is received for deleveraging.
      * @dev Repays existing borrow, withdraws collateral, swaps it to the loan token,
      *      repays the flashloan, and returns excess (initial collateral + leveraged yield)
-     * @param amountLoan Amount borrowed via flashloan for debt repayment.
+     * @param amountLoan Amount borrowed via flashloan for debt repayment. Can be 0, if the loan is fully repaid
      * @param data Encoded deleverage action data.
      */
     function _handleDeleverage(
         uint256 amountLoan,
-        bytes calldata data
+        bytes memory data
     ) internal override nonReentrant {
         (
             ,
@@ -628,8 +636,10 @@ contract FlashLeverage is
             minTokenOut
         );
 
-        // Repay the flash loan, with swapped loan token
-        _forceApprove(position.loanToken, address(i_morpho), amountLoan);
+        if (amountLoan > 0) {
+            // Repay the flash loan, with swapped loan token
+            _forceApprove(position.loanToken, address(i_morpho), amountLoan);
+        }
 
         uint256 totalAmountReturned;
         if (amountSwappedLoanToken > amountLoan) {
