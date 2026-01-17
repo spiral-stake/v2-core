@@ -83,7 +83,13 @@ contract FlashLeverage is
     event LoanRepaid(
         address indexed user,
         uint256 indexed positionId,
-        uint256 amountRepaidInLoanToken
+        uint256 amountRepaid
+    );
+
+    event AdditionalBorrowed(
+        address indexed user,
+        uint256 indexed positionId,
+        uint256 amountBorrowed
     );
 
     /////////////////////////
@@ -338,6 +344,53 @@ contract FlashLeverage is
         position.amountDepositedInLoanToken += amountSuppliedInLoanToken;
 
         emit CollateralSupplied(user, positionId, amountSuppliedInLoanToken);
+    }
+
+    /**
+     * @notice Allows position owner to borrow additional loan tokens if within LTV limits.
+     * @dev Only the position owner can call this function and works only for non-correlated pairs
+     * @param positionId The unique identifier of the leverage position.
+     * @param amountBorrow The amount of loan tokens to borrow.
+     */
+    function borrow(
+        uint256 positionId,
+        uint256 amountBorrow
+    ) external validateAmount(amountBorrow) {
+        address user = msg.sender;
+
+        LeveragePosition storage position = s_userLeveragePositions[user][
+            positionId
+        ];
+
+        require(position.open, FLError.FlashLeverage__PositionAlreadyClosed());
+        require(
+            !s_isCorrelated[position.collateralToken][position.loanToken],
+            FLError.FlashLeverage__CannotBorrowForCorrelatedPair()
+        );
+
+        address collateralToken = position.collateralToken;
+        address loanToken = position.loanToken;
+        address userProxy = position.userProxy;
+
+        _revertIfEffectiveLtvTooHigh(
+            userProxy,
+            collateralToken,
+            loanToken,
+            0,
+            amountBorrow
+        );
+
+        _morphoBorrowViaProxy(
+            userProxy,
+            s_marketParams[collateralToken][loanToken],
+            amountBorrow
+        );
+
+        _transferOut(loanToken, user, amountBorrow);
+
+        position.amountDepositedInLoanToken -= amountBorrow;
+
+        emit AdditionalBorrowed(user, positionId, amountBorrow);
     }
 
     /**

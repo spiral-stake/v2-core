@@ -171,7 +171,7 @@ abstract contract MarketPositionManager is
         address userProxy,
         MarketParams memory marketParams,
         uint256 amount
-    ) private returns (uint256 borrowShares) {
+    ) internal returns (uint256 borrowShares) {
         if (amount > 0) {
             uint256 shares;
             address onBehalf = userProxy;
