@@ -7,8 +7,6 @@ struct LeveragePosition {
     address collateralToken;
     address loanToken;
     uint256 amountCollateral;
-    uint256 amountLeveragedCollateral; // Total collateral supplied to Morpho (initial + borrowed swap)
-    uint256 sharesBorrowed; // Morpho borrow shares, used to calculate repayment amount when closing
     address userProxy; // Isolated proxy contract holding this position on Morpho
     uint256 amountDepositedInLoanToken; // Initial deposit valued in loanToken, used for yield/fee calc
     uint256 amountReturnedInLoanToken; // Total amount returned to the user in loanToken (principal + yield, minus fees)

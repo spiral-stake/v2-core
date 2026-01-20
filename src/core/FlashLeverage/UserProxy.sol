@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
+import {TokenHelper} from "../libraries/TokenHelper.sol";
+
 /// @title UserProxy
 /// @notice Minimal proxy contract that holds user positions on Morpho
 /// @dev This contract acts as an isolated wallet for each user's leverage positions.
 ///      It can only be controlled by the FlashLeverage contract and executes
 ///      calls to Morpho protocol on behalf of the user to maintain position isolation.
 ///      Uses clone pattern with initialize function for per-user configuration.
-contract UserProxy {
+contract UserProxy is TokenHelper {
     /// @notice Address of the user who owns this proxy and can be initialized only once
     address public user;
     /// @notice Address of the FlashLeverage contract that controls this proxy
@@ -61,5 +63,14 @@ contract UserProxy {
     function enableRecoveryMode() external {
         require(msg.sender == flashLeverage, "UserProxy: Unauthorised");
         recoveryMode = true;
+    }
+
+    /**
+     * @notice Recovers ERC20 tokens accidentally sent to this contract or accumulated as rewards
+     * @param token The address of the token to recover
+     */
+    function recover(address token) external {
+        require(msg.sender == user, "UserProxy: Unauthorised");
+        _transferOut(token, user, _selfBalance(token));
     }
 }

@@ -29,16 +29,6 @@ abstract contract TokenHelper {
         IERC20(token).safeTransfer(to, amount);
     }
 
-    function _safeApprove(address token, address to, uint256 value) internal {
-        (bool success, bytes memory data) = token.call(
-            abi.encodeWithSelector(IERC20.approve.selector, to, value)
-        );
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            "Safe Approve"
-        );
-    }
-
     function _forceApprove(
         address token,
         address spender,

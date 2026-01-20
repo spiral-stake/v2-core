@@ -14,7 +14,7 @@ contract SwapManager is TokenHelper {
     // Storage
 
     // List of swap router contracts from swap aggregators like kyberswap, odos and pendle router
-    mapping(address => bool) public s_isSwapRouter;
+    mapping(address => bool) private s_isSwapRouter;
 
     function _swapToken(
         address tokenIn,
@@ -36,5 +36,13 @@ contract SwapManager is TokenHelper {
 
     function _addSwapRouter(address router) internal {
         s_isSwapRouter[router] = true;
+    }
+
+    function _removeSwapRouter(address router) internal {
+        s_isSwapRouter[router] = false;
+    }
+
+    function isValidSwapRouter(address router) external view returns (bool) {
+        return s_isSwapRouter[router];
     }
 }

@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Math} from "../src/core/libraries/Math.sol";
 
 import {WriteAddresses} from "../script/WriteAddresses.s.sol";
 import {IMorpho, MarketParams, Id, Position} from "@morpho/interfaces/IMorpho.sol";
@@ -12,6 +13,8 @@ import "../script/Main.s.sol";
 import "../src/core/FlashLeverage/FlashLeverage.sol";
 
 contract TestBase is Test, WriteAddresses, Config {
+    using Math for uint256;
+
     FlashLeverage fl;
     IMorpho morpho;
     CollateralTokenConfig[] tokenConfigs;
@@ -74,7 +77,7 @@ contract TestBase is Test, WriteAddresses, Config {
         address loanToken,
         uint256 amountCollateral
     ) internal returns (bytes memory) {
-        uint256 amountLeverageFlashLoan = fl.calcLeverageFlashLoan(
+        uint256 amountFlashLoan = _calcLeverageFlashLoan(
             desiredLtv,
             collateralToken,
             loanToken,
@@ -85,14 +88,12 @@ contract TestBase is Test, WriteAddresses, Config {
             "http://127.0.0.1:3000/leverage",
             "?userAddress=",
             vm.toString(user),
-            "&desiredLtv=",
-            vm.toString(desiredLtv),
             "&collateralTokenAddress=",
             vm.toString(collateralToken),
             "&amountCollateral=",
             vm.toString(amountCollateral),
-            "&amountLeverageFlashLoan=",
-            vm.toString(amountLeverageFlashLoan)
+            "&amountFlashLoan=",
+            vm.toString(amountFlashLoan)
         );
 
         string[] memory inputs = new string[](6);
@@ -140,22 +141,46 @@ contract TestBase is Test, WriteAddresses, Config {
         SwapData memory swapData;
         return
             LeverageParams({
-                desiredLtv: DESIRED_LTV,
                 collateralToken: COLLATERAL_TOKEN,
                 loanToken: LOAN_TOKEN,
                 amountCollateral: AMOUNT_COLLATERAL,
+                amountFlashLoan: 0,
                 swapData: swapData,
                 minTokenOut: 0
             });
     }
 
-    function _buildDefaultDeleverageParams()
-        internal
-        pure
-        returns (DeleverageParams memory)
-    {
-        SwapData memory swapData;
-        return DeleverageParams({swapData: swapData, minTokenOut: 0});
+    /**
+     * @notice Calculates the flashloan amount needed for leveraging based on desired LTV and collateral amount.
+     * @param desiredLtv The desired loan-to-value ratio for the position.
+     * @param collateralToken The token used as collateral.
+     * @param loanToken The stablecoin loan token (eg: USDC, DAI, USR, ...).
+     * @param amountCollateral Amount of collateral being supplied.
+     * @return amountToBorrow Amount of loanToken that can be borrowed (scaled to loanToken decimals).
+     */
+    function _calcLeverageFlashLoan(
+        uint256 desiredLtv,
+        address collateralToken,
+        address loanToken,
+        uint256 amountCollateral
+    ) internal view returns (uint256) {
+        uint256 collateralValue = fl
+            .getCollateralValueInLoanToken(
+                collateralToken,
+                loanToken,
+                amountCollateral
+            )
+            .scaleTo(LOAN_TOKEN_DECIMALS, Math.STANDARD_DECIMALS);
+
+        // Total position value = collateralValue / (1 - LTV)
+        uint256 totalPositionValue = collateralValue.divDown(
+            Math.ONE - desiredLtv
+        );
+
+        // Loan amount = total position - collateral
+        uint256 amountLoan = totalPositionValue - collateralValue;
+
+        return amountLoan.scaleTo(Math.STANDARD_DECIMALS, LOAN_TOKEN_DECIMALS);
     }
 
     function testSetup() external pure {} // To avoid compiler error

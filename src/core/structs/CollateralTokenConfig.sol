@@ -5,4 +5,5 @@ pragma solidity 0.8.30;
 struct CollateralTokenConfig {
     address collateralToken;
     bytes32 morphoMarketId;
+    bool isCorrelated;
 }

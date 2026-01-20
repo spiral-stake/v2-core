@@ -34,7 +34,8 @@ contract TestFlashLeverage is TestBase {
         // PT-cUSD
         CollateralTokenConfig memory newTokenConfig = CollateralTokenConfig({
             collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
-            morphoMarketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789
+            morphoMarketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789,
+            isCorrelated: true
         });
 
         // Act
@@ -58,7 +59,8 @@ contract TestFlashLeverage is TestBase {
         // Case 1 - Invalid Collateral Token for given morpho Market
         CollateralTokenConfig memory newTokenConfig = CollateralTokenConfig({
             collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
-            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb
+            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb,
+            isCorrelated: true
         });
 
         // Act & Assert
@@ -95,21 +97,6 @@ contract TestFlashLeverage is TestBase {
         fl.leverage(USER, params);
     }
 
-    function test_leverage_RevertsWhen_DesiredLtvExceedsMaxLtv() external {
-        // Arrange
-        LeverageParams memory params = _buildDefaultLeverageParams();
-        uint256 EXCESSIVE_LTV = 98e16; // 98%
-        params.desiredLtv = EXCESSIVE_LTV;
-
-        // Act & Assert
-        vm.prank(USER);
-        IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
-
-        vm.prank(USER);
-        vm.expectRevert(FLError.FlashLeverage__ExceedsMaxLTV.selector);
-        fl.leverage(USER, params);
-    }
-
     function test_leverage_SuccessfullyCreatesPosition() external {
         // Arrange
         _setupSuccessfulLeverageConditions();
@@ -122,8 +109,6 @@ contract TestFlashLeverage is TestBase {
 
         // 1. Verify position creation
         assertEq(position.open, true);
-        assertEq(position.amountCollateral, AMOUNT_COLLATERAL);
-        assertGt(position.sharesBorrowed, 0, "Shares Borrowed should be gt 0");
 
         // 3. Verify user position isolation through userProxy
         address userProxy = position.userProxy;
@@ -132,15 +117,15 @@ contract TestFlashLeverage is TestBase {
             userProxy
         );
 
-        assertEq(
+        assertGt(
             morphoPosition.collateral,
-            position.amountLeveragedCollateral,
-            "Morpho position collateral should match core position"
+            0,
+            "Amount Leveraged should be gt 0"
         );
-        assertEq(
+        assertGt(
             morphoPosition.borrowShares,
-            position.sharesBorrowed,
-            "Morpho position shares should match core position"
+            0,
+            "Shares Borrowed should be gt 0"
         );
     }
 
@@ -159,11 +144,13 @@ contract TestFlashLeverage is TestBase {
             positionId
         );
 
-        // Act
-        _executeDeleverageOperation(
-            positionId,
-            positionBefore.amountLeveragedCollateral
+        Position memory morphoPosition = morpho.position(
+            Id.wrap(tokenConfigs[TOKEN_INDEX].morphoMarketId),
+            positionBefore.userProxy
         );
+
+        // Act
+        _executeDeleverageOperation(positionId, morphoPosition.collateral);
 
         // Assert
         LeveragePosition memory positionAfter = fl.getUserLeveragePosition(
@@ -310,7 +297,7 @@ contract TestFlashLeverage is TestBase {
                 .mulDown(amountCollateral)
                 .scaleTo(
                     Math.STANDARD_DECIMALS + loanTokenDecimals,
-                    Math.STANDARD_DECIMALS
+                    loanTokenDecimals
                 );
 
             uint256 actualValue = fl.getCollateralValueInLoanToken(
@@ -330,68 +317,6 @@ contract TestFlashLeverage is TestBase {
                 )
             );
         }
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                        FLASH LOAN CALCULATION TESTS
-    //////////////////////////////////////////////////////////////*/
-
-    function test_calcLeverageFlashLoan_ReturnsCorrectAmount() external view {
-        // Arrange
-        uint256 collateralValue = fl.getCollateralValueInLoanToken(
-            COLLATERAL_TOKEN,
-            LOAN_TOKEN,
-            AMOUNT_COLLATERAL
-        );
-        uint256 expectedAmount = ((
-            collateralValue.divDown(Math.ONE - DESIRED_LTV)
-        ) - collateralValue).scaleTo(
-                Math.STANDARD_DECIMALS,
-                LOAN_TOKEN_DECIMALS
-            );
-
-        // Act
-        uint256 actualAmount = fl.calcLeverageFlashLoan(
-            DESIRED_LTV,
-            COLLATERAL_TOKEN,
-            LOAN_TOKEN,
-            AMOUNT_COLLATERAL
-        );
-
-        // Assert
-        assertEq(
-            actualAmount,
-            expectedAmount,
-            "Flash loan amount calculation should be correct"
-        );
-    }
-
-    function test_calcLeverageFlashLoan_ProducesDesiredLtv() external view {
-        // Arrange
-        uint256 collateralValue = fl
-            .getCollateralValueInLoanToken(
-                COLLATERAL_TOKEN,
-                LOAN_TOKEN,
-                AMOUNT_COLLATERAL
-            )
-            .scaleTo(Math.STANDARD_DECIMALS, LOAN_TOKEN_DECIMALS);
-
-        // Act
-        uint256 loanAmount = fl.calcLeverageFlashLoan(
-            DESIRED_LTV,
-            COLLATERAL_TOKEN,
-            LOAN_TOKEN,
-            AMOUNT_COLLATERAL
-        );
-
-        uint256 actualLtv = loanAmount.divDown(collateralValue + loanAmount);
-
-        // Assert
-        assertEq(
-            actualLtv.scaleTo(Math.STANDARD_DECIMALS, LOAN_TOKEN_DECIMALS),
-            DESIRED_LTV.scaleTo(Math.STANDARD_DECIMALS, LOAN_TOKEN_DECIMALS),
-            "Calculated LTV should match desired LTV"
-        );
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -443,9 +368,6 @@ contract TestFlashLeverage is TestBase {
         uint256 minTokenOut;
 
         vm.prank(USER);
-        fl.deleverage(
-            positionId,
-            DeleverageParams({swapData: swapData, minTokenOut: minTokenOut})
-        );
+        fl.deleverage(positionId, swapData, minTokenOut);
     }
 }

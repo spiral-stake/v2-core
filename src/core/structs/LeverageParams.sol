@@ -5,16 +5,10 @@ import {SwapData} from "./SwapData.sol";
 
 /// @notice Parameters for opening a leveraged position
 struct LeverageParams {
-    uint256 desiredLtv; // Target loan-to-value ratio (18 decimals), must be <= maxLtv, used to calc flashLeverage loan when opening a position
     address collateralToken;
     address loanToken;
     uint256 amountCollateral;
+    uint256 amountFlashLoan;
     SwapData swapData; // Routing data for loanToken -> collateralToken swap
     uint256 minTokenOut; // Slippage protection: minimum collateral tokens received from swap
-}
-
-/// @notice Parameters for closing a leveraged position
-struct DeleverageParams {
-    SwapData swapData; // Routing data for collateralToken -> loanToken swap
-    uint256 minTokenOut; // Slippage protection: minimum loan tokens received from swap
 }
