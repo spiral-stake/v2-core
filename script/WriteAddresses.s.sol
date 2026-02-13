@@ -12,28 +12,24 @@ contract WriteAddresses is Script {
     function _writeAddresses(
         address morphoAddress,
         CollateralTokenConfig[] memory tokenConfigs,
-        address USDC,
         address flashLeverageAddress,
+        address flashLeverageRouter,
         string memory path
     ) internal {
         IMorpho morpho = IMorpho(morphoAddress);
         string memory addresses = "addresses";
 
+        vm.serializeAddress(addresses, "morphoAddress", morphoAddress);
         vm.serializeAddress(
             addresses,
             "flashLeverageAddress",
             flashLeverageAddress
         );
-
-        // USDC
-        string memory usdcToken = "USDC";
-        IERC20Metadata usdc = IERC20Metadata(USDC);
-        vm.serializeAddress(usdcToken, "address", address(usdc));
-        vm.serializeString(usdcToken, "name", usdc.name());
-        vm.serializeString(usdcToken, "symbol", usdc.symbol());
-        vm.serializeUint(usdcToken, "valueInUsd", 1);
-        usdcToken = vm.serializeUint(usdcToken, "decimals", usdc.decimals());
-        vm.serializeString(addresses, "USDC", usdcToken);
+        vm.serializeAddress(
+            addresses,
+            "flashLeverageRouterAddress",
+            flashLeverageRouter
+        );
 
         // Collateral Tokens
 

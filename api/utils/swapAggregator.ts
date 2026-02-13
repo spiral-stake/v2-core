@@ -14,7 +14,7 @@ export const getSwapData = async (
   receiver: string,
   tokenIn: string,
   tokenOut: string,
-  amountIn: string | BigNumber
+  amountIn: string | BigNumber,
 ) => {
   const res = await callSDK(`/v2/sdk/${CHAIN_ID}/convert`, {
     receiver,
@@ -23,7 +23,7 @@ export const getSwapData = async (
     tokensOut: tokenOut,
     amountsIn: amountIn,
     enableAggregator: true,
-    aggregators: "kyberswap, okx",
+    aggregators: "kyberswap, okx, paraswap, odos",
   });
 
   return {

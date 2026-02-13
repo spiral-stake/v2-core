@@ -437,30 +437,35 @@ contract FlashLeverage is
 
     /**
      * @notice Allows owner to add support for new collateral tokens.
-     * @param tokenConfig Collateral Token address and it's morpho market id
+     * @param tokenConfigs Collateral Token address and it's morpho market id
      */
-    function addSupportedCollateralToken(
-        CollateralTokenConfig calldata tokenConfig
+    function addSupportedCollateralTokens(
+        CollateralTokenConfig[] calldata tokenConfigs
     ) external onlyOwner {
-        address collateralToken = tokenConfig.collateralToken;
+        uint256 tokenConfigsLength = tokenConfigs.length;
 
-        require(
-            collateralToken != address(0),
-            FLError.FlashLeverage__CannotBeZeroAddress()
-        );
+        for (uint256 i; i < tokenConfigsLength; ++i) {
+            address collateralToken = tokenConfigs[i].collateralToken;
 
-        // Morpho related
-        MarketParams memory marketParams = i_morpho.idToMarketParams(
-            Id.wrap(tokenConfig.morphoMarketId)
-        );
-        require(
-            collateralToken == marketParams.collateralToken,
-            FLError.FlashLeverage__InvalidCollateralToken()
-        );
-        _updateMarketParams(marketParams);
+            require(
+                collateralToken != address(0),
+                FLError.FlashLeverage__CannotBeZeroAddress()
+            );
 
-        s_isCorrelated[collateralToken][marketParams.loanToken] = tokenConfig
-            .isCorrelated;
+            // Morpho related
+            MarketParams memory marketParams = i_morpho.idToMarketParams(
+                Id.wrap(tokenConfigs[i].morphoMarketId)
+            );
+            require(
+                collateralToken == marketParams.collateralToken,
+                FLError.FlashLeverage__InvalidCollateralToken()
+            );
+            _updateMarketParams(marketParams);
+
+            s_isCorrelated[collateralToken][
+                marketParams.loanToken
+            ] = tokenConfigs[i].isCorrelated;
+        }
     }
 
     /**

@@ -12,16 +12,14 @@ contract DeployFlashLeverage is Script {
         address[] memory swapRouters,
         address treasury,
         CollateralTokenConfig[] memory collateralTokens
-    ) external returns (address flashLeverageAddress) {
+    ) external returns (address) {
         vm.startBroadcast();
 
         // Deploy
         FlashLeverage flashLeverage = new FlashLeverage(morpho, treasury);
 
         // Add supported collateral token
-        for (uint256 i; i < collateralTokens.length; ++i) {
-            flashLeverage.addSupportedCollateralToken(collateralTokens[i]);
-        }
+        flashLeverage.addSupportedCollateralTokens(collateralTokens);
 
         // Add swap routers
         for (uint256 i; i < swapRouters.length; ++i) {

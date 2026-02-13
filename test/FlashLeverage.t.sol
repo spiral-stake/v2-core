@@ -32,7 +32,10 @@ contract TestFlashLeverage is TestBase {
 
         // Required
         // PT-cUSD
-        CollateralTokenConfig memory newTokenConfig = CollateralTokenConfig({
+        CollateralTokenConfig[]
+            memory newTokenConfig = new CollateralTokenConfig[](1);
+
+        newTokenConfig[0] = CollateralTokenConfig({
             collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
             morphoMarketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789,
             isCorrelated: true
@@ -40,11 +43,11 @@ contract TestFlashLeverage is TestBase {
 
         // Act
         vm.prank(flOwner);
-        fl.addSupportedCollateralToken(newTokenConfig);
+        fl.addSupportedCollateralTokens(newTokenConfig);
 
         // Assert
         bool supported = fl.isSupportedCollateralToken(
-            newTokenConfig.collateralToken,
+            newTokenConfig[0].collateralToken,
             USDC
         );
         assertTrue(supported);
@@ -57,16 +60,19 @@ contract TestFlashLeverage is TestBase {
         address flOwner = fl.owner();
 
         // Case 1 - Invalid Collateral Token for given morpho Market
-        CollateralTokenConfig memory newTokenConfig = CollateralTokenConfig({
-            collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
-            morphoMarketId: 0x8a71a66ac828c2b6d4f8accce5859aba0822b502f3833bec4aff09479affffdb,
+        CollateralTokenConfig[]
+            memory newTokenConfig = new CollateralTokenConfig[](1);
+
+        newTokenConfig[0] = CollateralTokenConfig({
+            collateralToken: 0x2d3C279E5FcDF5b793c0a75ed90738D7369B0b83,
+            morphoMarketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789,
             isCorrelated: true
         });
 
         // Act & Assert
         vm.prank(flOwner);
         vm.expectRevert(FLError.FlashLeverage__InvalidCollateralToken.selector);
-        fl.addSupportedCollateralToken(newTokenConfig);
+        fl.addSupportedCollateralTokens(newTokenConfig);
     }
 
     /*//////////////////////////////////////////////////////////////

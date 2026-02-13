@@ -30,7 +30,7 @@ contract TestBase is Test, WriteAddresses, Config {
     uint256 internal constant AMOUNT_COLLATERAL = 10000e18; // 10k
     uint256 internal constant DESIRED_LTV = 70e16; // 70%
 
-    uint256 internal constant TOKEN_INDEX = 2; // Collateral Token to run the tests on
+    uint256 internal constant TOKEN_INDEX = 0; // Collateral Token to run the tests on
     address internal USER;
     address internal COLLATERAL_TOKEN;
     address internal LOAN_TOKEN;
@@ -64,8 +64,8 @@ contract TestBase is Test, WriteAddresses, Config {
         _writeAddresses(
             address(morpho),
             tokenConfigs,
-            USDC,
             address(fl),
+            address(0),
             "./api/test-addresses/"
         );
     }

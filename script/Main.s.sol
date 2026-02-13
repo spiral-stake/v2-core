@@ -5,6 +5,7 @@ import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 
 import {DeployFlashLeverage} from "./DeployFlashLeverage.s.sol";
+import {DeployFlashLeverageRouter} from "./DeployFlashLeverageRouter.sol";
 import {WriteAddresses} from "./WriteAddresses.s.sol";
 import {Config, ChainConfig, CollateralTokenConfig} from "./Config.s.sol";
 
@@ -13,7 +14,7 @@ interface IWETH {
 }
 
 contract Main is Script, WriteAddresses, Config {
-    function run() external returns (address flashLeverageAddress) {
+    function run() external returns (address flashLeverage) {
         ChainConfig memory chain = getChainConfig();
         CollateralTokenConfig[] memory collateralTokens = getCollateralTokens();
 
@@ -23,13 +24,14 @@ contract Main is Script, WriteAddresses, Config {
             vm.stopBroadcast();
         }
 
-        flashLeverageAddress = _deployFlashLeverage(chain, collateralTokens);
+        flashLeverage = _deployFlashLeverage(chain, collateralTokens);
+        address flashLeverageRouter = _deployFlashLeverageRouter(flashLeverage);
 
         _writeAddresses(
             chain.morpho,
             collateralTokens,
-            chain.USDC,
-            flashLeverageAddress,
+            flashLeverage,
+            flashLeverageRouter,
             "./addresses/"
         );
     }
@@ -37,12 +39,20 @@ contract Main is Script, WriteAddresses, Config {
     function _deployFlashLeverage(
         ChainConfig memory chain,
         CollateralTokenConfig[] memory collateralTokenConfig
-    ) private returns (address flashLeverageAddress) {
-        flashLeverageAddress = new DeployFlashLeverage().run(
+    ) private returns (address flashLeverage) {
+        flashLeverage = new DeployFlashLeverage().run(
             chain.morpho,
             chain.swapRouters,
             chain.treasury,
             collateralTokenConfig
+        );
+    }
+
+    function _deployFlashLeverageRouter(
+        address flashLeverage
+    ) private returns (address flashLeverageRouter) {
+        flashLeverageRouter = new DeployFlashLeverageRouter().run(
+            flashLeverage
         );
     }
 }
