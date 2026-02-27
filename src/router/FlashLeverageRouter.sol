@@ -18,18 +18,34 @@ contract FlashLeverageRouter is TokenHelper {
     FlashLeverage public immutable i_flashLeverage;
 
     constructor(address morphoAddress, address flashLeverageAddress) {
+        require(
+            morphoAddress != address(0) && flashLeverageAddress != address(0),
+            "Zero address"
+        );
         i_flashLeverage = FlashLeverage(flashLeverageAddress);
         i_morpho = IMorpho(morphoAddress);
     }
 
+    /**
+     * @notice Swaps an input token to the market's collateral token, then opens a leveraged position.
+     * @param onBehalfOf The address of the user for whom the position is being created.
+     * @param leverageParams Leverage parameters. amountCollateral will be overwritten with swap output.
+     * @param tokenIn The token to swap from.
+     * @param amountIn The amount of tokenIn to swap.
+     * @param swapData Swap configuration for the external router.
+     * @param minTokenOut Minimum collateral tokens expected from the swap (slippage protection).
+     */
     function swapAndLeverage(
         address onBehalfOf,
         LeverageParams memory leverageParams,
         address tokenIn,
         uint256 amountIn,
-        SwapData calldata swapData
+        SwapData calldata swapData,
+        uint256 minTokenOut
     ) external {
         require(amountIn > 0, "AmountIn cannot be zero");
+        require(onBehalfOf != address(0), "Invalid onBehalfOf");
+
         _transferIn(tokenIn, msg.sender, amountIn);
 
         _forceApprove(tokenIn, address(swapData.extRouter), amountIn);
@@ -41,6 +57,11 @@ contract FlashLeverageRouter is TokenHelper {
         );
 
         leverageParams.amountCollateral = _selfBalance(market.collateralToken);
+        require(
+            leverageParams.amountCollateral >= minTokenOut,
+            "Slippage exceeded"
+        );
+
         _forceApprove(
             market.collateralToken,
             address(i_flashLeverage),

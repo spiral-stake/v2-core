@@ -22,7 +22,7 @@ contract DeployFlashLeverage is Script {
 
         // Add swap routers
         for (uint256 i; i < swapRouters.length; ++i) {
-            flashLeverage.addSwapRouter(swapRouters[i]);
+            flashLeverage.setSwapRouter(swapRouters[i], true);
         }
 
         vm.stopBroadcast();

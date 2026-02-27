@@ -31,10 +31,10 @@ contract FlashLeverage is
     /// @dev Protects positions from immediate liquidation due to price fluctuations after leveraging.
     uint256 public constant LIQUIDATION_BUFFER = 25e15; // 2.5%
 
-    /// @notice Maximum yield fee percentage (18 decimals, where 1e18 = 100%)
+    /// @notice Maximum yield fee only on correlated assets (18 decimals, where 1e18 = 100%)
     uint256 private constant MAX_YIELD_FEE = 10e16; // 10%
 
-    /// @notice Maximum deposit fee for non-correlated assets (18 decimals, where 1e18 = 100%)
+    /// @notice Maximum deposit fee only on non-correlated assets (18 decimals, where 1e18 = 100%)
     uint256 private constant MAX_DEPOSIT_FEE = 1e16; // 1%
 
     /// @notice Implementation contract for creating individual user proxies
@@ -214,7 +214,6 @@ contract FlashLeverage is
         uint256 minTokenOut
     ) external returns (uint256) {
         address user = msg.sender;
-
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
         ];
@@ -223,7 +222,6 @@ contract FlashLeverage is
         position.open = false;
 
         MarketParams memory market = s_markets[position.marketId];
-
         Position memory morphoPosition = getMorphoPosition(
             position.userProxy,
             market
@@ -270,11 +268,9 @@ contract FlashLeverage is
         uint256 minTokenOut
     ) external validateAmount(amountFlashLoan) {
         address user = msg.sender;
-
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
         ];
-
         require(position.open, FLError.FlashLeverage__PositionAlreadyClosed());
 
         MarketParams memory market = s_markets[position.marketId];
@@ -306,7 +302,6 @@ contract FlashLeverage is
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
         ];
-
         require(position.open, FLError.FlashLeverage__PositionAlreadyClosed());
 
         MarketParams memory market = s_markets[position.marketId];
@@ -325,7 +320,6 @@ contract FlashLeverage is
             market,
             amountCollateral
         );
-
         position.amountDepositedInLoanToken += amountSuppliedInLoanToken;
 
         emit CollateralSupplied(user, positionId, amountSuppliedInLoanToken);
@@ -342,11 +336,9 @@ contract FlashLeverage is
         uint256 amountBorrow
     ) external validateAmount(amountBorrow) {
         address user = msg.sender;
-
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
         ];
-
         require(position.open, FLError.FlashLeverage__PositionAlreadyClosed());
 
         MarketParams memory market = s_markets[position.marketId];
@@ -355,8 +347,8 @@ contract FlashLeverage is
         _revertIfEffectiveLtvTooHigh(userProxy, market, 0, amountBorrow);
         _morphoBorrowViaProxy(userProxy, market, amountBorrow);
 
-        _transferOut(market.loanToken, user, amountBorrow);
         position.amountDepositedInLoanToken -= amountBorrow;
+        _transferOut(market.loanToken, user, amountBorrow);
 
         emit AdditionalBorrowed(user, positionId, amountBorrow);
     }
@@ -396,6 +388,84 @@ contract FlashLeverage is
         emit LoanRepaid(user, positionId, amountRepay);
     }
 
+    function withdrawCollateral(
+        uint256 positionId,
+        uint256 amountWithdraw
+    ) external validateAmount(amountWithdraw) {
+        address user = msg.sender;
+        LeveragePosition storage position = s_userLeveragePositions[user][
+            positionId
+        ];
+        require(position.open, FLError.FlashLeverage__PositionAlreadyClosed());
+
+        MarketParams memory market = s_markets[position.marketId];
+        address userProxy = position.userProxy;
+
+        _morphoWithdrawCollateralViaProxy(userProxy, market, amountWithdraw);
+        _revertIfEffectiveLtvTooHigh(userProxy, market, 0, 0);
+
+        uint256 amountWithdrawInLoanToken = getCollateralValueInLoanToken(
+            market,
+            amountWithdraw
+        );
+
+        if (s_isCorrelated[position.marketId]) {
+            Position memory morphoPosition = getMorphoPosition(
+                position.userProxy,
+                market
+            );
+            uint256 amountCollateralInLoanToken = getCollateralValueInLoanToken(
+                market,
+                morphoPosition.collateral
+            );
+            uint256 amountLoan = getSharesValueInLoanToken(
+                market,
+                morphoPosition.borrowShares
+            );
+
+            uint256 netPositionValue = amountCollateralInLoanToken - amountLoan;
+            if (netPositionValue > position.amountDepositedInLoanToken) {
+                uint256 yieldGenerated;
+                unchecked {
+                    yieldGenerated =
+                        netPositionValue -
+                        position.amountDepositedInLoanToken;
+                }
+
+                uint256 yieldFeeInLoanToken;
+                if (amountWithdrawInLoanToken > yieldGenerated) {
+                    // Withdrawal exceeds yield, fee only on yield portion
+                    yieldFeeInLoanToken = yieldGenerated.mulDown(s_yieldFee);
+                } else {
+                    // Withdrawal is within yield, fee on entire withdrawal
+                    yieldFeeInLoanToken = amountWithdrawInLoanToken.mulDown(
+                        s_yieldFee
+                    );
+                }
+
+                // Convert fee from loanToken terms to collateralToken terms
+                // using the ratio: amountWithdraw / amountWithdrawInLoanToken
+                uint256 feeInCollateral = yieldFeeInLoanToken
+                    .mulDown(amountWithdraw)
+                    .divDown(amountWithdrawInLoanToken);
+
+                if (feeInCollateral > 0) {
+                    _transferOut(
+                        market.collateralToken,
+                        s_treasury,
+                        feeInCollateral
+                    );
+                    amountWithdraw -= feeInCollateral;
+                }
+            }
+        }
+
+        position.amountDepositedInLoanToken -= amountWithdrawInLoanToken;
+        _transferOut(market.collateralToken, user, amountWithdraw);
+
+        emit CollateralWithdrawn(user, positionId, amountWithdraw);
+    }
+
     /**
      * @notice Allows owner to add support for new markets.
      * @param marketConfigs Morpho market ids to add support for
@@ -407,42 +477,29 @@ contract FlashLeverage is
 
         for (uint256 i; i < marketConfigsLength; ++i) {
             MarketConfig memory marketConfig = marketConfigs[i];
-            // Morpho related
+
             MarketParams memory market = i_morpho.idToMarketParams(
                 Id.wrap(marketConfig.marketId)
             );
 
-            _updateMarketParams(marketConfig.marketId, market);
+            _updateMarket(marketConfig.marketId, market);
             s_isCorrelated[marketConfig.marketId] = marketConfig.isCorrelated;
         }
     }
 
     /**
-     * @notice Adds a new valid swapRouter to execute the internal swaps
-     * @param swapRouter The new swapRouter address
-     * @dev Only callable by the contract owner. Validates that the new swap router is not zero address.
+     * @notice Enables or disables a swapRouter for executing internal swaps.
+     * @param swapRouter The swapRouter address to update.
+     * @param value True to enable, false to disable.
+     * @dev Only callable by the contract owner. Validates that the swap router is not zero address.
      */
-    function addSwapRouter(address swapRouter) external onlyOwner {
+    function setSwapRouter(address swapRouter, bool value) external onlyOwner {
         require(
             swapRouter != address(0),
             FLError.FlashLeverage__CannotBeZeroAddress()
         );
 
-        _addSwapRouter(swapRouter);
-    }
-
-    /**
-     * @notice Removes an existing swapRouter if it becomes compromised, or when we don't want to support it.
-     * @param swapRouter Address of the swapRouter
-     * @dev Only callable by the contract owner. Validates that the new swap router is not zero address.
-     */
-    function removeSwapRouter(address swapRouter) external onlyOwner {
-        require(
-            swapRouter != address(0),
-            FLError.FlashLeverage__CannotBeZeroAddress()
-        );
-
-        _removeSwapRouter(swapRouter);
+        _setSwapRouter(swapRouter, value);
     }
 
     /**
@@ -575,6 +632,7 @@ contract FlashLeverage is
         // Repay the flash loan, with borrowed loan token
         _forceApprove(market.loanToken, address(i_morpho), amountLoan);
 
+        // AmountCollateral == 0, when called by increaseLeverage()
         if (amountCollateral > 0) {
             // Position Tracking Related: Amount Collateral Deposited in loan token
             uint256 amountDepositedInLoanToken = getCollateralValueInLoanToken(
@@ -688,36 +746,12 @@ contract FlashLeverage is
         }
 
         uint256 feeAmount = amount.mulDown(s_depositFee);
-
         if (feeAmount > 0) {
             _transferOut(token, s_treasury, feeAmount);
         }
 
         amountAfterFee = amount - feeAmount;
     }
-
-    // /**
-    //  * @notice Charges deposit fee for non-correlated assets.
-    //  * @param token Address of the token to charge fee on.
-    //  * @param amount The amount on which to charge fee.
-    //  * @return amountAfterFee The amount after deducting the fee.
-    //  */
-    // function _chargeYieldFeeIfCorrelated(
-    //     Position memory position,
-    //     uint256 amount
-    // ) internal returns (uint256 amountAfterFee) {
-    //     if (s_isCorrelated[position.marketId]) {
-    //         return amount;
-    //     }
-
-    //     uint256 feeAmount = amount.mulDown(s_depositFee);
-
-    //     if (feeAmount > 0) {
-    //         _transferOut(token, s_treasury, feeAmount);
-    //     }
-
-    //     amountAfterFee = amount - feeAmount;
-    // }
 
     /**
      * @dev Validates that the final LTV after leverage operation doesn't exceed the max LTV.
@@ -732,7 +766,8 @@ contract FlashLeverage is
         uint256 amountLeveragedCollateral,
         uint256 amountLoan
     ) internal view {
-        // Add existing position values if proxy exists
+        // Add existing position values if proxy exists,
+        // proxy == address(0) when called from _handleDeleverage()
         if (userProxy != address(0)) {
             Position memory morphoPosition = getMorphoPosition(
                 userProxy,
@@ -752,7 +787,6 @@ contract FlashLeverage is
             loanTokenDecimals,
             Math.STANDARD_DECIMALS
         );
-
         uint256 amountCollateralInLoanToken = getCollateralValueInLoanToken(
             market,
             amountLeveragedCollateral
@@ -760,7 +794,6 @@ contract FlashLeverage is
 
         uint256 effectiveLtv = amountLoan.divDown(amountCollateralInLoanToken);
         uint256 maxLtv = getMaxLtv(market);
-
         require(
             effectiveLtv <= maxLtv,
             FLError.FlashLeverage__ExceedsMaxLTV(effectiveLtv, maxLtv)

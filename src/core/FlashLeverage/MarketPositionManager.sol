@@ -233,14 +233,14 @@ abstract contract MarketPositionManager is
     /**
      * @notice Updates market parameters for a given Morpho market.
      * @param marketId Morpho market id to store the parameters against.
-     * @param params Morpho market parameters to store.
+     * @param market Morpho market parameters to store.
      */
-    function _updateMarketParams(
+    function _updateMarket(
         bytes32 marketId,
-        MarketParams memory params
+        MarketParams memory market
     ) internal {
-        s_markets[marketId] = params;
-        s_loanTokenDecimals[params.loanToken] = IERC20Metadata(params.loanToken)
+        s_markets[marketId] = market;
+        s_loanTokenDecimals[market.loanToken] = IERC20Metadata(market.loanToken)
             .decimals();
     }
 

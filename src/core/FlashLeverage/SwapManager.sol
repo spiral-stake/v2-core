@@ -34,12 +34,8 @@ contract SwapManager is TokenHelper {
         require(amountOut >= minTokenOut, "minTokenOut Not Met");
     }
 
-    function _addSwapRouter(address router) internal {
-        s_isSwapRouter[router] = true;
-    }
-
-    function _removeSwapRouter(address router) internal {
-        s_isSwapRouter[router] = false;
+    function _setSwapRouter(address router, bool value) internal {
+        s_isSwapRouter[router] = value;
     }
 
     function isValidSwapRouter(address router) external view returns (bool) {
