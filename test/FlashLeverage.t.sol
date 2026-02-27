@@ -26,53 +26,46 @@ contract TestFlashLeverage is TestBase {
                            ACCESS CONTROL TESTS
     //////////////////////////////////////////////////////////////*/
 
-    function test_addSupportedCollateralTokens() external {
+    function test_addSupportedMarkets() external {
         // Arrange
         address flOwner = fl.owner();
 
         // Required
         // PT-cUSD
-        CollateralTokenConfig[]
-            memory newTokenConfig = new CollateralTokenConfig[](1);
+        MarketConfig[] memory newMarketConfig = new MarketConfig[](1);
 
-        newTokenConfig[0] = CollateralTokenConfig({
-            collateralToken: 0x545A490f9ab534AdF409A2E682bc4098f49952e3,
-            morphoMarketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789,
+        newMarketConfig[0] = MarketConfig({
+            marketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789,
             isCorrelated: true
         });
 
         // Act
         vm.prank(flOwner);
-        fl.addSupportedCollateralTokens(newTokenConfig);
+        fl.addSupportedMarkets(newMarketConfig);
 
         // Assert
-        bool supported = fl.isSupportedCollateralToken(
-            newTokenConfig[0].collateralToken,
-            USDC
-        );
+        bool supported = fl.isSupportedMarket(newMarketConfig[0].marketId);
         assertTrue(supported);
     }
 
-    function test_addSupportedCollateralTokens_RevertsWhen_InvalidTokenConfiguration()
+    function test_addSupportedMarkets_RevertsWhen_InvalidTokenConfiguration()
         external
     {
         // Arrange
         address flOwner = fl.owner();
 
-        // Case 1 - Invalid Collateral Token for given morpho Market
-        CollateralTokenConfig[]
-            memory newTokenConfig = new CollateralTokenConfig[](1);
+        // Case 1 - Invalid Morpho Market ID
+        MarketConfig[] memory newMarketConfig = new MarketConfig[](1);
 
-        newTokenConfig[0] = CollateralTokenConfig({
-            collateralToken: 0x2d3C279E5FcDF5b793c0a75ed90738D7369B0b83,
-            morphoMarketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c789,
+        newMarketConfig[0] = MarketConfig({
+            marketId: 0x802ec6e878dc9fe6905b8a0a18962dcca10440a87fa2242fbf4a0461c7b0c089,
             isCorrelated: true
         });
 
         // Act & Assert
         vm.prank(flOwner);
-        vm.expectRevert(FLError.FlashLeverage__InvalidCollateralToken.selector);
-        fl.addSupportedCollateralTokens(newTokenConfig);
+        vm.expectRevert();
+        fl.addSupportedMarkets(newMarketConfig);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -82,12 +75,10 @@ contract TestFlashLeverage is TestBase {
     function test_leverage_RevertsWhen_CollateralTokenUnsupported() external {
         // Arrange
         LeverageParams memory params = _buildDefaultLeverageParams();
-        params.collateralToken = RANDOM_ADDRESS;
+        params.marketId = bytes32(0);
 
         // Act & Assert
-        vm.expectRevert(
-            FLError.FlashLeverage__UnsupportedCollateralToken.selector
-        );
+        vm.expectRevert(FLError.FlashLeverage__UnsupportedMarket.selector);
         vm.prank(address(fl));
         fl.leverage(USER, params);
     }
@@ -119,7 +110,7 @@ contract TestFlashLeverage is TestBase {
         // 3. Verify user position isolation through userProxy
         address userProxy = position.userProxy;
         Position memory morphoPosition = morpho.position(
-            Id.wrap(tokenConfigs[TOKEN_INDEX].morphoMarketId),
+            Id.wrap(marketId),
             userProxy
         );
 
@@ -151,7 +142,7 @@ contract TestFlashLeverage is TestBase {
         );
 
         Position memory morphoPosition = morpho.position(
-            Id.wrap(tokenConfigs[TOKEN_INDEX].morphoMarketId),
+            Id.wrap(marketId),
             positionBefore.userProxy
         );
 
@@ -239,39 +230,25 @@ contract TestFlashLeverage is TestBase {
 
     function test_getLiqLtv_ReturnsCorrectValue() external view {
         // Arrange
-        CollateralTokenConfig memory config = tokenConfigs[TOKEN_INDEX];
-        MarketParams memory marketParams = morpho.idToMarketParams(
-            Id.wrap(config.morphoMarketId)
-        );
 
         // Act
-        uint256 actualLiqLtv = fl.getLiqLtv(
-            config.collateralToken,
-            marketParams.loanToken
-        );
+        uint256 actualLiqLtv = fl.getLiqLtv(market);
 
         // Assert
         assertEq(
             actualLiqLtv,
-            marketParams.lltv,
+            market.lltv,
             "Liquidation LTV should match market parameters"
         );
     }
 
     function test_getMaxLtv_ReturnsLiqLtvMinusBuffer() external view {
         // Arrange
-        CollateralTokenConfig memory config = tokenConfigs[TOKEN_INDEX];
-        MarketParams memory marketParams = morpho.idToMarketParams(
-            Id.wrap(config.morphoMarketId)
-        );
         uint256 liquidationBuffer = fl.LIQUIDATION_BUFFER();
-        uint256 expectedMaxLtv = marketParams.lltv - liquidationBuffer;
+        uint256 expectedMaxLtv = market.lltv - liquidationBuffer;
 
         // Act
-        uint256 actualMaxLtv = fl.getMaxLtv(
-            config.collateralToken,
-            marketParams.loanToken
-        );
+        uint256 actualMaxLtv = fl.getMaxLtv(market);
 
         // Assert
         assertEq(
@@ -287,18 +264,18 @@ contract TestFlashLeverage is TestBase {
     {
         // Arrange & Act & Assert
         // Test across multiple token configurations for comprehensive coverage
-        for (uint256 i; i < tokenConfigs.length; ++i) {
-            CollateralTokenConfig memory config = tokenConfigs[i];
-            MarketParams memory marketParams = morpho.idToMarketParams(
-                Id.wrap(config.morphoMarketId)
+        for (uint256 i; i < marketConfigs.length; ++i) {
+            bytes32 marketId = marketConfigs[i].marketId;
+            MarketParams memory market = morpho.idToMarketParams(
+                Id.wrap(marketId)
             );
 
             uint256 amountCollateral = 10e18;
-            address loanToken = marketParams.loanToken;
+            address loanToken = market.loanToken;
             uint8 loanTokenDecimals = IERC20Metadata(loanToken).decimals();
 
             // Calculate expected value using oracle price
-            uint256 expectedValue = IOracle(marketParams.oracle)
+            uint256 expectedValue = IOracle(market.oracle)
                 .price()
                 .mulDown(amountCollateral)
                 .scaleTo(
@@ -307,8 +284,7 @@ contract TestFlashLeverage is TestBase {
                 );
 
             uint256 actualValue = fl.getCollateralValueInLoanToken(
-                config.collateralToken,
-                loanToken,
+                market,
                 amountCollateral
             );
 
@@ -331,24 +307,22 @@ contract TestFlashLeverage is TestBase {
 
     function _setupSuccessfulLeverageConditions() internal {
         vm.prank(USER);
-        IERC20(COLLATERAL_TOKEN).transfer(address(fl), AMOUNT_COLLATERAL);
+        IERC20(market.collateralToken).transfer(address(fl), AMOUNT_COLLATERAL);
 
         vm.prank(address(fl));
-        IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
+        IERC20(market.collateralToken).approve(address(fl), AMOUNT_COLLATERAL);
     }
 
     function _executeLeverageOperation() internal {
         bytes memory callData = getLeverageCalldata(
             USER,
             DESIRED_LTV,
-            COLLATERAL_TOKEN,
-            LOAN_TOKEN,
             AMOUNT_COLLATERAL
         );
 
         vm.startPrank(USER);
 
-        IERC20(COLLATERAL_TOKEN).approve(address(fl), AMOUNT_COLLATERAL);
+        IERC20(market.collateralToken).approve(address(fl), AMOUNT_COLLATERAL);
         (bool success, ) = address(fl).call(callData);
         require(success, "Leverage operation failed");
         vm.stopPrank();
@@ -360,7 +334,6 @@ contract TestFlashLeverage is TestBase {
     ) internal {
         bytes memory callData = getDeleverageCalldata(
             positionId,
-            COLLATERAL_TOKEN,
             amountLeveragedCollateral
         );
 

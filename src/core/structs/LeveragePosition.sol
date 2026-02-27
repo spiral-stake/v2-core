@@ -4,8 +4,7 @@ pragma solidity 0.8.30;
 /// @notice Represents a user's leveraged position state
 struct LeveragePosition {
     bool open;
-    address collateralToken;
-    address loanToken;
+    bytes32 marketId;
     uint256 amountCollateral;
     address userProxy; // Isolated proxy contract holding this position on Morpho
     uint256 amountDepositedInLoanToken; // Initial deposit valued in loanToken, used for yield/fee calc

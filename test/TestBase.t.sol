@@ -4,7 +4,9 @@ pragma solidity 0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
 import {Math} from "../src/core/libraries/Math.sol";
+import {MarketConfig} from "../src/core/structs/MarketConfig.sol";
 
 import {WriteAddresses} from "../script/WriteAddresses.s.sol";
 import {IMorpho, MarketParams, Id, Position} from "@morpho/interfaces/IMorpho.sol";
@@ -17,7 +19,7 @@ contract TestBase is Test, WriteAddresses, Config {
 
     FlashLeverage fl;
     IMorpho morpho;
-    CollateralTokenConfig[] tokenConfigs;
+    MarketConfig[] marketConfigs;
     address[] tokenWhales;
     address treasury;
     address USDC;
@@ -30,10 +32,10 @@ contract TestBase is Test, WriteAddresses, Config {
     uint256 internal constant AMOUNT_COLLATERAL = 10000e18; // 10k
     uint256 internal constant DESIRED_LTV = 70e16; // 70%
 
+    bytes32 internal marketId;
+    MarketParams internal market;
     uint256 internal constant TOKEN_INDEX = 0; // Collateral Token to run the tests on
     address internal USER;
-    address internal COLLATERAL_TOKEN;
-    address internal LOAN_TOKEN;
     uint8 internal LOAN_TOKEN_DECIMALS;
 
     function setUp() external virtual {
@@ -48,22 +50,21 @@ contract TestBase is Test, WriteAddresses, Config {
         ChainConfig memory chain = getChainConfig();
 
         morpho = IMorpho(chain.morpho);
-        tokenConfigs = getCollateralTokens();
+        marketConfigs = getMarketConfigs();
         tokenWhales = getCollateralTokenWhales();
         treasury = chain.treasury;
         USDC = chain.USDC;
         RANDOM_ADDRESS = makeAddr("Random Address");
+        marketId = marketConfigs[TOKEN_INDEX].marketId;
+        market = morpho.idToMarketParams(Id.wrap(marketId));
 
         USER = tokenWhales[TOKEN_INDEX];
-        COLLATERAL_TOKEN = tokenConfigs[TOKEN_INDEX].collateralToken;
-        LOAN_TOKEN = morpho
-            .idToMarketParams(Id.wrap(tokenConfigs[TOKEN_INDEX].morphoMarketId))
-            .loanToken;
-        LOAN_TOKEN_DECIMALS = IERC20Metadata(LOAN_TOKEN).decimals();
+
+        LOAN_TOKEN_DECIMALS = IERC20Metadata(market.loanToken).decimals();
 
         _writeAddresses(
             address(morpho),
-            tokenConfigs,
+            marketConfigs,
             address(fl),
             address(0),
             "./api/test-addresses/"
@@ -73,14 +74,10 @@ contract TestBase is Test, WriteAddresses, Config {
     function getLeverageCalldata(
         address user,
         uint256 desiredLtv,
-        address collateralToken,
-        address loanToken,
         uint256 amountCollateral
     ) internal returns (bytes memory) {
         uint256 amountFlashLoan = _calcLeverageFlashLoan(
             desiredLtv,
-            collateralToken,
-            loanToken,
             amountCollateral
         );
 
@@ -89,7 +86,7 @@ contract TestBase is Test, WriteAddresses, Config {
             "?userAddress=",
             vm.toString(user),
             "&collateralTokenAddress=",
-            vm.toString(collateralToken),
+            vm.toString(market.collateralToken),
             "&amountCollateral=",
             vm.toString(amountCollateral),
             "&amountFlashLoan=",
@@ -109,7 +106,6 @@ contract TestBase is Test, WriteAddresses, Config {
 
     function getDeleverageCalldata(
         uint256 positionId,
-        address collateralToken,
         uint256 amountLeveragedCollateral
     ) internal returns (bytes memory) {
         string memory url = string.concat(
@@ -117,7 +113,7 @@ contract TestBase is Test, WriteAddresses, Config {
             "?positionId=",
             vm.toString(positionId),
             "&collateralTokenAddress=",
-            vm.toString(collateralToken),
+            vm.toString(market.collateralToken),
             "&amountLeveragedCollateral=",
             vm.toString(amountLeveragedCollateral)
         );
@@ -141,8 +137,7 @@ contract TestBase is Test, WriteAddresses, Config {
         SwapData memory swapData;
         return
             LeverageParams({
-                collateralToken: COLLATERAL_TOKEN,
-                loanToken: LOAN_TOKEN,
+                marketId: marketId,
                 amountCollateral: AMOUNT_COLLATERAL,
                 amountFlashLoan: 0,
                 swapData: swapData,
@@ -153,23 +148,15 @@ contract TestBase is Test, WriteAddresses, Config {
     /**
      * @notice Calculates the flashloan amount needed for leveraging based on desired LTV and collateral amount.
      * @param desiredLtv The desired loan-to-value ratio for the position.
-     * @param collateralToken The token used as collateral.
-     * @param loanToken The stablecoin loan token (eg: USDC, DAI, USR, ...).
      * @param amountCollateral Amount of collateral being supplied.
      * @return amountToBorrow Amount of loanToken that can be borrowed (scaled to loanToken decimals).
      */
     function _calcLeverageFlashLoan(
         uint256 desiredLtv,
-        address collateralToken,
-        address loanToken,
         uint256 amountCollateral
     ) internal view returns (uint256) {
         uint256 collateralValue = fl
-            .getCollateralValueInLoanToken(
-                collateralToken,
-                loanToken,
-                amountCollateral
-            )
+            .getCollateralValueInLoanToken(market, amountCollateral)
             .scaleTo(LOAN_TOKEN_DECIMALS, Math.STANDARD_DECIMALS);
 
         // Total position value = collateralValue / (1 - LTV)

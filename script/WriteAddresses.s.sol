@@ -3,20 +3,22 @@ pragma solidity 0.8.30;
 
 import {Script} from "forge-std/Script.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20Metadata.sol";
-import {CollateralTokenConfig} from "../src/core/structs/CollateralTokenConfig.sol";
 import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
+import {FlashLeverage} from "./DeployFlashLeverage.s.sol";
+import {MarketConfig} from "../src/core/structs/MarketConfig.sol";
 
-import {console} from "forge-std/console.sol";
+interface IPT {
+    function expiry() external view returns (uint256);
+}
 
 contract WriteAddresses is Script {
     function _writeAddresses(
         address morphoAddress,
-        CollateralTokenConfig[] memory tokenConfigs,
+        MarketConfig[] memory marketConfigs,
         address flashLeverageAddress,
         address flashLeverageRouter,
         string memory path
     ) internal {
-        IMorpho morpho = IMorpho(morphoAddress);
         string memory addresses = "addresses";
 
         vm.serializeAddress(addresses, "morphoAddress", morphoAddress);
@@ -32,66 +34,93 @@ contract WriteAddresses is Script {
         );
 
         // Collateral Tokens
+        string memory markets = "markets";
 
-        string memory collateralTokens = "collateralTokens";
-        for (uint256 i; i < tokenConfigs.length; ++i) {
+        uint256 marketsLength = marketConfigs.length;
+        for (uint256 i; i < marketsLength; ++i) {
+            string memory marketObj = "marketObj";
+
+            bytes32 marketId = marketConfigs[i].marketId;
+
+            MarketParams memory market = IMorpho(morphoAddress)
+                .idToMarketParams(Id.wrap(marketId));
+
+            IERC20Metadata token = IERC20Metadata(market.collateralToken);
+
+            // Create collateral token metadata object
             string memory tokenObj = "tokenObj";
-
-            IERC20Metadata token = IERC20Metadata(
-                tokenConfigs[i].collateralToken
-            );
-            MarketParams memory marketParams = morpho.idToMarketParams(
-                Id.wrap(tokenConfigs[i].morphoMarketId)
-            );
+            vm.serializeAddress(tokenObj, "address", address(token));
+            vm.serializeString(tokenObj, "name", token.name());
+            string memory symbol = token.symbol();
+            vm.serializeString(tokenObj, "symbol", symbol);
+            if (_startsWith(symbol, "PT-")) {
+                vm.serializeUint(
+                    tokenObj,
+                    "maturity",
+                    IPT(address(token)).expiry()
+                );
+            }
+            tokenObj = vm.serializeUint(tokenObj, "decimals", token.decimals());
 
             // Create loan token metadata object
-            address loanTokenAddress = marketParams.loanToken;
+            address loanTokenAddress = market.loanToken;
             IERC20Metadata loanToken = IERC20Metadata(loanTokenAddress);
             string memory loanTokenObj = "loanTokenObj";
             vm.serializeAddress(loanTokenObj, "address", loanTokenAddress);
             vm.serializeString(loanTokenObj, "name", loanToken.name());
             vm.serializeString(loanTokenObj, "symbol", loanToken.symbol());
-
             loanTokenObj = vm.serializeUint(
                 loanTokenObj,
                 "decimals",
                 loanToken.decimals()
             );
 
-            vm.serializeAddress(tokenObj, "address", address(token));
-            vm.serializeString(tokenObj, "name", token.name());
-            vm.serializeString(tokenObj, "symbol", token.symbol());
-            vm.serializeUint(tokenObj, "decimals", token.decimals());
-            vm.serializeBytes32(
-                tokenObj,
-                "morphoMarketId",
-                tokenConfigs[i].morphoMarketId
-            );
-            tokenObj = vm.serializeString(tokenObj, "loanToken", loanTokenObj);
+            vm.serializeUint(marketObj, "liqLtv", market.lltv);
 
-            vm.serializeString(
-                collateralTokens,
-                vm.toString(address(token)),
-                tokenObj
+            vm.serializeUint(
+                marketObj,
+                "maxLtv",
+                FlashLeverage(flashLeverageAddress).getMaxLtv(market)
             );
-            if (i == tokenConfigs.length - 1) {
-                collateralTokens = vm.serializeString(
-                    collateralTokens,
-                    vm.toString(address(token)),
-                    tokenObj
+
+            vm.serializeBytes32(marketObj, "morphoMarketId", marketId);
+
+            vm.serializeString(marketObj, "collateralToken", tokenObj);
+
+            marketObj = vm.serializeString(
+                marketObj,
+                "loanToken",
+                loanTokenObj
+            );
+
+            vm.serializeString(markets, vm.toString(marketId), marketObj);
+            if (i == marketsLength - 1) {
+                markets = vm.serializeString(
+                    markets,
+                    vm.toString(marketId),
+                    marketObj
                 );
             }
         }
 
-        addresses = vm.serializeString(
-            addresses,
-            "collateralTokens",
-            collateralTokens
-        );
+        addresses = vm.serializeString(addresses, "markets", markets);
 
         vm.writeJson(
             addresses,
             string.concat(path, vm.toString(block.chainid), ".json")
         );
+    }
+
+    function _startsWith(
+        string memory str,
+        string memory prefix
+    ) internal pure returns (bool) {
+        bytes memory strBytes = bytes(str);
+        bytes memory prefixBytes = bytes(prefix);
+        if (prefixBytes.length > strBytes.length) return false;
+        for (uint256 i; i < prefixBytes.length; ++i) {
+            if (strBytes[i] != prefixBytes[i]) return false;
+        }
+        return true;
     }
 }

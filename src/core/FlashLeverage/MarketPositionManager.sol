@@ -37,10 +37,9 @@ abstract contract MarketPositionManager is
     /////////////////////////
     // Storage
 
-    mapping(address collateralToken => mapping(address loanToken => MarketParams))
-        internal s_marketParams;
+    mapping(bytes32 marketId => MarketParams) internal s_markets;
 
-    // To save gas by reducing external calls
+    // Cached Loan Token Decimals to save gas by reducing external calls
     mapping(address loanToken => uint8) internal s_loanTokenDecimals;
 
     /////////////////////////
@@ -84,57 +83,38 @@ abstract contract MarketPositionManager is
     /**
      * @notice Supplies collateral and borrows funds from Morpho market.
      * @param userProxy Address of the user's proxy contract, to execute / deposit on behalf of
-     * @param collateralToken Token used as collateral.
+     * @param market Market parameters for the collateral-loan token pair.
      * @param amountCollateral Amount of collateral to supply.
      * @param amountBorrow Amount to borrow.
      * @return borrowShares Number of shares borrowed from the market.
      */
     function _supplyCollateralAndBorrowViaProxy(
         address userProxy,
-        address collateralToken,
-        address loanToken,
+        MarketParams memory market,
         uint256 amountCollateral,
         uint256 amountBorrow
     ) internal returns (uint256 borrowShares) {
-        MarketParams memory marketParams = s_marketParams[collateralToken][
-            loanToken
-        ];
-
-        _morphoSupplyCollateral(userProxy, marketParams, amountCollateral);
-        borrowShares = _morphoBorrowViaProxy(
-            userProxy,
-            marketParams,
-            amountBorrow
-        );
+        _morphoSupplyCollateral(userProxy, market, amountCollateral);
+        borrowShares = _morphoBorrowViaProxy(userProxy, market, amountBorrow);
     }
 
     /**
      * @notice Repays borrowed funds and withdraws supplied collateral.
      * @param userProxy Address of the user's proxy contract, to execute / deposit on behalf of
-     * @param collateralToken Token used as collateral.
+     * @param market Market parameters for the collateral-loan token pair.
      * @param amountLoan Amount of loan to repay (for approval).
      * @param amountCollateral Amount of collateral to withdraw.
      * @param borrowShares Shares representing borrowed amount to repay.
      */
     function _repayAndWithdrawCollateralViaProxy(
         address userProxy,
-        address collateralToken,
-        address loanToken,
+        MarketParams memory market,
         uint256 amountLoan,
         uint256 amountCollateral,
         uint256 borrowShares
     ) internal {
-        MarketParams memory marketParams = s_marketParams[collateralToken][
-            loanToken
-        ];
-
-        _morphoRepay(userProxy, marketParams, amountLoan, borrowShares);
-
-        _morphoWithdrawCollateralViaProxy(
-            userProxy,
-            marketParams,
-            amountCollateral
-        );
+        _morphoRepay(userProxy, market, amountLoan, borrowShares);
+        _morphoWithdrawCollateralViaProxy(userProxy, market, amountCollateral);
     }
 
     /**
@@ -233,7 +213,7 @@ abstract contract MarketPositionManager is
         address userProxy,
         MarketParams memory marketParams,
         uint256 amount
-    ) private {
+    ) internal {
         if (amount > 0) {
             address onBehalf = userProxy;
             address receiver = address(this);
@@ -251,11 +231,15 @@ abstract contract MarketPositionManager is
     }
 
     /**
-     * @notice Updates market parameters for a collateral token using Morpho's market ID.
-     * @param params Morpho market params for collateral token
+     * @notice Updates market parameters for a given Morpho market.
+     * @param marketId Morpho market id to store the parameters against.
+     * @param params Morpho market parameters to store.
      */
-    function _updateMarketParams(MarketParams memory params) internal {
-        s_marketParams[params.collateralToken][params.loanToken] = params;
+    function _updateMarketParams(
+        bytes32 marketId,
+        MarketParams memory params
+    ) internal {
+        s_markets[marketId] = params;
         s_loanTokenDecimals[params.loanToken] = IERC20Metadata(params.loanToken)
             .decimals();
     }
@@ -289,44 +273,28 @@ abstract contract MarketPositionManager is
     /**
      * @notice Retrieves the Morpho position for a user in a specific market.
      * @param user The address of the user (typically a UserProxy contract).
-     * @param collateralToken The collateral token of the market.
-     * @param loanToken The loan token of the market.
+     * @param market Market parameters used to derive the market id.
      * @return Position struct containing collateral amount and borrow shares.
      */
     function getMorphoPosition(
         address user,
-        address collateralToken,
-        address loanToken
+        MarketParams memory market
     ) public view returns (Position memory) {
-        return
-            i_morpho.position(
-                Id.wrap(
-                    keccak256(
-                        abi.encode(s_marketParams[collateralToken][loanToken])
-                    )
-                ),
-                user
-            );
+        return i_morpho.position(Id.wrap(keccak256(abi.encode(market))), user);
     }
 
     /**
      * @notice Calculates the amount of loan token needed to repay borrowed shares.
-     * @param collateralToken Token used as collateral in the position.
-     * @param loanToken Token that was borrowed in the position.
+     * @param market Market parameters for the collateral-loan token pair.
      * @param borrowShares Shares representing the borrowed position.
      * @return Equivalent amount in loan token (using the token's native decimals).
      */
     function getSharesValueInLoanToken(
-        address collateralToken,
-        address loanToken,
+        MarketParams memory market,
         uint256 borrowShares
     ) public view returns (uint256) {
-        MarketParams memory marketParams = s_marketParams[collateralToken][
-            loanToken
-        ];
-
         (, , uint256 totalBorrowAssets, uint256 totalBorrowShares) = i_morpho
-            .expectedMarketBalances(marketParams);
+            .expectedMarketBalances(market);
 
         return borrowShares.toAssetsUp(totalBorrowAssets, totalBorrowShares);
     }

@@ -25,7 +25,8 @@ stop-server:
 	fi
 	@kill -9 $$(lsof -ti :3000) 2>/dev/null || true
 
-# rpc - https://polygon-mainnet.infura.io/v3/864733c97d574e199e6d10220c272f10
-# rpc - https://rpc.katana.network
 # rpc - https://mainnet.infura.io/v3/864733c97d574e199e6d10220c272f10
 # rpc - https://rpc.plume.org
+# rpc - https://rpc.katana.network
+# rpc - https://rpc.hyperliquid.xyz/evm
+# rpc - https://polygon-mainnet.infura.io/v3/864733c97d574e199e6d10220c272f10

@@ -31,10 +31,14 @@ addresses/
 # Server
 .server.pid
 
+# Reports
+report.md
+
 # Temp
 script/Run.s.sol
 .VSCodeCounter
 new.doc
+
 
 
 

@@ -2,12 +2,12 @@
 pragma solidity 0.8.30;
 
 import {Script} from "forge-std/Script.sol";
-import {console} from "forge-std/console.sol";
 
 import {DeployFlashLeverage} from "./DeployFlashLeverage.s.sol";
 import {DeployFlashLeverageRouter} from "./DeployFlashLeverageRouter.sol";
 import {WriteAddresses} from "./WriteAddresses.s.sol";
-import {Config, ChainConfig, CollateralTokenConfig} from "./Config.s.sol";
+import {Config, ChainConfig} from "./Config.s.sol";
+import {MarketConfig} from "../src/core/structs/MarketConfig.sol";
 
 interface IWETH {
     function deposit() external payable;
@@ -16,7 +16,7 @@ interface IWETH {
 contract Main is Script, WriteAddresses, Config {
     function run() external returns (address flashLeverage) {
         ChainConfig memory chain = getChainConfig();
-        CollateralTokenConfig[] memory collateralTokens = getCollateralTokens();
+        MarketConfig[] memory marketConfigs = getMarketConfigs();
 
         if (block.chainid == 31337) {
             vm.startBroadcast();
@@ -24,12 +24,15 @@ contract Main is Script, WriteAddresses, Config {
             vm.stopBroadcast();
         }
 
-        flashLeverage = _deployFlashLeverage(chain, collateralTokens);
-        address flashLeverageRouter = _deployFlashLeverageRouter(flashLeverage);
+        flashLeverage = _deployFlashLeverage(chain, marketConfigs);
+        address flashLeverageRouter = _deployFlashLeverageRouter(
+            chain.morpho,
+            flashLeverage
+        );
 
         _writeAddresses(
             chain.morpho,
-            collateralTokens,
+            marketConfigs,
             flashLeverage,
             flashLeverageRouter,
             "./addresses/"
@@ -38,20 +41,22 @@ contract Main is Script, WriteAddresses, Config {
 
     function _deployFlashLeverage(
         ChainConfig memory chain,
-        CollateralTokenConfig[] memory collateralTokenConfig
+        MarketConfig[] memory marketConfigs
     ) private returns (address flashLeverage) {
         flashLeverage = new DeployFlashLeverage().run(
             chain.morpho,
             chain.swapRouters,
             chain.treasury,
-            collateralTokenConfig
+            marketConfigs
         );
     }
 
     function _deployFlashLeverageRouter(
+        address morpho,
         address flashLeverage
     ) private returns (address flashLeverageRouter) {
         flashLeverageRouter = new DeployFlashLeverageRouter().run(
+            morpho,
             flashLeverage
         );
     }

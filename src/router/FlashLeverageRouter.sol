@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
+import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
 import {LeverageParams} from "../core/structs/LeverageParams.sol";
 import {SwapData} from "../core/structs/SwapData.sol";
 import {TokenHelper} from "../core/libraries/TokenHelper.sol";
@@ -13,10 +14,12 @@ interface FlashLeverage {
 }
 
 contract FlashLeverageRouter is TokenHelper {
+    IMorpho public immutable i_morpho;
     FlashLeverage public immutable i_flashLeverage;
 
-    constructor(address flashLeverageAddress) {
+    constructor(address morphoAddress, address flashLeverageAddress) {
         i_flashLeverage = FlashLeverage(flashLeverageAddress);
+        i_morpho = IMorpho(morphoAddress);
     }
 
     function swapAndLeverage(
@@ -33,11 +36,13 @@ contract FlashLeverageRouter is TokenHelper {
         (bool success, ) = swapData.extRouter.call(swapData.extCalldata);
         require(success, "Swap Router Call Failed");
 
-        leverageParams.amountCollateral = _selfBalance(
-            leverageParams.collateralToken
+        MarketParams memory market = i_morpho.idToMarketParams(
+            Id.wrap(leverageParams.marketId)
         );
+
+        leverageParams.amountCollateral = _selfBalance(market.collateralToken);
         _forceApprove(
-            leverageParams.collateralToken,
+            market.collateralToken,
             address(i_flashLeverage),
             leverageParams.amountCollateral
         );

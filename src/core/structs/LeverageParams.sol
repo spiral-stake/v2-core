@@ -5,8 +5,7 @@ import {SwapData} from "./SwapData.sol";
 
 /// @notice Parameters for opening a leveraged position
 struct LeverageParams {
-    address collateralToken;
-    address loanToken;
+    bytes32 marketId;
     uint256 amountCollateral;
     uint256 amountFlashLoan;
     SwapData swapData; // Routing data for loanToken -> collateralToken swap

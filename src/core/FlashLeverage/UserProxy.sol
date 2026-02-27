@@ -16,8 +16,8 @@ contract UserProxy is TokenHelper {
     address public immutable flashLeverage;
     /// @notice Address of the Morpho contract to borrow and repay
     address public immutable morpho;
-    /// @notice Flag indicating whether recovery mode is active for this proxy contract
-    bool public recoveryMode;
+    /// @notice Flag indicating whether manual mode is active for this proxy contract
+    bool public manualMode;
 
     /// @notice Sets the immutable flashLeverage address
     /// @param _flashLeverage Address of the FlashLeverage contract
@@ -38,7 +38,7 @@ contract UserProxy is TokenHelper {
     /// @param data The encoded function call data to execute
     /// @return result The return data from the executed call
     /// @dev Can be called by either FlashLeverage (normal operation) or by the user
-    ///      (only when recovery mode is enabled). Used to interact with Morpho protocol
+    ///      (only when manual mode is enabled). Used to interact with Morpho protocol
     ///      (supply, borrow, repay, withdraw) and token approvals.
     ///      Reverts if the target call fails for any reason.
     function execute(
@@ -47,7 +47,7 @@ contract UserProxy is TokenHelper {
         if (msg.sender == flashLeverage) {
             // Proceed
         } else if (msg.sender == user) {
-            require(recoveryMode, "UserProxy: Not in Recovery Mode");
+            require(manualMode, "UserProxy: Not in manual Mode");
             // Proceed
         } else {
             revert("UserProxy: Unauthorised");
@@ -58,11 +58,11 @@ contract UserProxy is TokenHelper {
         return returnData;
     }
 
-    /// @notice Enables recovery mode allowing the user to call `execute`
-    /// @dev Only FlashLeverage can trigger recovery mode
-    function enableRecoveryMode() external {
+    /// @notice Enables manual mode allowing the user to call `execute`
+    /// @dev Only FlashLeverage can trigger manual mode
+    function enableManualMode() external {
         require(msg.sender == flashLeverage, "UserProxy: Unauthorised");
-        recoveryMode = true;
+        manualMode = true;
     }
 
     /**
