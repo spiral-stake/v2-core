@@ -792,6 +792,10 @@ contract FlashLeverage is
             amountLeveragedCollateral
         ).scaleTo(loanTokenDecimals, Math.STANDARD_DECIMALS);
 
+        if (amountCollateralInLoanToken == 0 && amountLoan == 0) {
+            return;
+        }
+
         uint256 effectiveLtv = amountLoan.divDown(amountCollateralInLoanToken);
         uint256 maxLtv = getMaxLtv(market);
         require(
