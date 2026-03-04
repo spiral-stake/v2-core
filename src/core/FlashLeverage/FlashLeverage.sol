@@ -468,7 +468,11 @@ contract FlashLeverage is
             }
         }
 
-        position.amountDepositedInLoanToken -= amountWithdrawInLoanToken;
+        if (amountWithdrawInLoanToken >= position.amountDepositedInLoanToken) {
+            position.amountDepositedInLoanToken = 0;
+        } else {
+            position.amountDepositedInLoanToken -= amountWithdrawInLoanToken;
+        }
         _transferOut(market.collateralToken, user, amountWithdraw);
 
         emit CollateralWithdrawn(user, positionId, amountWithdraw);
