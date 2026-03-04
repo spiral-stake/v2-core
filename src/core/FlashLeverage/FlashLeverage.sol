@@ -327,7 +327,7 @@ contract FlashLeverage is
 
     /**
      * @notice Allows position owner to borrow additional loan tokens if within LTV limits.
-     * @dev Only the position owner can call this function and works only for non-correlated pairs
+     * @dev Only the position owner can call this function
      * @param positionId The unique identifier of the leverage position.
      * @param amountBorrow The amount of loan tokens to borrow.
      */
@@ -388,6 +388,14 @@ contract FlashLeverage is
         emit LoanRepaid(user, positionId, amountRepay);
     }
 
+    /**
+     * @notice Withdraws collateral from an existing leverage position.
+     * @dev For correlated markets, a yield fee is charged on the profit portion of the withdrawal.
+     *      The fee is calculated in loan token terms and converted to collateral token for transfer.
+     *      Reverts if the resulting LTV exceeds the max allowed LTV after withdrawal.
+     * @param positionId The unique identifier of the leverage position.
+     * @param amountWithdraw The amount of collateral tokens to withdraw.
+     */
     function withdrawCollateral(
         uint256 positionId,
         uint256 amountWithdraw
@@ -754,7 +762,7 @@ contract FlashLeverage is
     }
 
     /**
-     * @dev Validates that the final LTV after leverage operation doesn't exceed the max LTV.
+     * @dev Validates that the final LTV after leverage, borrow & withdraw operations to not exceed the max LTV.
      * @param userProxy Address of the user's proxy contract (address(0) for new positions).
      * @param market Market parameters for the collateral-loan token pair.
      * @param amountLeveragedCollateral Total amount of collateral after leverage.
