@@ -166,7 +166,8 @@ contract FlashLeverage is
     {
         MarketParams memory market = s_markets[params.marketId];
         require(
-            market.collateralToken != address(0),
+            market.collateralToken != address(0) &&
+                s_marketEnabled[params.marketId],
             FLError.FlashLeverage__UnsupportedMarket()
         );
 
@@ -519,6 +520,20 @@ contract FlashLeverage is
     }
 
     /**
+     * @notice Enables or disables a market for new leverage positions
+     * @param marketId The morpho market id to update.
+     * @param value True to enable, false to disable.
+     * @dev Only callable by the contract owner. Existing positions can still be managed
+     */
+    function setMarketEnabled(bytes32 marketId, bool value) external onlyOwner {
+        require(
+            s_markets[marketId].collateralToken != address(0),
+            FLError.FlashLeverage__UnsupportedMarket()
+        );
+        s_marketEnabled[marketId] = value;
+    }
+
+    /**
      * @notice Updates the treasury address
      * @param newTreasury The new treasury address
      * @dev Only callable by the contract owner. Validates that the new treasury is not zero address.
@@ -851,7 +866,9 @@ contract FlashLeverage is
      *      has been configured and is available for leverage operations.
      */
     function isSupportedMarket(bytes32 marketId) external view returns (bool) {
-        return s_markets[marketId].collateralToken != address(0);
+        return
+            s_markets[marketId].collateralToken != address(0) &&
+            s_marketEnabled[marketId];
     }
 
     /**
