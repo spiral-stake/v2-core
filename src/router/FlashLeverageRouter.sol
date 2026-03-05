@@ -11,6 +11,8 @@ interface FlashLeverage {
         address onBehalfOf,
         LeverageParams calldata leverageParams
     ) external;
+
+    function isValidSwapRouter(address router) external returns (bool);
 }
 
 contract FlashLeverageRouter is TokenHelper {
@@ -45,6 +47,10 @@ contract FlashLeverageRouter is TokenHelper {
     ) external {
         require(amountIn > 0, "AmountIn cannot be zero");
         require(onBehalfOf != address(0), "Invalid onBehalfOf");
+        require(
+            i_flashLeverage.isValidSwapRouter(swapData.extRouter),
+            "Invalid Swap Router"
+        );
 
         _transferIn(tokenIn, msg.sender, amountIn);
 
