@@ -139,6 +139,7 @@ contract FlashLeverage is
         i_userProxyImplementation = address(
             new UserProxy(address(this), morphoAddress)
         );
+        UserProxy(i_userProxyImplementation).initialize(address(this));
 
         s_treasury = treasury;
         s_yieldFee = MAX_YIELD_FEE;
