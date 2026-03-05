@@ -161,6 +161,7 @@ contract FlashLeverage is
         validateOnBehalfOf(onBehalfOf)
         validateAmount(params.amountCollateral)
         validateAmount(params.amountFlashLoan)
+        nonReentrant
     {
         MarketParams memory market = s_markets[params.marketId];
         require(
@@ -212,7 +213,7 @@ contract FlashLeverage is
         uint256 positionId,
         SwapData memory swapData,
         uint256 minTokenOut
-    ) external returns (uint256) {
+    ) external nonReentrant returns (uint256) {
         address user = msg.sender;
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
@@ -266,7 +267,7 @@ contract FlashLeverage is
         uint256 amountFlashLoan,
         SwapData calldata swapData,
         uint256 minTokenOut
-    ) external validateAmount(amountFlashLoan) {
+    ) external nonReentrant validateAmount(amountFlashLoan) {
         address user = msg.sender;
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
@@ -298,7 +299,7 @@ contract FlashLeverage is
         address user,
         uint256 positionId,
         uint256 amountCollateral
-    ) external validateAmount(amountCollateral) {
+    ) external nonReentrant validateAmount(amountCollateral) {
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
         ];
@@ -334,7 +335,7 @@ contract FlashLeverage is
     function borrow(
         uint256 positionId,
         uint256 amountBorrow
-    ) external validateAmount(amountBorrow) {
+    ) external nonReentrant validateAmount(amountBorrow) {
         address user = msg.sender;
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
@@ -365,7 +366,7 @@ contract FlashLeverage is
         uint256 positionId,
         uint256 amountRepay,
         uint256 borrowShares // Can be 0, mostly used for full loan repayment
-    ) external validateAmount(amountRepay) {
+    ) external nonReentrant validateAmount(amountRepay) {
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
         ];
@@ -399,7 +400,7 @@ contract FlashLeverage is
     function withdrawCollateral(
         uint256 positionId,
         uint256 amountWithdraw
-    ) external validateAmount(amountWithdraw) {
+    ) external nonReentrant validateAmount(amountWithdraw) {
         address user = msg.sender;
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
