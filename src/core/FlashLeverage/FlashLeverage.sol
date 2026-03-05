@@ -419,7 +419,9 @@ contract FlashLeverage is
             amountWithdraw
         );
 
-        if (s_isCorrelated[position.marketId]) {
+        if (
+            s_isCorrelated[position.marketId] && amountWithdrawInLoanToken > 0
+        ) {
             Position memory morphoPosition = getMorphoPosition(
                 position.userProxy,
                 market
