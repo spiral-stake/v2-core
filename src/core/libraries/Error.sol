@@ -13,7 +13,6 @@ library FLError {
     // Position management
     error FlashLeverage__ExceedsMaxLTV(uint256 effectiveLtv, uint256 maxLtv);
     error FlashLeverage__PositionAlreadyClosed();
-    error FlashLeverage__CannotBorrowForCorrelatedPair();
 
     // Configuration
     error FlashLeverage__UnsupportedMarket();
