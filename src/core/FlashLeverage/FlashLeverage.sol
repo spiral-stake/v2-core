@@ -780,7 +780,7 @@ contract FlashLeverage is
         uint256 amountLoan
     ) internal view {
         // Add existing position values if proxy exists,
-        // proxy == address(0) when called from _handleDeleverage()
+        // proxy == address(0) when called from _handleLeverage() for new positions
         if (userProxy != address(0)) {
             Position memory morphoPosition = getMorphoPosition(
                 userProxy,
