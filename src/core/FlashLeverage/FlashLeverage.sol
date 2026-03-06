@@ -464,9 +464,8 @@ contract FlashLeverage is
 
                 // Convert fee from loanToken terms to collateralToken terms
                 // using the ratio: amountWithdraw / amountWithdrawInLoanToken
-                uint256 feeInCollateral = yieldFeeInLoanToken
-                    .mulDown(amountWithdraw)
-                    .divDown(amountWithdrawInLoanToken);
+                uint256 feeInCollateral = (yieldFeeInLoanToken *
+                    amountWithdraw) / amountWithdrawInLoanToken;
 
                 if (feeInCollateral > 0) {
                     _transferOut(
