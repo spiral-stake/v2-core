@@ -66,36 +66,38 @@ contract FlashLeverage is
         uint256 indexed positionId,
         uint256 indexed amountDepositedInLoanToken
     );
-
     event LeveragePositionClosed(
         address indexed user,
         uint256 indexed positionId,
         uint256 indexed amountReturnedInLoanToken
     );
-
     event CollateralSupplied(
         address indexed user,
         uint256 indexed positionId,
         uint256 amountSuppliedInLoanToken
     );
-
     event LoanRepaid(
         address indexed user,
         uint256 indexed positionId,
         uint256 amountRepaid
     );
-
     event AdditionalBorrowed(
         address indexed user,
         uint256 indexed positionId,
         uint256 amountBorrowed
     );
-
     event CollateralWithdrawn(
         address indexed user,
         uint256 indexed positionId,
         uint256 amountWithdrawn
     );
+    event MarketAdded(bytes32 indexed marketId, bool isCorrelated);
+    event TreasuryUpdated(
+        address indexed oldTreasury,
+        address indexed newTreasury
+    );
+    event YieldFeeUpdated(uint256 oldFee, uint256 newFee);
+    event DepositFeeUpdated(uint256 oldFee, uint256 newFee);
 
     /////////////////////////
     // Modifiers
@@ -501,6 +503,7 @@ contract FlashLeverage is
 
             _updateMarket(marketConfig.marketId, market);
             s_isCorrelated[marketConfig.marketId] = marketConfig.isCorrelated;
+            emit MarketAdded(marketConfig.marketId, marketConfig.isCorrelated);
         }
     }
 
@@ -544,6 +547,7 @@ contract FlashLeverage is
             FLError.FlashLeverage__CannotBeZeroAddress()
         );
 
+        emit TreasuryUpdated(s_treasury, newTreasury);
         s_treasury = newTreasury;
     }
 
@@ -559,6 +563,7 @@ contract FlashLeverage is
             FLError.FlashLeverage__InvalidYieldFee()
         );
 
+        emit YieldFeeUpdated(s_yieldFee, newYieldFee);
         s_yieldFee = newYieldFee;
     }
 
@@ -574,6 +579,7 @@ contract FlashLeverage is
             FLError.FlashLeverage__InvalidDepositFee()
         );
 
+        emit DepositFeeUpdated(s_depositFee, newDepositFee);
         s_depositFee = newDepositFee;
     }
 

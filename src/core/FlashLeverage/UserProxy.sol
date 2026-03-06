@@ -20,6 +20,12 @@ contract UserProxy is TokenHelper {
     /// @notice Flag indicating whether manual mode is active for this proxy contract
     bool public s_manualMode;
 
+    /////////////////////////
+    // Events
+
+    event ProxyInitialized(address indexed user);
+    event ManualModeEnabled();
+
     /// @notice Sets the immutable flashLeverage address
     /// @param _flashLeverage Address of the FlashLeverage contract
     constructor(address _flashLeverage, address _morpho) {
@@ -36,6 +42,7 @@ contract UserProxy is TokenHelper {
             FLError.FlashLeverage__ProxyAlreadyInitialized()
         );
         s_user = _user;
+        emit ProxyInitialized(_user);
     }
 
     /// @notice Executes arbitrary calls on behalf of this proxy contract
@@ -70,6 +77,7 @@ contract UserProxy is TokenHelper {
             FLError.FlashLeverage__Unauthorised()
         );
         s_manualMode = true;
+        emit ManualModeEnabled();
     }
 
     /**
