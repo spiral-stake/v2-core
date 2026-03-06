@@ -387,10 +387,14 @@ contract FlashLeverage is
             amountRepay
         );
 
-        _morphoRepay(position.userProxy, market, amountRepay, borrowShares);
-        position.amountDepositedInLoanToken += amountRepay;
-
-        emit LoanRepaid(user, positionId, amountRepay);
+        (uint256 amountRepaid, ) = _morphoRepay(
+            position.userProxy,
+            market,
+            amountRepay,
+            borrowShares
+        );
+        position.amountDepositedInLoanToken += amountRepaid;
+        emit LoanRepaid(user, positionId, amountRepaid);
     }
 
     /**
