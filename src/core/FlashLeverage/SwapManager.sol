@@ -14,7 +14,7 @@ contract SwapManager is TokenHelper {
     // Storage
 
     // List of swap router contracts from swap aggregators like kyberswap, odos and pendle router
-    mapping(address => bool) private s_isSwapRouter;
+    mapping(address router => bool approved) private s_isSwapRouter;
 
     function _swapToken(
         address tokenIn,
