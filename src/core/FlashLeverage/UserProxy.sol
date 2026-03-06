@@ -56,6 +56,7 @@ contract UserProxy is TokenHelper {
         bytes calldata data
     ) external returns (bytes memory result) {
         if (msg.sender == i_flashLeverage) {
+            require(!s_manualMode, FLError.FlashLeverage__ManualModeEnabled());
             // Proceed
         } else if (msg.sender == s_user) {
             require(s_manualMode, FLError.FlashLeverage__NotInManualMode());
