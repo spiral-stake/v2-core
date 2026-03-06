@@ -6,6 +6,15 @@ import {LeverageParams} from "../core/structs/LeverageParams.sol";
 import {SwapData} from "../core/structs/SwapData.sol";
 import {TokenHelper} from "../core/libraries/TokenHelper.sol";
 
+library FLRError {
+    error FlashLeverageRouter__ZeroAddress();
+    error FlashLeverageRouter__AmountInCannotBeZero();
+    error FlashLeverageRouter__InvalidOnBehalfOf();
+    error FlashLeverageRouter__InvalidSwapRouter();
+    error FlashLeverageRouter__SwapRouterCallFailed();
+    error FlashLeverageRouter__MinTokenOutNotMet();
+}
+
 interface FlashLeverage {
     function leverage(
         address onBehalfOf,
@@ -22,7 +31,7 @@ contract FlashLeverageRouter is TokenHelper {
     constructor(address morphoAddress, address flashLeverageAddress) {
         require(
             morphoAddress != address(0) && flashLeverageAddress != address(0),
-            "Zero address"
+            FLRError.FlashLeverageRouter__ZeroAddress()
         );
         i_flashLeverage = FlashLeverage(flashLeverageAddress);
         i_morpho = IMorpho(morphoAddress);
@@ -45,18 +54,24 @@ contract FlashLeverageRouter is TokenHelper {
         SwapData calldata swapData,
         uint256 minTokenOut
     ) external {
-        require(amountIn > 0, "AmountIn cannot be zero");
-        require(onBehalfOf != address(0), "Invalid onBehalfOf");
+        require(
+            amountIn > 0,
+            FLRError.FlashLeverageRouter__AmountInCannotBeZero()
+        );
+        require(
+            onBehalfOf != address(0),
+            FLRError.FlashLeverageRouter__InvalidOnBehalfOf()
+        );
         require(
             i_flashLeverage.isValidSwapRouter(swapData.extRouter),
-            "Invalid Swap Router"
+            FLRError.FlashLeverageRouter__InvalidSwapRouter()
         );
 
         _transferIn(tokenIn, msg.sender, amountIn);
 
         _forceApprove(tokenIn, address(swapData.extRouter), amountIn);
         (bool success, ) = swapData.extRouter.call(swapData.extCalldata);
-        require(success, "Swap Router Call Failed");
+        require(success, FLRError.FlashLeverageRouter__SwapRouterCallFailed());
 
         MarketParams memory market = i_morpho.idToMarketParams(
             Id.wrap(leverageParams.marketId)
@@ -65,7 +80,7 @@ contract FlashLeverageRouter is TokenHelper {
         leverageParams.amountCollateral = _selfBalance(market.collateralToken);
         require(
             leverageParams.amountCollateral >= minTokenOut,
-            "Slippage exceeded"
+            FLRError.FlashLeverageRouter__MinTokenOutNotMet()
         );
 
         _forceApprove(

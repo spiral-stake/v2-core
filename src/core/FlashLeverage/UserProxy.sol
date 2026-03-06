@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 
 import {TokenHelper} from "../libraries/TokenHelper.sol";
+import {FLError} from "../libraries/Error.sol";
 
 /// @title UserProxy
 /// @notice Minimal proxy contract that holds user positions on Morpho
@@ -30,7 +31,10 @@ contract UserProxy is TokenHelper {
     /// @param _user Address of the user who owns this proxy
     /// @dev Called once per clone in the same tx after deployment by the factory
     function initialize(address _user) external {
-        require(s_user == address(0), "UserProxy: Already Initialized");
+        require(
+            s_user == address(0),
+            FLError.FlashLeverage__ProxyAlreadyInitialized()
+        );
         s_user = _user;
     }
 
@@ -47,21 +51,24 @@ contract UserProxy is TokenHelper {
         if (msg.sender == i_flashLeverage) {
             // Proceed
         } else if (msg.sender == s_user) {
-            require(s_manualMode, "UserProxy: Not in manual Mode");
+            require(s_manualMode, FLError.FlashLeverage__NotInManualMode());
             // Proceed
         } else {
             revert("UserProxy: Unauthorised");
         }
 
         (bool success, bytes memory returnData) = i_morpho.call(data);
-        require(success, "UserProxy: Call Failed");
+        require(success, FLError.FlashLeverage__ProxyCallFailed());
         return returnData;
     }
 
     /// @notice Enables manual mode allowing the user to call `execute`
     /// @dev Only FlashLeverage can trigger manual mode
     function enableManualMode() external {
-        require(msg.sender == i_flashLeverage, "UserProxy: Unauthorised");
+        require(
+            msg.sender == i_flashLeverage,
+            FLError.FlashLeverage__Unauthorised()
+        );
         s_manualMode = true;
     }
 
@@ -70,7 +77,7 @@ contract UserProxy is TokenHelper {
      * @param token The address of the token to recover
      */
     function recover(address token) external {
-        require(msg.sender == s_user, "UserProxy: Unauthorised");
+        require(msg.sender == s_user, FLError.FlashLeverage__Unauthorised());
         _transferOut(token, s_user, _selfBalance(token));
     }
 }

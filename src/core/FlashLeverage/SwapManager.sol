@@ -8,6 +8,7 @@ pragma solidity 0.8.30;
 
 import {SwapData} from "../structs/SwapData.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
+import {FLError} from "../libraries/Error.sol";
 
 contract SwapManager is TokenHelper {
     /////////////////////////
@@ -23,15 +24,21 @@ contract SwapManager is TokenHelper {
         SwapData memory swapData,
         uint256 minTokenOut
     ) internal returns (uint256 amountOut) {
-        require(s_isSwapRouter[swapData.extRouter], "Unsupported Swap Router");
+        require(
+            s_isSwapRouter[swapData.extRouter],
+            FLError.FlashLeverage__UnsupportedSwapRouter()
+        );
         uint256 balanceBefore = _selfBalance(tokenOut);
 
         _forceApprove(tokenIn, address(swapData.extRouter), amountIn);
         (bool success, ) = swapData.extRouter.call(swapData.extCalldata);
-        require(success, "Swap Router Call Failed");
+        require(success, FLError.FlashLeverage__SwapRouterCallFailed());
 
         amountOut = _selfBalance(tokenOut) - balanceBefore;
-        require(amountOut >= minTokenOut, "minTokenOut Not Met");
+        require(
+            amountOut >= minTokenOut,
+            FLError.FlashLeverage__MinTokenOutNotMet()
+        );
     }
 
     function _setSwapRouter(address router, bool value) internal {

@@ -21,4 +21,15 @@ library FLError {
 
     // Ownership
     error FlashLeverage__OwnershipRenunciationDisabled();
+
+    // UserProxy
+    error FlashLeverage__ProxyAlreadyInitialized();
+    error FlashLeverage__Unauthorised();
+    error FlashLeverage__NotInManualMode();
+    error FlashLeverage__ProxyCallFailed();
+
+    // SwapManager
+    error FlashLeverage__UnsupportedSwapRouter();
+    error FlashLeverage__SwapRouterCallFailed();
+    error FlashLeverage__MinTokenOutNotMet();
 }
