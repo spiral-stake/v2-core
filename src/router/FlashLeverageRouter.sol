@@ -41,7 +41,7 @@ contract FlashLeverageRouter is TokenHelper {
      * @notice Swaps an input token to the market's collateral token, then opens a leveraged position.
      * @param onBehalfOf The address of the user for whom the position is being created.
      * @param leverageParams Leverage parameters. amountCollateral will be overwritten with swap output.
-     * @param tokenIn The token to swap from.
+     * @param tokenIn The token to swap from. address(0) for native token
      * @param amountIn The amount of tokenIn to swap.
      * @param swapData Swap configuration for the external router.
      * @param minTokenOut Minimum collateral tokens expected from the swap (slippage protection).
@@ -67,10 +67,16 @@ contract FlashLeverageRouter is TokenHelper {
             FLRError.FlashLeverageRouter__InvalidSwapRouter()
         );
 
-        _transferIn(tokenIn, msg.sender, amountIn);
-
-        _forceApprove(tokenIn, address(swapData.extRouter), amountIn);
-        (bool success, ) = swapData.extRouter.call(swapData.extCalldata);
+        bool success;
+        if (tokenIn == NATIVE) {
+            (success, ) = swapData.extRouter.call{value: amountIn}(
+                swapData.extCalldata
+            );
+        } else {
+            _transferIn(tokenIn, msg.sender, amountIn);
+            _forceApprove(tokenIn, address(swapData.extRouter), amountIn);
+            (success, ) = swapData.extRouter.call(swapData.extCalldata);
+        }
         require(success, FLRError.FlashLeverageRouter__SwapRouterCallFailed());
 
         MarketParams memory market = i_morpho.idToMarketParams(
