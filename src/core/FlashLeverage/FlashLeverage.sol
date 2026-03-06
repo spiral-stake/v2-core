@@ -426,6 +426,7 @@ contract FlashLeverage is
             amountWithdraw
         );
 
+        uint256 yieldGeneratedInLoanToken;
         if (
             s_isCorrelated[position.marketId] && amountWithdrawInLoanToken > 0
         ) {
@@ -444,17 +445,18 @@ contract FlashLeverage is
 
             uint256 netPositionValue = amountCollateralInLoanToken - amountLoan;
             if (netPositionValue > position.amountDepositedInLoanToken) {
-                uint256 yieldGenerated;
                 unchecked {
-                    yieldGenerated =
+                    yieldGeneratedInLoanToken =
                         netPositionValue -
                         position.amountDepositedInLoanToken;
                 }
 
                 uint256 yieldFeeInLoanToken;
-                if (amountWithdrawInLoanToken > yieldGenerated) {
+                if (amountWithdrawInLoanToken > yieldGeneratedInLoanToken) {
                     // Withdrawal exceeds yield, fee only on yield portion
-                    yieldFeeInLoanToken = yieldGenerated.mulDown(s_yieldFee);
+                    yieldFeeInLoanToken = yieldGeneratedInLoanToken.mulDown(
+                        s_yieldFee
+                    );
                 } else {
                     // Withdrawal is within yield, fee on entire withdrawal
                     yieldFeeInLoanToken = amountWithdrawInLoanToken.mulDown(
@@ -481,7 +483,8 @@ contract FlashLeverage is
         if (amountWithdrawInLoanToken >= position.amountDepositedInLoanToken) {
             position.amountDepositedInLoanToken = 0;
         } else {
-            position.amountDepositedInLoanToken -= amountWithdrawInLoanToken;
+            position.amountDepositedInLoanToken -= (amountWithdrawInLoanToken -
+                yieldGeneratedInLoanToken);
         }
         _transferOut(market.collateralToken, user, amountWithdraw);
 
@@ -764,8 +767,9 @@ contract FlashLeverage is
             uint256 amountDeposited = position.amountDepositedInLoanToken;
 
             if (totalAmountReturned > amountDeposited) {
-                uint256 yieldGenerated = totalAmountReturned - amountDeposited;
-                amountFee = yieldGenerated.mulDown(s_yieldFee);
+                uint256 yieldGeneratedInLoanToken = totalAmountReturned -
+                    amountDeposited;
+                amountFee = yieldGeneratedInLoanToken.mulDown(s_yieldFee);
                 _transferOut(market.loanToken, s_treasury, amountFee);
             }
         }
