@@ -28,6 +28,7 @@ library FLError {
     error FlashLeverage__NotInManualMode();
     error FlashLeverage__ProxyCallFailed();
     error FlashLeverage__ManualModeEnabled();
+    error FlashLeverage__CannotBeUserProxy();
 
     // SwapManager
     error FlashLeverage__UnsupportedSwapRouter();

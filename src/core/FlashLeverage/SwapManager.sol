@@ -45,6 +45,15 @@ contract SwapManager is TokenHelper {
         );
     }
 
+    function _isUserProxy(address target) internal view returns (bool) {
+        (bool success, bytes memory data) = target.staticcall(
+            abi.encodeWithSignature("i_flashLeverage()")
+        );
+        if (!success || data.length < 32) return false;
+
+        return abi.decode(data, (address)) == address(this);
+    }
+
     function _setSwapRouter(address router, bool value) internal {
         s_isSwapRouter[router] = value;
         emit SwapRouterUpdated(router, value);
