@@ -14,13 +14,15 @@ import {LeverageParams} from "../structs/LeverageParams.sol";
 import {LeveragePosition} from "../structs/LeveragePosition.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {IOracle} from "@morpho/interfaces/IOracle.sol";
 
 contract FlashLeverage is
     MarketPositionManager,
     SwapManager,
     ReentrancyGuard,
-    Ownable2Step
+    Ownable2Step,
+    Pausable
 {
     using Math for uint256;
 
@@ -165,6 +167,7 @@ contract FlashLeverage is
         validateAmount(params.amountCollateral)
         validateAmount(params.amountFlashLoan)
         nonReentrant
+        whenNotPaused
     {
         MarketParams memory market = s_markets[params.marketId];
         require(
@@ -217,7 +220,7 @@ contract FlashLeverage is
         uint256 positionId,
         SwapData memory swapData,
         uint256 minTokenOut
-    ) external nonReentrant returns (uint256) {
+    ) external nonReentrant whenNotPaused returns (uint256) {
         address user = msg.sender;
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
@@ -271,7 +274,7 @@ contract FlashLeverage is
         uint256 amountFlashLoan,
         SwapData calldata swapData,
         uint256 minTokenOut
-    ) external nonReentrant validateAmount(amountFlashLoan) {
+    ) external nonReentrant whenNotPaused validateAmount(amountFlashLoan) {
         address user = msg.sender;
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
@@ -303,7 +306,7 @@ contract FlashLeverage is
         address user,
         uint256 positionId,
         uint256 amountCollateral
-    ) external nonReentrant validateAmount(amountCollateral) {
+    ) external nonReentrant whenNotPaused validateAmount(amountCollateral) {
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
         ];
@@ -383,7 +386,7 @@ contract FlashLeverage is
         uint256 positionId,
         uint256 amountRepay,
         uint256 borrowShares // Can be 0, mostly used for full loan repayment
-    ) external nonReentrant validateAmount(amountRepay) {
+    ) external nonReentrant whenNotPaused validateAmount(amountRepay) {
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
         ];
@@ -421,7 +424,7 @@ contract FlashLeverage is
     function withdrawCollateral(
         uint256 positionId,
         uint256 amountWithdraw
-    ) external nonReentrant validateAmount(amountWithdraw) {
+    ) external nonReentrant whenNotPaused validateAmount(amountWithdraw) {
         address user = msg.sender;
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
@@ -601,6 +604,22 @@ contract FlashLeverage is
 
         emit DepositFeeUpdated(s_depositFee, newDepositFee);
         s_depositFee = newDepositFee;
+    }
+
+    /**
+     * @notice Pauses the contract, preventing leveraging and position management operations.
+     * @dev Only callable by the contract owner. Emergency use.
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @notice Unpauses the contract, resuming normal operations.
+     * @dev Only callable by the contract owner.
+     */
+    function unpause() external onlyOwner {
+        _unpause();
     }
 
     /**
