@@ -352,7 +352,20 @@ contract FlashLeverage is
         _revertIfEffectiveLtvTooHigh(userProxy, market, 0, amountBorrow);
         _morphoBorrowViaProxy(userProxy, market, amountBorrow);
 
-        position.amountDepositedInLoanToken -= amountBorrow;
+        if (!s_isCorrelated[position.marketId]) {
+            position.amountDepositedInLoanToken = amountBorrow >
+                position.amountDepositedInLoanToken
+                ? 0
+                : position.amountDepositedInLoanToken - amountBorrow;
+        } else {
+            require(
+                position.amountDepositedInLoanToken >= amountBorrow,
+                FLError
+                    .FlashLeverage__BorrowExceedsDepositedForCorrelatedPairs()
+            );
+            position.amountDepositedInLoanToken -= amountBorrow;
+        }
+
         _transferOut(market.loanToken, user, amountBorrow);
 
         emit AdditionalBorrowed(user, positionId, amountBorrow);
