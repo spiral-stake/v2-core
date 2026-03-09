@@ -60,6 +60,9 @@ contract FlashLeverage is
     /// @notice Tracks if a collateral-loan token pair is correlated
     mapping(bytes32 marketId => bool) public s_isCorrelated;
 
+    /// @notice Whitelisted operators that can open positions on behalf of users
+    mapping(address operator => bool approved) public s_approvedOperators;
+
     /////////////////////////
     // Events
 
@@ -101,20 +104,21 @@ contract FlashLeverage is
     );
     event YieldFeeUpdated(uint256 oldFee, uint256 newFee);
     event DepositFeeUpdated(uint256 oldFee, uint256 newFee);
+    event ApprovedOperatorUpdated(address indexed operator, bool approved);
+    event MarketEnabled(bytes32 indexed marketId, bool enabled);
 
     /////////////////////////
     // Modifiers
 
     /**
-     * @dev Validates if the onBehalfOf address is not a zero address
-     * @param onBehalfOf onBehalfOf address
-     *
-     * Reverts if the onBehalfOf address is a zero address
+     * @notice Validates that the user address is not zero and the caller is authorized
+     * @param user The address of the user for whom the action is being performed
+     * @dev Reverts if user is zero address or caller is neither the user nor an approved operator
      */
-    modifier validateOnBehalfOf(address onBehalfOf) {
+    modifier validateUser(address user) {
         require(
-            onBehalfOf != address(0),
-            FLError.FlashLeverage__CannotBeZeroAddress()
+            msg.sender == user || s_approvedOperators[msg.sender],
+            FLError.FlashLeverage__NotApprovedOperator()
         );
         _;
     }
@@ -156,15 +160,15 @@ contract FlashLeverage is
 
     /**
      * @notice Creates leveraged positions by supplying collateralToken and borrowing via flashloan.
-     * @param onBehalfOf The address of the user for whom the position is being created for.
+     * @param user The address of the user for whom the position is being created for.
      * @param params Struct containing leverage parameters including market id, collateral amount, and swap configuration.
      */
     function leverage(
-        address onBehalfOf,
+        address user,
         LeverageParams calldata params
     )
         external
-        validateOnBehalfOf(onBehalfOf)
+        validateUser(user)
         validateAmount(params.amountCollateral)
         validateAmount(params.amountFlashLoan)
         nonReentrant
@@ -189,8 +193,8 @@ contract FlashLeverage is
             params.amountCollateral
         );
 
-        uint256 positionId = s_userLeveragePositions[onBehalfOf].length;
-        s_userLeveragePositions[onBehalfOf].push(
+        uint256 positionId = s_userLeveragePositions[user].length;
+        s_userLeveragePositions[user].push(
             LeveragePosition({
                 open: true,
                 marketId: params.marketId,
@@ -202,7 +206,7 @@ contract FlashLeverage is
 
         bytes memory data = abi.encode(
             Action.LEVERAGE,
-            onBehalfOf, // user
+            user,
             positionId,
             amountCollateral,
             params.swapData,
@@ -523,6 +527,7 @@ contract FlashLeverage is
             _updateMarket(marketConfig.marketId, market);
             s_isCorrelated[marketConfig.marketId] = marketConfig.isCorrelated;
             emit MarketAdded(marketConfig.marketId, marketConfig.isCorrelated);
+            emit MarketEnabled(marketConfig.marketId, true);
         }
     }
 
@@ -557,6 +562,7 @@ contract FlashLeverage is
             FLError.FlashLeverage__UnsupportedMarket()
         );
         s_marketEnabled[marketId] = value;
+        emit MarketEnabled(marketId, value);
     }
 
     /**
@@ -645,6 +651,24 @@ contract FlashLeverage is
      */
     function renounceOwnership() public pure override(Ownable) {
         revert FLError.FlashLeverage__OwnershipRenunciationDisabled();
+    }
+
+    /**
+     * @notice Whitelists or removes an operator that can open positions on behalf of users.
+     * @param operator The operator address to update.
+     * @param value True to approve, false to revoke.
+     * @dev Only callable by the contract owner.
+     */
+    function setApprovedOperator(
+        address operator,
+        bool value
+    ) external onlyOwner {
+        require(
+            operator != address(0),
+            FLError.FlashLeverage__CannotBeZeroAddress()
+        );
+        s_approvedOperators[operator] = value;
+        emit ApprovedOperatorUpdated(operator, value);
     }
 
     /////////////////////////

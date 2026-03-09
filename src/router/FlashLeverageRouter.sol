@@ -39,7 +39,6 @@ contract FlashLeverageRouter is TokenHelper {
 
     /**
      * @notice Swaps an input token to the market's collateral token, then opens a leveraged position.
-     * @param onBehalfOf The address of the user for whom the position is being created.
      * @param leverageParams Leverage parameters. amountCollateral will be overwritten with swap output.
      * @param tokenIn The token to swap from. address(0) for native token
      * @param amountIn The amount of tokenIn to swap.
@@ -47,20 +46,17 @@ contract FlashLeverageRouter is TokenHelper {
      * @param minTokenOut Minimum collateral tokens expected from the swap (slippage protection).
      */
     function swapAndLeverage(
-        address onBehalfOf,
         LeverageParams memory leverageParams,
         address tokenIn,
         uint256 amountIn,
         SwapData calldata swapData,
         uint256 minTokenOut
     ) external {
+        address user = msg.sender;
+
         require(
             amountIn > 0,
             FLRError.FlashLeverageRouter__AmountInCannotBeZero()
-        );
-        require(
-            onBehalfOf != address(0),
-            FLRError.FlashLeverageRouter__InvalidOnBehalfOf()
         );
         require(
             i_flashLeverage.isValidSwapRouter(swapData.extRouter),
@@ -73,7 +69,7 @@ contract FlashLeverageRouter is TokenHelper {
                 swapData.extCalldata
             );
         } else {
-            _transferIn(tokenIn, msg.sender, amountIn);
+            _transferIn(tokenIn, user, amountIn);
             _forceApprove(tokenIn, address(swapData.extRouter), amountIn);
             (success, ) = swapData.extRouter.call(swapData.extCalldata);
         }
@@ -95,7 +91,7 @@ contract FlashLeverageRouter is TokenHelper {
             leverageParams.amountCollateral
         );
 
-        i_flashLeverage.leverage(onBehalfOf, leverageParams);
+        i_flashLeverage.leverage(user, leverageParams);
 
         // Refund unconsumed tokenIn to user, if any
         uint256 tokenInAfter = tokenIn == NATIVE
@@ -104,10 +100,10 @@ contract FlashLeverageRouter is TokenHelper {
 
         if (tokenInAfter > 0) {
             if (tokenIn == NATIVE) {
-                (bool sent, ) = msg.sender.call{value: tokenInAfter}("");
+                (bool sent, ) = user.call{value: tokenInAfter}("");
                 require(sent);
             } else {
-                _transferOut(tokenIn, msg.sender, tokenInAfter);
+                _transferOut(tokenIn, user, tokenInAfter);
             }
         }
     }

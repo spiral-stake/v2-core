@@ -9,6 +9,7 @@ library FLError {
 
     // Access / Security
     error FlashLeverage__UntrustedLender(); // Flashloan callback from non-Morpho address
+    error FlashLeverage__NotApprovedOperator();
 
     // Position management
     error FlashLeverage__ExceedsMaxLTV(uint256 effectiveLtv, uint256 maxLtv);
