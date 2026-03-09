@@ -66,7 +66,8 @@ contract FlashLeverage is
     event LeveragePositionOpened(
         address indexed user,
         uint256 indexed positionId,
-        uint256 indexed amountDepositedInLoanToken
+        uint256 indexed amountDepositedInLoanToken,
+        uint256 amountCollateral
     );
     event LeveragePositionClosed(
         address indexed user,
@@ -193,7 +194,6 @@ contract FlashLeverage is
             LeveragePosition({
                 open: true,
                 marketId: params.marketId,
-                amountCollateral: amountCollateral,
                 userProxy: address(0), // Will be set in _handleLeverage
                 amountDepositedInLoanToken: 0, // Will be set in _handleLeverage
                 amountReturnedInLoanToken: 0
@@ -729,7 +729,8 @@ contract FlashLeverage is
             emit LeveragePositionOpened(
                 user,
                 positionId,
-                amountDepositedInLoanToken
+                amountDepositedInLoanToken,
+                amountCollateral
             );
         }
     }
