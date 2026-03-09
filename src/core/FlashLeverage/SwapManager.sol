@@ -22,6 +22,7 @@ contract SwapManager is TokenHelper {
     event SwapRouterUpdated(address indexed router, bool enabled);
 
     function _swapToken(
+        address user,
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
@@ -43,6 +44,12 @@ contract SwapManager is TokenHelper {
             amountOut >= minTokenOut,
             FLError.FlashLeverage__MinTokenOutNotMet()
         );
+
+        // Refund unconsumed tokenIn to user, if any
+        uint256 tokenInAfter = _selfBalance(tokenIn);
+        if (tokenInAfter > 0) {
+            _transferOut(tokenIn, user, tokenInAfter);
+        }
     }
 
     function _isUserProxy(address target) internal view returns (bool) {

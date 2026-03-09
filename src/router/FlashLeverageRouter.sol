@@ -96,5 +96,19 @@ contract FlashLeverageRouter is TokenHelper {
         );
 
         i_flashLeverage.leverage(onBehalfOf, leverageParams);
+
+        // Refund unconsumed tokenIn to user, if any
+        uint256 tokenInAfter = tokenIn == NATIVE
+            ? address(this).balance
+            : _selfBalance(tokenIn);
+
+        if (tokenInAfter > 0) {
+            if (tokenIn == NATIVE) {
+                (bool sent, ) = msg.sender.call{value: tokenInAfter}("");
+                require(sent);
+            } else {
+                _transferOut(tokenIn, msg.sender, tokenInAfter);
+            }
+        }
     }
 }

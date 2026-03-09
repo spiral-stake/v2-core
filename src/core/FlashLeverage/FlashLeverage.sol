@@ -682,6 +682,7 @@ contract FlashLeverage is
 
         // Swap amount loan -> collateral token
         uint256 amountSwappedCollateral = _swapToken(
+            user,
             market.loanToken,
             market.collateralToken,
             amountLoan,
@@ -776,6 +777,7 @@ contract FlashLeverage is
 
         // Swap withdrawn collateral -> loan token
         uint256 amountSwappedLoanToken = _swapToken(
+            user,
             market.collateralToken,
             market.loanToken,
             amountLeveragedCollateral,
