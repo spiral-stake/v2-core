@@ -13,6 +13,7 @@ library FLRError {
     error FlashLeverageRouter__InvalidSwapRouter();
     error FlashLeverageRouter__SwapRouterCallFailed();
     error FlashLeverageRouter__MinTokenOutNotMet();
+    error FlashLeverageRouter__InvalidMsgValue();
 }
 
 interface FlashLeverage {
@@ -51,7 +52,7 @@ contract FlashLeverageRouter is TokenHelper {
         uint256 amountIn,
         SwapData calldata swapData,
         uint256 minTokenOut
-    ) external {
+    ) external payable {
         address user = msg.sender;
 
         require(
@@ -65,6 +66,10 @@ contract FlashLeverageRouter is TokenHelper {
 
         bool success;
         if (tokenIn == NATIVE) {
+            require(
+                msg.value == amountIn,
+                FLRError.FlashLeverageRouter__InvalidMsgValue()
+            );
             (success, ) = swapData.extRouter.call{value: amountIn}(
                 swapData.extCalldata
             );
@@ -107,4 +112,7 @@ contract FlashLeverageRouter is TokenHelper {
             }
         }
     }
+
+    /// @notice Allows the contract to receive native tokens from swap routers
+    receive() external payable {}
 }
