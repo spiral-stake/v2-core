@@ -346,7 +346,7 @@ contract FlashLeverage is
     function borrow(
         uint256 positionId,
         uint256 amountBorrow
-    ) external nonReentrant validateAmount(amountBorrow) {
+    ) external nonReentrant whenNotPaused validateAmount(amountBorrow) {
         address user = msg.sender;
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
@@ -527,7 +527,6 @@ contract FlashLeverage is
             _updateMarket(marketConfig.marketId, market);
             s_isCorrelated[marketConfig.marketId] = marketConfig.isCorrelated;
             emit MarketAdded(marketConfig.marketId, marketConfig.isCorrelated);
-            emit MarketEnabled(marketConfig.marketId, true);
         }
     }
 
@@ -684,7 +683,7 @@ contract FlashLeverage is
     function _handleLeverage(
         uint256 amountLoan,
         bytes calldata data
-    ) internal override nonReentrant {
+    ) internal override {
         (
             ,
             address user,
@@ -770,7 +769,7 @@ contract FlashLeverage is
     function _handleDeleverage(
         uint256 amountLoan,
         bytes memory data
-    ) internal override nonReentrant {
+    ) internal override {
         (
             ,
             address user,
