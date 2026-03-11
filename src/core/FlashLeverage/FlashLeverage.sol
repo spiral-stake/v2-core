@@ -500,8 +500,20 @@ contract FlashLeverage is
             }
         }
 
-        position.amountDepositedInLoanToken -= (amountWithdrawInLoanToken -
-            yieldGeneratedInLoanToken);
+        // Safe update amountDeposited: skip if withdrawing from yield only,
+        // clamp to 0 if withdrawal exceeds deposited (especially for non-correlated pair)
+        if (amountWithdrawInLoanToken > yieldGeneratedInLoanToken) {
+            amountWithdrawInLoanToken -= yieldGeneratedInLoanToken;
+
+            if (
+                position.amountDepositedInLoanToken > amountWithdrawInLoanToken
+            ) {
+                position
+                    .amountDepositedInLoanToken -= amountWithdrawInLoanToken;
+            } else {
+                position.amountDepositedInLoanToken = 0;
+            }
+        }
 
         _transferOut(market.collateralToken, user, amountWithdraw);
 
