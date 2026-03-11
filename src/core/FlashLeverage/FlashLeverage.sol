@@ -557,6 +557,10 @@ contract FlashLeverage is
             !_isUserProxy(swapRouter),
             FLError.FlashLeverage__CannotBeUserProxy()
         );
+        require(
+            swapRouter != address(i_morpho),
+            FLError.FlashLeverage__CannotBeMorpho()
+        );
 
         _setSwapRouter(swapRouter, value);
     }

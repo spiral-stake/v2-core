@@ -10,6 +10,7 @@ library FLError {
     // Access / Security
     error FlashLeverage__UntrustedLender(); // Flashloan callback from non-Morpho address
     error FlashLeverage__NotApprovedOperator();
+    error FlashLeverage__CannotBeMorpho(); // Morpho contract cannot be a whitelisted swap-router
 
     // Position management
     error FlashLeverage__ExceedsMaxLTV(uint256 effectiveLtv, uint256 maxLtv);
