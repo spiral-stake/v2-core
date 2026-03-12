@@ -5,7 +5,6 @@ pragma solidity 0.8.30;
 struct LeveragePosition {
     bool open;
     bytes32 marketId;
-    uint256 amountCollateral;
     address userProxy; // Isolated proxy contract holding this position on Morpho
     uint256 amountDepositedInLoanToken; // Initial deposit valued in loanToken, used for yield/fee calc
     uint256 amountReturnedInLoanToken; // Total amount returned to the user in loanToken (principal + yield, minus fees)

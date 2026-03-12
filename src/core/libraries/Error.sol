@@ -9,11 +9,13 @@ library FLError {
 
     // Access / Security
     error FlashLeverage__UntrustedLender(); // Flashloan callback from non-Morpho address
+    error FlashLeverage__NotApprovedOperator();
+    error FlashLeverage__CannotBeMorpho(); // Morpho contract cannot be a whitelisted swap-router
 
     // Position management
     error FlashLeverage__ExceedsMaxLTV(uint256 effectiveLtv, uint256 maxLtv);
     error FlashLeverage__PositionAlreadyClosed();
-    error FlashLeverage__CannotBorrowForCorrelatedPair();
+    error FlashLeverage__BorrowExceedsDepositedForCorrelatedPairs();
 
     // Configuration
     error FlashLeverage__UnsupportedMarket();
@@ -22,4 +24,17 @@ library FLError {
 
     // Ownership
     error FlashLeverage__OwnershipRenunciationDisabled();
+
+    // UserProxy
+    error FlashLeverage__ProxyAlreadyInitialized();
+    error FlashLeverage__Unauthorised();
+    error FlashLeverage__NotInManualMode();
+    error FlashLeverage__ProxyCallFailed();
+    error FlashLeverage__ManualModeEnabled();
+    error FlashLeverage__CannotBeUserProxy();
+
+    // SwapManager
+    error FlashLeverage__UnsupportedSwapRouter();
+    error FlashLeverage__SwapRouterCallFailed();
+    error FlashLeverage__MinTokenOutNotMet();
 }

@@ -38,6 +38,7 @@ abstract contract MarketPositionManager is
     // Storage
 
     mapping(bytes32 marketId => MarketParams) internal s_markets;
+    mapping(bytes32 marketId => bool) internal s_marketEnabled;
 
     // Cached Loan Token Decimals to save gas by reducing external calls
     mapping(address loanToken => uint8) internal s_loanTokenDecimals;
@@ -240,6 +241,7 @@ abstract contract MarketPositionManager is
         MarketParams memory market
     ) internal {
         s_markets[marketId] = market;
+        s_marketEnabled[marketId] = true;
         s_loanTokenDecimals[market.loanToken] = IERC20Metadata(market.loanToken)
             .decimals();
     }

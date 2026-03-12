@@ -8,34 +8,62 @@ pragma solidity 0.8.30;
 
 import {SwapData} from "../structs/SwapData.sol";
 import {TokenHelper} from "../libraries/TokenHelper.sol";
+import {FLError} from "../libraries/Error.sol";
 
 contract SwapManager is TokenHelper {
     /////////////////////////
     // Storage
 
     // List of swap router contracts from swap aggregators like kyberswap, odos and pendle router
-    mapping(address => bool) private s_isSwapRouter;
+    mapping(address router => bool approved) private s_isSwapRouter;
+
+    /////////////////////////
+    // Events
+    event SwapRouterUpdated(address indexed router, bool enabled);
 
     function _swapToken(
+        address user,
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
         SwapData memory swapData,
         uint256 minTokenOut
     ) internal returns (uint256 amountOut) {
-        require(s_isSwapRouter[swapData.extRouter], "Unsupported Swap Router");
+        require(
+            s_isSwapRouter[swapData.extRouter],
+            FLError.FlashLeverage__UnsupportedSwapRouter()
+        );
         uint256 balanceBefore = _selfBalance(tokenOut);
 
         _forceApprove(tokenIn, address(swapData.extRouter), amountIn);
         (bool success, ) = swapData.extRouter.call(swapData.extCalldata);
-        require(success, "Swap Router Call Failed");
+        require(success, FLError.FlashLeverage__SwapRouterCallFailed());
 
         amountOut = _selfBalance(tokenOut) - balanceBefore;
-        require(amountOut >= minTokenOut, "minTokenOut Not Met");
+        require(
+            amountOut >= minTokenOut,
+            FLError.FlashLeverage__MinTokenOutNotMet()
+        );
+
+        // Refund unconsumed tokenIn to user, if any
+        uint256 tokenInAfter = _selfBalance(tokenIn);
+        if (tokenInAfter > 0) {
+            _transferOut(tokenIn, user, tokenInAfter);
+        }
+    }
+
+    function _isUserProxy(address target) internal view returns (bool) {
+        (bool success, bytes memory data) = target.staticcall(
+            abi.encodeWithSignature("i_flashLeverage()")
+        );
+        if (!success || data.length < 32) return false;
+
+        return abi.decode(data, (address)) == address(this);
     }
 
     function _setSwapRouter(address router, bool value) internal {
         s_isSwapRouter[router] = value;
+        emit SwapRouterUpdated(router, value);
     }
 
     function isValidSwapRouter(address router) external view returns (bool) {
