@@ -75,6 +75,8 @@ contract WriteAddresses is Script {
                 loanToken.decimals()
             );
 
+            vm.serializeAddress(marketObj, "irm", market.irm);
+            vm.serializeAddress(marketObj, "oracle", market.oracle);
             vm.serializeUint(marketObj, "liqLtv", market.lltv);
 
             vm.serializeUint(
