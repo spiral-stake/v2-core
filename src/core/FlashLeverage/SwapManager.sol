@@ -33,23 +33,23 @@ contract SwapManager is TokenHelper {
             s_isSwapRouter[swapData.extRouter],
             FLError.FlashLeverage__UnsupportedSwapRouter()
         );
-        uint256 balanceBefore = _selfBalance(tokenOut);
+        uint256 tokenOutBefore = _selfBalance(tokenOut);
+        uint256 tokenInBefore = _selfBalance(tokenIn);
 
         _forceApprove(tokenIn, address(swapData.extRouter), amountIn);
         (bool success, ) = swapData.extRouter.call(swapData.extCalldata);
         require(success, FLError.FlashLeverage__SwapRouterCallFailed());
 
-        amountOut = _selfBalance(tokenOut) - balanceBefore;
+        require(
+            _selfBalance(tokenIn) == tokenInBefore - amountIn,
+            FLError.FlashLeverage__PartialSwapNotAllowed()
+        );
+
+        amountOut = _selfBalance(tokenOut) - tokenOutBefore;
         require(
             amountOut >= minTokenOut,
             FLError.FlashLeverage__MinTokenOutNotMet()
         );
-
-        // Refund unconsumed tokenIn to user, if any
-        uint256 tokenInAfter = _selfBalance(tokenIn);
-        if (tokenInAfter > 0) {
-            _transferOut(tokenIn, user, tokenInAfter);
-        }
     }
 
     function _isUserProxy(address target) internal view returns (bool) {
