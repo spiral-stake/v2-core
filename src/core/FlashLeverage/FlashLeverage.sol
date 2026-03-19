@@ -438,6 +438,7 @@ contract FlashLeverage is
         MarketParams memory market = s_markets[position.marketId];
         address userProxy = position.userProxy;
 
+        Position memory morphoPosition = getMorphoPosition(userProxy, market);
         _morphoWithdrawCollateralViaProxy(userProxy, market, amountWithdraw);
         _revertIfEffectiveLtvTooHigh(userProxy, market, 0, 0);
 
@@ -450,10 +451,6 @@ contract FlashLeverage is
         if (
             s_isCorrelated[position.marketId] && amountWithdrawInLoanToken > 0
         ) {
-            Position memory morphoPosition = getMorphoPosition(
-                position.userProxy,
-                market
-            );
             uint256 amountCollateralInLoanToken = getCollateralValueInLoanToken(
                 market,
                 morphoPosition.collateral
