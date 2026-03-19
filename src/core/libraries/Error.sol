@@ -37,4 +37,5 @@ library FLError {
     error FlashLeverage__UnsupportedSwapRouter();
     error FlashLeverage__SwapRouterCallFailed();
     error FlashLeverage__MinTokenOutNotMet();
+    error FlashLeverage__PartialSwapNotAllowed();
 }
