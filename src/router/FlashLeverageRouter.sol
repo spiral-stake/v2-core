@@ -9,14 +9,13 @@ import {TokenHelper} from "../core/libraries/TokenHelper.sol";
 library FLRError {
     error FlashLeverageRouter__ZeroAddress();
     error FlashLeverageRouter__AmountInCannotBeZero();
-    error FlashLeverageRouter__InvalidOnBehalfOf();
     error FlashLeverageRouter__InvalidSwapRouter();
     error FlashLeverageRouter__SwapRouterCallFailed();
     error FlashLeverageRouter__MinTokenOutNotMet();
     error FlashLeverageRouter__InvalidMsgValue();
 }
 
-interface FlashLeverage {
+interface IFlashLeverage {
     function leverage(
         address onBehalfOf,
         LeverageParams calldata leverageParams
@@ -27,14 +26,14 @@ interface FlashLeverage {
 
 contract FlashLeverageRouter is TokenHelper {
     IMorpho public immutable i_morpho;
-    FlashLeverage public immutable i_flashLeverage;
+    IFlashLeverage public immutable i_flashLeverage;
 
     constructor(address morphoAddress, address flashLeverageAddress) {
         require(
             morphoAddress != address(0) && flashLeverageAddress != address(0),
             FLRError.FlashLeverageRouter__ZeroAddress()
         );
-        i_flashLeverage = FlashLeverage(flashLeverageAddress);
+        i_flashLeverage = IFlashLeverage(flashLeverageAddress);
         i_morpho = IMorpho(morphoAddress);
     }
 

@@ -62,7 +62,7 @@ contract UserProxy is TokenHelper {
             require(s_manualMode, FLError.FlashLeverage__NotInManualMode());
             // Proceed
         } else {
-            revert("UserProxy: Unauthorised");
+            revert FLError.FlashLeverage__Unauthorised();
         }
 
         (bool success, bytes memory returnData) = i_morpho.call(data);
