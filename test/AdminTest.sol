@@ -2,12 +2,17 @@
 pragma solidity 0.8.30;
 
 import "./TestBase.sol";
-import {FLError} from "src/core/libraries/Error.sol";
 import {UserProxy} from "src/core/FlashLeverage/UserProxy.sol";
+import {FLError} from "src/core/libraries/Error.sol";
 
 /// @title AdminTest
 /// @notice Tests for owner-only functions: pause, fees, market management, operators, recovery
 contract AdminTest is TestBase {
+    using Math for uint256;
+
+    uint256 constant INITIAL_COLLATERAL = 10e18;
+    uint256 constant STANDARD_LTV = 70e16; // 70%
+
     // ═══════════════════════════════════════════════
     //                 PAUSE / UNPAUSE
     // ═══════════════════════════════════════════════
@@ -15,63 +20,80 @@ contract AdminTest is TestBase {
     function test_pause_blocksLeverage() external {
         fl.pause();
 
-        collateralToken.mint(alice, 10e18);
-        vm.startPrank(alice);
-        collateralToken.approve(address(fl), 10e18);
-
-        vm.expectRevert(); // EnforcedPause
-        fl.leverage(
-            alice,
-            LeverageParams({
-                marketId: correlatedMarketId,
-                amountCollateral: 10e18,
-                amountFlashLoan: 5e18,
-                swapData: SwapData({extRouter: address(router), extCalldata: ""}),
-                minTokenOut: 0
-            })
-        );
-        vm.stopPrank();
+        vm.prank(alice);
+        vm.expectRevert();
+        fl.leverage(alice, _dummyLeverageParams());
     }
 
     function test_pause_blocksDeleverage() external {
-        uint256 posId = _openCorrelatedPosition(alice, 10e18, 70e16);
+        uint256 posId = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            STANDARD_LTV
+        );
         fl.pause();
 
         vm.prank(alice);
-        vm.expectRevert(); // EnforcedPause
-        fl.deleverage(posId, SwapData({extRouter: address(router), extCalldata: ""}), 0);
+        vm.expectRevert();
+        fl.deleverage(posId, _emptySwap(), 0);
+    }
+
+    function test_pause_blocksIncreaseLeverage() external {
+        uint256 posId = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            50e16
+        );
+        fl.pause();
+
+        vm.prank(alice);
+        vm.expectRevert();
+        fl.increaseLeverage(posId, 1e18, _emptySwap(), 0);
     }
 
     function test_pause_blocksSupplyCollateral() external {
-        _openCorrelatedPosition(alice, 10e18, 70e16);
+        _openCorrelatedPosition(alice, INITIAL_COLLATERAL, STANDARD_LTV);
         fl.pause();
 
         collateralToken.mint(alice, 5e18);
         vm.startPrank(alice);
         collateralToken.approve(address(fl), 5e18);
-        vm.expectRevert(); // EnforcedPause
+        vm.expectRevert();
         fl.supplyCollateral(alice, 0, 5e18);
         vm.stopPrank();
     }
 
+    function test_pause_blocksBorrow() external {
+        uint256 posId = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            50e16
+        );
+        fl.pause();
+
+        vm.prank(alice);
+        vm.expectRevert();
+        fl.borrow(posId, 1e18);
+    }
+
     function test_pause_blocksRepay() external {
-        _openCorrelatedPosition(alice, 10e18, 70e16);
+        _openCorrelatedPosition(alice, INITIAL_COLLATERAL, STANDARD_LTV);
         fl.pause();
 
         loanToken.mint(alice, 1e18);
         vm.startPrank(alice);
         loanToken.approve(address(fl), 1e18);
-        vm.expectRevert(); // EnforcedPause
+        vm.expectRevert();
         fl.repay(alice, 0, 1e18, 0);
         vm.stopPrank();
     }
 
     function test_pause_blocksWithdrawCollateral() external {
-        _openCorrelatedPosition(alice, 10e18, 70e16);
+        _openCorrelatedPosition(alice, INITIAL_COLLATERAL, 50e16);
         fl.pause();
 
         vm.prank(alice);
-        vm.expectRevert(); // EnforcedPause
+        vm.expectRevert();
         fl.withdrawCollateral(0, 1e18);
     }
 
@@ -79,8 +101,7 @@ contract AdminTest is TestBase {
         fl.pause();
         fl.unpause();
 
-        // Should succeed after unpause
-        _openCorrelatedPosition(alice, 10e18, 70e16);
+        _openCorrelatedPosition(alice, INITIAL_COLLATERAL, STANDARD_LTV);
         assertEq(fl.getUserLeveragePositions(alice).length, 1);
     }
 
@@ -92,7 +113,6 @@ contract AdminTest is TestBase {
 
     function test_unpause_onlyOwner() external {
         fl.pause();
-
         vm.prank(alice);
         vm.expectRevert();
         fl.unpause();
@@ -113,6 +133,45 @@ contract AdminTest is TestBase {
         assertTrue(fl.isSupportedMarket(correlatedMarketId));
     }
 
+    function test_setMarketEnabled_existingPositionsStillManageable() external {
+        uint256 posId = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            50e16
+        );
+
+        fl.setMarketEnabled(correlatedMarketId, false);
+
+        // Existing position can still be managed
+        LeveragePosition memory pos = fl.getUserLeveragePosition(alice, posId);
+        Position memory morphoPos = fl.getMorphoPosition(
+            pos.userProxy,
+            correlatedMarket
+        );
+
+        // Borrow should still work
+        vm.prank(alice);
+        fl.borrow(posId, 1e17);
+
+        // Deleverage should still work
+        morphoPos = fl.getMorphoPosition(pos.userProxy, correlatedMarket);
+        uint256 colVal = fl.getCollateralValueInLoanToken(
+            correlatedMarket,
+            morphoPos.collateral
+        );
+        SwapData memory swap = _buildSwapData(
+            address(collateralToken),
+            address(loanToken),
+            morphoPos.collateral,
+            colVal
+        );
+
+        vm.prank(alice);
+        fl.deleverage(posId, swap, 0);
+
+        assertFalse(fl.getUserLeveragePosition(alice, posId).open);
+    }
+
     function test_setMarketEnabled_onlyOwner() external {
         vm.prank(alice);
         vm.expectRevert();
@@ -122,6 +181,18 @@ contract AdminTest is TestBase {
     function test_setMarketEnabled_revertsOnUnknownMarket() external {
         vm.expectRevert(FLError.FlashLeverage__UnsupportedMarket.selector);
         fl.setMarketEnabled(keccak256("unknown"), false);
+    }
+
+    function test_addSupportedMarkets_onlyOwner() external {
+        MarketConfig[] memory configs = new MarketConfig[](1);
+        configs[0] = MarketConfig({
+            marketId: correlatedMarketId,
+            isCorrelated: true
+        });
+
+        vm.prank(alice);
+        vm.expectRevert();
+        fl.addSupportedMarkets(configs);
     }
 
     // ═══════════════════════════════════════════════
@@ -140,13 +211,102 @@ contract AdminTest is TestBase {
 
     function test_updateYieldFee_revertsAboveMax() external {
         vm.expectRevert(FLError.FlashLeverage__InvalidYieldFee.selector);
-        fl.updateYieldFee(11e16); // 11% > MAX_YIELD_FEE (10%)
+        fl.updateYieldFee(11e16); // 11% > 10% max
     }
 
     function test_updateYieldFee_onlyOwner() external {
         vm.prank(alice);
         vm.expectRevert();
         fl.updateYieldFee(5e16);
+    }
+
+    /// @notice Zero deposit fee means no fee charged
+    function test_depositFee_zeroFee_noCharge() external {
+        fl.updateDepositFee(0);
+
+        uint256 collateral = 100e18;
+        uint256 treasuryBefore = ncCollateralToken.balanceOf(treasury);
+
+        _openNonCorrelatedPosition(alice, collateral, 50e16);
+
+        uint256 treasuryAfter = ncCollateralToken.balanceOf(treasury);
+        assertEq(treasuryAfter, treasuryBefore, "Zero fee = no charge");
+    }
+
+    function test_updateYieldFee_takesEffectImmediately() external {
+        uint256 posId = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            STANDARD_LTV
+        );
+
+        // 10% appreciation
+        correlatedOracle.setPrice((CORRELATED_PRICE * 110) / 100);
+
+        // Reduce yield fee to 5%
+        fl.updateYieldFee(5e16);
+
+        LeveragePosition memory pos = fl.getUserLeveragePosition(alice, posId);
+        Position memory morphoPos = fl.getMorphoPosition(
+            pos.userProxy,
+            correlatedMarket
+        );
+        uint256 colVal = fl.getCollateralValueInLoanToken(
+            correlatedMarket,
+            morphoPos.collateral
+        );
+        SwapData memory swap = _buildSwapData(
+            address(collateralToken),
+            address(loanToken),
+            morphoPos.collateral,
+            colVal
+        );
+
+        uint256 treasuryBefore = loanToken.balanceOf(treasury);
+
+        vm.prank(alice);
+        fl.deleverage(posId, swap, 0);
+
+        uint256 fee = loanToken.balanceOf(treasury) - treasuryBefore;
+        // Fee should reflect 5%, not 10%
+        assertGt(fee, 0, "Should charge fee");
+
+        // Open identical position at 10% fee for comparison
+        correlatedOracle.setPrice(CORRELATED_PRICE);
+        fl.updateYieldFee(10e16);
+
+        uint256 posId2 = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            STANDARD_LTV
+        );
+        correlatedOracle.setPrice((CORRELATED_PRICE * 110) / 100);
+
+        LeveragePosition memory pos2 = fl.getUserLeveragePosition(
+            alice,
+            posId2
+        );
+        Position memory morphoPos2 = fl.getMorphoPosition(
+            pos2.userProxy,
+            correlatedMarket
+        );
+        uint256 colVal2 = fl.getCollateralValueInLoanToken(
+            correlatedMarket,
+            morphoPos2.collateral
+        );
+        SwapData memory swap2 = _buildSwapData(
+            address(collateralToken),
+            address(loanToken),
+            morphoPos2.collateral,
+            colVal2
+        );
+
+        uint256 treasuryBefore2 = loanToken.balanceOf(treasury);
+        vm.prank(alice);
+        fl.deleverage(posId2, swap2, 0);
+
+        uint256 fee2 = loanToken.balanceOf(treasury) - treasuryBefore2;
+        assertGt(fee2, fee, "10% fee should be larger than 5% fee");
     }
 
     function test_updateDepositFee_success() external {
@@ -161,7 +321,13 @@ contract AdminTest is TestBase {
 
     function test_updateDepositFee_revertsAboveMax() external {
         vm.expectRevert(FLError.FlashLeverage__InvalidDepositFee.selector);
-        fl.updateDepositFee(2e16); // 2% > MAX_DEPOSIT_FEE (1%)
+        fl.updateDepositFee(2e16); // 2% > 1% max
+    }
+
+    function test_updateDepositFee_onlyOwner() external {
+        vm.prank(alice);
+        vm.expectRevert();
+        fl.updateDepositFee(5e15);
     }
 
     // ═══════════════════════════════════════════════
@@ -183,6 +349,51 @@ contract AdminTest is TestBase {
         vm.prank(alice);
         vm.expectRevert();
         fl.updateTreasury(makeAddr("newTreasury"));
+    }
+
+    function test_updateTreasury_takesEffectOnNextFee() external {
+        address newTreasury = makeAddr("newTreasury");
+
+        uint256 posId = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            STANDARD_LTV
+        );
+        correlatedOracle.setPrice((CORRELATED_PRICE * 110) / 100);
+
+        // Change treasury before deleverage
+        fl.updateTreasury(newTreasury);
+
+        LeveragePosition memory pos = fl.getUserLeveragePosition(alice, posId);
+        Position memory morphoPos = fl.getMorphoPosition(
+            pos.userProxy,
+            correlatedMarket
+        );
+        uint256 colVal = fl.getCollateralValueInLoanToken(
+            correlatedMarket,
+            morphoPos.collateral
+        );
+        SwapData memory swap = _buildSwapData(
+            address(collateralToken),
+            address(loanToken),
+            morphoPos.collateral,
+            colVal
+        );
+
+        vm.prank(alice);
+        fl.deleverage(posId, swap, 0);
+
+        // Fee should go to new treasury
+        assertGt(
+            loanToken.balanceOf(newTreasury),
+            0,
+            "New treasury should receive fee"
+        );
+        assertEq(
+            loanToken.balanceOf(treasury),
+            0,
+            "Old treasury should receive nothing"
+        );
     }
 
     // ═══════════════════════════════════════════════
@@ -234,12 +445,20 @@ contract AdminTest is TestBase {
     }
 
     function test_setSwapRouter_revertsOnUserProxy() external {
-        // Create a position to get a UserProxy
-        uint256 posId = _openCorrelatedPosition(alice, 10e18, 70e16);
+        uint256 posId = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            STANDARD_LTV
+        );
         LeveragePosition memory pos = fl.getUserLeveragePosition(alice, posId);
 
         vm.expectRevert(FLError.FlashLeverage__CannotBeUserProxy.selector);
         fl.setSwapRouter(pos.userProxy, true);
+    }
+
+    function test_setSwapRouter_revertsOnMorpho() external {
+        vm.expectRevert(FLError.FlashLeverage__CannotBeMorpho.selector);
+        fl.setSwapRouter(address(morpho), true);
     }
 
     // ═══════════════════════════════════════════════
@@ -247,7 +466,11 @@ contract AdminTest is TestBase {
     // ═══════════════════════════════════════════════
 
     function test_enableManualMode_success() external {
-        uint256 posId = _openCorrelatedPosition(alice, 10e18, 70e16);
+        uint256 posId = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            STANDARD_LTV
+        );
         LeveragePosition memory pos = fl.getUserLeveragePosition(alice, posId);
 
         fl.enableManualMode(pos.userProxy);
@@ -255,21 +478,26 @@ contract AdminTest is TestBase {
     }
 
     function test_enableManualMode_blocksFlashLeverage() external {
-        uint256 posId = _openCorrelatedPosition(alice, 10e18, 70e16);
+        uint256 posId = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            STANDARD_LTV
+        );
         LeveragePosition memory pos = fl.getUserLeveragePosition(alice, posId);
 
         fl.enableManualMode(pos.userProxy);
 
-        // FlashLeverage should be blocked from using this proxy
-        // (increaseLeverage would call execute on the proxy)
-        SwapData memory swap = SwapData({extRouter: address(router), extCalldata: ""});
         vm.prank(alice);
-        vm.expectRevert(); // ManualModeEnabled
-        fl.increaseLeverage(posId, 1e18, swap, 0);
+        vm.expectRevert();
+        fl.increaseLeverage(posId, 1e18, _emptySwap(), 0);
     }
 
     function test_enableManualMode_onlyOwner() external {
-        uint256 posId = _openCorrelatedPosition(alice, 10e18, 70e16);
+        uint256 posId = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            STANDARD_LTV
+        );
         LeveragePosition memory pos = fl.getUserLeveragePosition(alice, posId);
 
         vm.prank(alice);
@@ -281,15 +509,26 @@ contract AdminTest is TestBase {
     //              RECOVER
     // ═══════════════════════════════════════════════
 
-    function test_recover_sweepsStuckTokens() external {
-        // Send some tokens directly to FlashLeverage
-        loanToken.mint(address(fl), 100e18);
+    function test_recover_sweepsToOwner() external {
+        uint256 stuckAmount = 100e18;
+        loanToken.mint(address(fl), stuckAmount);
 
-        uint256 ownerBefore = loanToken.balanceOf(address(this));
+        address contractOwner = fl.owner();
+        uint256 ownerBefore = loanToken.balanceOf(contractOwner);
+
         fl.recover(address(loanToken));
-        uint256 ownerAfter = loanToken.balanceOf(address(this));
 
-        assertEq(ownerAfter - ownerBefore, 100e18, "Should recover all stuck tokens");
+        assertEq(
+            loanToken.balanceOf(contractOwner),
+            ownerBefore + stuckAmount,
+            "Should send to owner, not caller"
+        );
+        assertEq(loanToken.balanceOf(address(fl)), 0, "FL should be empty");
+    }
+
+    function test_recover_zeroBalance_noRevert() external {
+        // Should not revert even with 0 balance
+        fl.recover(address(loanToken));
     }
 
     function test_recover_onlyOwner() external {
@@ -305,7 +544,30 @@ contract AdminTest is TestBase {
     // ═══════════════════════════════════════════════
 
     function test_renounceOwnership_reverts() external {
-        vm.expectRevert(FLError.FlashLeverage__OwnershipRenunciationDisabled.selector);
+        vm.expectRevert(
+            FLError.FlashLeverage__OwnershipRenunciationDisabled.selector
+        );
         fl.renounceOwnership();
+    }
+
+    // ─── Internal helpers ───
+
+    function _dummyLeverageParams()
+        internal
+        view
+        returns (LeverageParams memory)
+    {
+        return
+            LeverageParams({
+                marketId: correlatedMarketId,
+                amountCollateral: INITIAL_COLLATERAL,
+                amountFlashLoan: 5e18,
+                swapData: _emptySwap(),
+                minTokenOut: 0
+            });
+    }
+
+    function _emptySwap() internal view returns (SwapData memory) {
+        return SwapData({extRouter: address(router), extCalldata: ""});
     }
 }

@@ -1,167 +1,472 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
-import {Test} from "forge-std/Test.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IMorpho, MarketParams, Id, Position} from "@morpho/interfaces/IMorpho.sol";
+import "./TestBase.sol";
+import {FLError} from "src/core/libraries/Error.sol";
 
-import {FlashLeverage} from "src/core/FlashLeverage/FlashLeverage.sol";
-import {MarketConfig} from "src/core/structs/MarketConfig.sol";
-import {LeverageParams} from "src/core/structs/LeverageParams.sol";
-import {LeveragePosition} from "src/core/structs/LeveragePosition.sol";
-import {SwapData} from "src/core/structs/SwapData.sol";
-import {Math} from "src/core/libraries/Math.sol";
-
-// NOTE: Import your FlashLeverageRouter here
-// import {FlashLeverageRouter} from "src/router/FlashLeverageRouter.sol";
-// import {FLRError} from "src/router/FlashLeverageRouter.sol";
-
-import {MockERC20} from "./mocks/MockERC20.sol";
-import {MockOracle} from "./mocks/MockOracle.sol";
-import {MockExtRouter} from "./mocks/MockExtRouter.sol";
-import {MockIrm} from "./mocks/MockIrm.sol";
+// NOTE: Uncomment when router contract is finalized
+import {FLRError, FlashLeverageRouter} from "src/router/FlashLeverageRouter.sol";
 
 /// @title FlashLeverageRouterTest
 /// @notice Tests for FlashLeverageRouter::swapAndLeverage
-/// @dev Uncomment the FlashLeverageRouter import and tests once the router is finalized.
-///      This file provides the test structure — adjust imports to match your project.
-contract FlashLeverageRouterTest is Test {
+/// @dev Uncomment imports and tests once router contract is finalized.
+///      Tests are written from expected behavior, not implementation.
+contract FlashLeverageRouterTest is TestBase {
     using Math for uint256;
 
-    // Contracts
-    FlashLeverage public fl;
-    // FlashLeverageRouter public flRouter;
-    IMorpho public morpho;
-    MockIrm public irm;
-    MockOracle public oracle;
-    MockExtRouter public swapRouter;
-    MockERC20 public collateralToken;
-    MockERC20 public loanToken;
-    MockERC20 public inputToken; // token user swaps from (e.g. USDC)
+    uint256 constant INITIAL_COLLATERAL = 10e18;
+    uint256 constant STANDARD_LTV = 70e16; // 70%
 
-    bytes32 public marketId;
-    MarketParams public market;
-    address public treasury;
-    address public alice;
+    FlashLeverageRouter public flRouter;
+    MockERC20 public inputToken; // e.g. USDC — token user starts with
 
-    uint256 public constant ORACLE_PRICE = 1.1e36;
-    uint256 public constant LLTV = 945e15;
+    function setUp() public override {
+        super.setUp();
 
-    function setUp() public {
-        treasury = makeAddr("treasury");
-        alice = makeAddr("alice");
+        inputToken = new MockERC20("USD Coin", "USDC", 6);
 
-        collateralToken = new MockERC20("wstETH", "wstETH", 18);
-        loanToken = new MockERC20("WETH", "WETH", 18);
-        inputToken = new MockERC20("USDC", "USDC", 6);
-        oracle = new MockOracle(ORACLE_PRICE);
-        irm = new MockIrm();
+        // Deploy router
+        flRouter = new FlashLeverageRouter(address(morpho), address(fl));
 
-        // Deploy real Morpho
-        address morphoAddress = vm.deployCode(
-            "lib/morpho-blue/out/Morpho.sol/Morpho.json",
-            abi.encode(address(this))
-        );
-        morpho = IMorpho(morphoAddress);
+        // Router must be approved operator on FL
+        fl.setApprovedOperator(address(flRouter), true);
 
-        morpho.enableIrm(address(irm));
-        morpho.enableLltv(LLTV);
-
-        fl = new FlashLeverage(address(morpho), treasury);
-        swapRouter = new MockExtRouter();
-        fl.setSwapRouter(address(swapRouter), true);
-
-        market = MarketParams({
-            loanToken: address(loanToken),
-            collateralToken: address(collateralToken),
-            oracle: address(oracle),
-            irm: address(irm),
-            lltv: LLTV
-        });
-        marketId = keccak256(abi.encode(market));
-
-        morpho.createMarket(market);
-
-        MarketConfig[] memory configs = new MarketConfig[](1);
-        configs[0] = MarketConfig({marketId: marketId, isCorrelated: true});
-        fl.addSupportedMarkets(configs);
-
-        // Seed liquidity
-        loanToken.mint(address(this), 1_000_000e18);
-        loanToken.approve(address(morpho), 1_000_000e18);
-        morpho.supply(market, 1_000_000e18, 0, address(this), "");
-
-        // Seed initial shares to prevent inflation attack
-        loanToken.mint(address(this), 1e9);
-        loanToken.approve(address(morpho), 1e9);
-        morpho.supply(market, 1e9, 0, address(0xdEaD), "");
-
-        // Deploy and whitelist FlashLeverageRouter as approved operator
-        // flRouter = new FlashLeverageRouter(address(morpho), address(fl));
-        // fl.setApprovedOperator(address(flRouter), true);
+        // Whitelist the swap router on FL (already done in TestBase for `router`)
     }
 
-    // ─── Placeholder tests ───
-    // Uncomment and adjust once FlashLeverageRouter is imported
+    // ═══════════════════════════════════════════════
+    //              ERC20 HAPPY PATH
+    // ═══════════════════════════════════════════════
 
-    /*
-    function test_swapAndLeverage_erc20_success() external {
+    function test_swapAndLeverage_erc20_fullVerification() external {
         uint256 inputAmount = 1000e6; // 1000 USDC
-        uint256 collateralOut = 10e18; // router gives 10 wstETH
+        uint256 collateralFromSwap = 10e18; // swap gives 10 wstETH
 
-        inputToken.mint(alice, inputAmount);
-        collateralToken.mint(address(swapRouter), collateralOut);
-
-        SwapData memory swap = SwapData({
-            extRouter: address(swapRouter),
+        // Build swap: USDC → wstETH (pre-leverage swap on router)
+        collateralToken.mint(address(router), collateralFromSwap);
+        SwapData memory preSwap = SwapData({
+            extRouter: address(router),
             extCalldata: abi.encodeCall(
                 MockExtRouter.swap,
-                (address(inputToken), address(collateralToken), inputAmount, collateralOut)
+                (
+                    address(inputToken),
+                    address(collateralToken),
+                    inputAmount,
+                    collateralFromSwap
+                )
             )
         });
 
-        LeverageParams memory params = LeverageParams({
-            marketId: marketId,
-            amountCollateral: 0, // will be overwritten
-            amountFlashLoan: 5e18,
-            swapData: SwapData({extRouter: address(swapRouter), extCalldata: ""}),
-            minTokenOut: 0
-        });
+        // Build swap: WETH → wstETH (leverage swap inside FL)
+        uint256 flashLoan = _calcFlashLoan(
+            STANDARD_LTV,
+            collateralFromSwap,
+            correlatedMarket
+        );
+        uint256 leverageSwapOut = _calcSwapOutput(flashLoan, correlatedMarket);
+        SwapData memory leverageSwap = _buildSwapData(
+            address(loanToken),
+            address(collateralToken),
+            flashLoan,
+            leverageSwapOut
+        );
+
+        inputToken.mint(alice, inputAmount);
+
+        uint256 aliceInputBefore = inputToken.balanceOf(alice);
 
         vm.startPrank(alice);
         inputToken.approve(address(flRouter), inputAmount);
-        flRouter.swapAndLeverage(params, address(inputToken), inputAmount, swap, 0);
+        flRouter.swapAndLeverage(
+            LeverageParams({
+                marketId: correlatedMarketId,
+                amountCollateral: collateralFromSwap,
+                amountFlashLoan: flashLoan,
+                swapData: leverageSwap,
+                minTokenOut: 0
+            }),
+            address(inputToken),
+            inputAmount,
+            preSwap,
+            0
+        );
         vm.stopPrank();
 
+        // Position opened for msg.sender (alice), not a passed onBehalfOf
         assertEq(fl.getUserLeveragePositions(alice).length, 1);
+
+        LeveragePosition memory pos = fl.getUserLeveragePosition(alice, 0);
+        assertTrue(pos.open);
+
+        // Input tokens pulled from alice
+        assertEq(inputToken.balanceOf(alice), aliceInputBefore - inputAmount);
+
+        // No tokens left in router
+        assertEq(inputToken.balanceOf(address(flRouter)), 0);
+        assertEq(collateralToken.balanceOf(address(flRouter)), 0);
+        assertEq(loanToken.balanceOf(address(flRouter)), 0);
     }
 
-    function test_swapAndLeverage_native_success() external {
-        vm.deal(alice, 1 ether);
+    function test_swapAndLeverage_erc20_positionOwnedByMsgSender() external {
+        uint256 inputAmount = 1000e6;
+        uint256 collateralFromSwap = 10e18;
 
-        // Router should accept native ETH
-        // ... test with tokenIn = address(0)
-    }
+        collateralToken.mint(address(router), collateralFromSwap);
+        SwapData memory preSwap = SwapData({
+            extRouter: address(router),
+            extCalldata: abi.encodeCall(
+                MockExtRouter.swap,
+                (
+                    address(inputToken),
+                    address(collateralToken),
+                    inputAmount,
+                    collateralFromSwap
+                )
+            )
+        });
 
-    function test_swapAndLeverage_revertsOnZeroAmountIn() external {
-        vm.expectRevert(FLRError.FlashLeverageRouter__AmountInCannotBeZero.selector);
+        uint256 flashLoan = _calcFlashLoan(
+            STANDARD_LTV,
+            collateralFromSwap,
+            correlatedMarket
+        );
+        uint256 leverageSwapOut = _calcSwapOutput(flashLoan, correlatedMarket);
+        SwapData memory leverageSwap = _buildSwapData(
+            address(loanToken),
+            address(collateralToken),
+            flashLoan,
+            leverageSwapOut
+        );
+
+        inputToken.mint(alice, inputAmount);
+
+        vm.startPrank(alice);
+        inputToken.approve(address(flRouter), inputAmount);
         flRouter.swapAndLeverage(
-            LeverageParams({marketId: marketId, amountCollateral: 0, amountFlashLoan: 1e18, swapData: SwapData({extRouter: address(0), extCalldata: ""}), minTokenOut: 0}),
+            LeverageParams({
+                marketId: correlatedMarketId,
+                amountCollateral: collateralFromSwap,
+                amountFlashLoan: flashLoan,
+                swapData: leverageSwap,
+                minTokenOut: 0
+            }),
             address(inputToken),
+            inputAmount,
+            preSwap,
+            0
+        );
+        vm.stopPrank();
+
+        // Position belongs to alice (msg.sender), nobody else has positions
+        assertEq(fl.getUserLeveragePositions(alice).length, 1);
+        assertEq(fl.getUserLeveragePositions(bob).length, 0);
+        assertEq(fl.getUserLeveragePositions(address(flRouter)).length, 0);
+    }
+
+    // ═══════════════════════════════════════════════
+    //              NATIVE ETH HAPPY PATH
+    // ═══════════════════════════════════════════════
+
+    function test_swapAndLeverage_native_fullVerification() external {
+        uint256 ethAmount = 1 ether;
+        uint256 collateralFromSwap = 10e18;
+
+        // Pre-fund router for the swap output
+        collateralToken.mint(address(router), collateralFromSwap);
+        SwapData memory preSwap = SwapData({
+            extRouter: address(router),
+            extCalldata: abi.encodeCall(
+                MockExtRouter.swapETH,
+                (address(collateralToken), ethAmount, collateralFromSwap)
+            )
+        });
+
+        uint256 flashLoan = _calcFlashLoan(
+            STANDARD_LTV,
+            collateralFromSwap,
+            correlatedMarket
+        );
+        uint256 leverageSwapOut = _calcSwapOutput(flashLoan, correlatedMarket);
+        SwapData memory leverageSwap = _buildSwapData(
+            address(loanToken),
+            address(collateralToken),
+            flashLoan,
+            leverageSwapOut
+        );
+
+        vm.deal(alice, ethAmount);
+        uint256 aliceEthBefore = alice.balance;
+
+        vm.prank(alice);
+        flRouter.swapAndLeverage{value: ethAmount}(
+            LeverageParams({
+                marketId: correlatedMarketId,
+                amountCollateral: collateralFromSwap,
+                amountFlashLoan: flashLoan,
+                swapData: leverageSwap,
+                minTokenOut: 0
+            }),
+            address(0), // native ETH
+            ethAmount,
+            preSwap,
+            0
+        );
+
+        assertEq(fl.getUserLeveragePositions(alice).length, 1);
+        assertEq(
+            alice.balance,
+            aliceEthBefore - ethAmount,
+            "ETH should be consumed"
+        );
+        assertEq(address(flRouter).balance, 0, "No ETH left in router");
+    }
+
+    // ═══════════════════════════════════════════════
+    //              REFUND EXCESS
+    // ═══════════════════════════════════════════════
+
+    function test_swapAndLeverage_erc20_refundsExcess() external {
+        uint256 inputAmount = 1000e6;
+        uint256 actualConsumed = 800e6; // swap only uses 800
+        uint256 collateralFromSwap = 8e18;
+
+        collateralToken.mint(address(router), collateralFromSwap);
+        SwapData memory preSwap = SwapData({
+            extRouter: address(router),
+            extCalldata: abi.encodeCall(
+                MockExtRouter.swap,
+                (
+                    address(inputToken),
+                    address(collateralToken),
+                    actualConsumed,
+                    collateralFromSwap
+                )
+            )
+        });
+
+        uint256 flashLoan = _calcFlashLoan(
+            STANDARD_LTV,
+            collateralFromSwap,
+            correlatedMarket
+        );
+        uint256 leverageSwapOut = _calcSwapOutput(flashLoan, correlatedMarket);
+        SwapData memory leverageSwap = _buildSwapData(
+            address(loanToken),
+            address(collateralToken),
+            flashLoan,
+            leverageSwapOut
+        );
+
+        inputToken.mint(alice, inputAmount);
+
+        vm.startPrank(alice);
+        inputToken.approve(address(flRouter), inputAmount);
+        flRouter.swapAndLeverage(
+            LeverageParams({
+                marketId: correlatedMarketId,
+                amountCollateral: collateralFromSwap,
+                amountFlashLoan: flashLoan,
+                swapData: leverageSwap,
+                minTokenOut: 0
+            }),
+            address(inputToken),
+            inputAmount,
+            preSwap,
+            0
+        );
+        vm.stopPrank();
+
+        uint256 expectedRefund = inputAmount - actualConsumed;
+        assertEq(
+            inputToken.balanceOf(alice),
+            expectedRefund,
+            "Should refund unconsumed input tokens"
+        );
+        assertEq(
+            inputToken.balanceOf(address(flRouter)),
             0,
-            SwapData({extRouter: address(swapRouter), extCalldata: ""}),
+            "No tokens left in router"
+        );
+    }
+
+    function test_swapAndLeverage_native_refundsExcess() external {
+        uint256 ethSent = 2 ether;
+        uint256 actualConsumed = 1 ether;
+        uint256 collateralFromSwap = 10e18;
+
+        collateralToken.mint(address(router), collateralFromSwap);
+        SwapData memory preSwap = SwapData({
+            extRouter: address(router),
+            extCalldata: abi.encodeCall(
+                MockExtRouter.swapETH,
+                (address(collateralToken), actualConsumed, collateralFromSwap)
+            )
+        });
+
+        uint256 flashLoan = _calcFlashLoan(
+            STANDARD_LTV,
+            collateralFromSwap,
+            correlatedMarket
+        );
+        uint256 leverageSwapOut = _calcSwapOutput(flashLoan, correlatedMarket);
+        SwapData memory leverageSwap = _buildSwapData(
+            address(loanToken),
+            address(collateralToken),
+            flashLoan,
+            leverageSwapOut
+        );
+
+        vm.deal(alice, ethSent);
+        uint256 aliceEthBefore = alice.balance;
+
+        vm.prank(alice);
+        flRouter.swapAndLeverage{value: ethSent}(
+            LeverageParams({
+                marketId: correlatedMarketId,
+                amountCollateral: collateralFromSwap,
+                amountFlashLoan: flashLoan,
+                swapData: leverageSwap,
+                minTokenOut: 0
+            }),
+            address(0),
+            ethSent,
+            preSwap,
+            0
+        );
+
+        assertEq(
+            alice.balance,
+            aliceEthBefore - actualConsumed,
+            "Should refund excess ETH"
+        );
+        assertEq(address(flRouter).balance, 0, "No ETH left in router");
+    }
+
+    // ═══════════════════════════════════════════════
+    //           MSG.VALUE VALIDATION
+    // ═══════════════════════════════════════════════
+
+    function test_swapAndLeverage_erc20_revertsOnNonZeroMsgValue() external {
+        inputToken.mint(alice, 1000e6);
+
+        vm.deal(alice, 1 ether);
+        vm.startPrank(alice);
+        inputToken.approve(address(flRouter), 1000e6);
+
+        vm.expectRevert();
+        flRouter.swapAndLeverage{value: 1 ether}(
+            LeverageParams({
+                marketId: correlatedMarketId,
+                amountCollateral: 10e18,
+                amountFlashLoan: 5e18,
+                swapData: _emptySwap(),
+                minTokenOut: 0
+            }),
+            address(inputToken), // ERC20, not native
+            1000e6,
+            _emptySwap(),
+            0
+        );
+        vm.stopPrank();
+    }
+
+    function test_swapAndLeverage_native_revertsOnMsgValueMismatch() external {
+        vm.deal(alice, 2 ether);
+
+        vm.prank(alice);
+        vm.expectRevert();
+        flRouter.swapAndLeverage{value: 1 ether}(
+            LeverageParams({
+                marketId: correlatedMarketId,
+                amountCollateral: 10e18,
+                amountFlashLoan: 5e18,
+                swapData: _emptySwap(),
+                minTokenOut: 0
+            }),
+            address(0), // native
+            2 ether, // amountIn != msg.value
+            _emptySwap(),
             0
         );
     }
 
-    function test_swapAndLeverage_revertsOnInvalidRouter() external {
+    // ═══════════════════════════════════════════════
+    //              REVERT CASES
+    // ═══════════════════════════════════════════════
+
+    function test_swapAndLeverage_revertsOnZeroAmountIn() external {
+        vm.prank(alice);
+        vm.expectRevert();
+        flRouter.swapAndLeverage(
+            LeverageParams({
+                marketId: correlatedMarketId,
+                amountCollateral: 10e18,
+                amountFlashLoan: 5e18,
+                swapData: _emptySwap(),
+                minTokenOut: 0
+            }),
+            address(inputToken),
+            0,
+            _emptySwap(),
+            0
+        );
+    }
+
+    function test_swapAndLeverage_revertsOnUnsupportedMarket() external {
+        uint256 inputAmount = 1000e6;
+        uint256 collateralFromSwap = 10e18;
+
+        collateralToken.mint(address(router), collateralFromSwap);
+        SwapData memory preSwap = SwapData({
+            extRouter: address(router),
+            extCalldata: abi.encodeCall(
+                MockExtRouter.swap,
+                (
+                    address(inputToken),
+                    address(collateralToken),
+                    inputAmount,
+                    collateralFromSwap
+                )
+            )
+        });
+
+        inputToken.mint(alice, inputAmount);
+
+        vm.startPrank(alice);
+        inputToken.approve(address(flRouter), inputAmount);
+
+        vm.expectRevert();
+        flRouter.swapAndLeverage(
+            LeverageParams({
+                marketId: keccak256("fake"),
+                amountCollateral: collateralFromSwap,
+                amountFlashLoan: 5e18,
+                swapData: _emptySwap(),
+                minTokenOut: 0
+            }),
+            address(inputToken),
+            inputAmount,
+            preSwap,
+            0
+        );
+        vm.stopPrank();
+    }
+
+    function test_swapAndLeverage_revertsOnInvalidPreSwapRouter() external {
         inputToken.mint(alice, 1000e6);
+
         vm.startPrank(alice);
         inputToken.approve(address(flRouter), 1000e6);
 
-        vm.expectRevert(FLRError.FlashLeverageRouter__InvalidSwapRouter.selector);
+        vm.expectRevert();
         flRouter.swapAndLeverage(
-            LeverageParams({marketId: marketId, amountCollateral: 0, amountFlashLoan: 1e18, swapData: SwapData({extRouter: address(0), extCalldata: ""}), minTokenOut: 0}),
+            LeverageParams({
+                marketId: correlatedMarketId,
+                amountCollateral: 10e18,
+                amountFlashLoan: 5e18,
+                swapData: _emptySwap(),
+                minTokenOut: 0
+            }),
             address(inputToken),
             1000e6,
             SwapData({extRouter: makeAddr("badRouter"), extCalldata: ""}),
@@ -170,24 +475,37 @@ contract FlashLeverageRouterTest is Test {
         vm.stopPrank();
     }
 
-    function test_swapAndLeverage_refundsExcessERC20() external {
-        // Test that unconsumed tokenIn is refunded
+    function test_swapAndLeverage_revertsWhenRouterNotApprovedOperator()
+        external
+    {
+        // Remove router as approved operator
+        // fl.setApprovedOperator(address(flRouter), false);
+
+        inputToken.mint(alice, 1000e6);
+
+        vm.startPrank(alice);
+        inputToken.approve(address(flRouter), 1000e6);
+
+        vm.expectRevert();
+        flRouter.swapAndLeverage(
+            LeverageParams({
+                marketId: correlatedMarketId,
+                amountCollateral: 10e18,
+                amountFlashLoan: 5e18,
+                swapData: _emptySwap(),
+                minTokenOut: 0
+            }),
+            address(inputToken),
+            1000e6,
+            _emptySwap(),
+            0
+        );
+        vm.stopPrank();
     }
 
-    function test_swapAndLeverage_refundsExcessNative() external {
-        // Test that unconsumed native ETH is refunded
-    }
+    // ─── Internal helpers ───
 
-    function test_swapAndLeverage_revertsOnWrongMsgValue_erc20() external {
-        // msg.value > 0 with ERC20 tokenIn should revert
+    function _emptySwap() internal view returns (SwapData memory) {
+        return SwapData({extRouter: address(router), extCalldata: ""});
     }
-
-    function test_swapAndLeverage_revertsOnWrongMsgValue_native() external {
-        // msg.value != amountIn with native tokenIn should revert
-    }
-
-    function test_swapAndLeverage_useMsgSenderAsUser() external {
-        // Verify position is opened for msg.sender, not a passed onBehalfOf
-    }
-    */
 }

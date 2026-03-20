@@ -168,11 +168,11 @@ contract FlashLeverage is
         LeverageParams calldata params
     )
         external
+        nonReentrant
+        whenNotPaused
         validateUser(user)
         validateAmount(params.amountCollateral)
         validateAmount(params.amountFlashLoan)
-        nonReentrant
-        whenNotPaused
     {
         MarketParams memory market = s_markets[params.marketId];
         require(
@@ -200,7 +200,7 @@ contract FlashLeverage is
                 marketId: params.marketId,
                 userProxy: address(0), // Will be set in _handleLeverage
                 amountDepositedInLoanToken: 0, // Will be set in _handleLeverage
-                amountReturnedInLoanToken: 0
+                amountReturnedInLoanToken: 0 // Will be set at the time of deleverage
             })
         );
 
@@ -291,7 +291,7 @@ contract FlashLeverage is
             Action.LEVERAGE,
             user,
             positionId,
-            uint256(0), // amountCollateral is 0, since we're only adding via flash loan
+            uint256(0), // amountCollateral is 0, since we're only adding via loan
             swapData,
             minTokenOut
         );
@@ -718,7 +718,6 @@ contract FlashLeverage is
 
         // Swap amount loan -> collateral token
         uint256 amountSwappedCollateral = _swapToken(
-            user,
             market.loanToken,
             market.collateralToken,
             amountLoan,
@@ -813,7 +812,6 @@ contract FlashLeverage is
 
         // Swap withdrawn collateral -> loan token
         uint256 amountSwappedLoanToken = _swapToken(
-            user,
             market.collateralToken,
             market.loanToken,
             amountLeveragedCollateral,

@@ -2,6 +2,9 @@
 cache/
 out/
 
+# Morpho compiled artifacts (rebuilt locally via `cd lib/morpho-blue && forge build`)
+lib/morpho-blue/out/
+
 # Node modules
 node_modules/
 
@@ -9,9 +12,6 @@ node_modules/
 !/broadcast
 /broadcast/*/31337/
 /broadcast/**/dry-run/
-
-# Docs
-docs/
 
 # Dotenv file
 .env
@@ -37,8 +37,3 @@ report.md
 # Temp
 script/Run.s.sol
 .VSCodeCounter
-new.doc
-
-
-
-

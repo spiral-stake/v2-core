@@ -22,7 +22,6 @@ contract SwapManager is TokenHelper {
     event SwapRouterUpdated(address indexed router, bool enabled);
 
     function _swapToken(
-        address user,
         address tokenIn,
         address tokenOut,
         uint256 amountIn,

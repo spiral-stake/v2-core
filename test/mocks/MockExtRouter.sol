@@ -25,6 +25,26 @@ contract MockExtRouter {
         IERC20(tokenOut).safeTransfer(msg.sender, amountOut);
     }
 
+    /// @notice Swap that accepts native ETH as input, refunds excess to sender
+    /// @param tokenOut Address of the output token
+    /// @param amountETHIn Actual amount of ETH to consume
+    /// @param amountOut Amount of tokenOut to send to msg.sender
+    function swapETH(
+        address tokenOut,
+        uint256 amountETHIn,
+        uint256 amountOut
+    ) external payable {
+        require(msg.value >= amountETHIn, "MockExtRouter: insufficient ETH");
+        IERC20(tokenOut).safeTransfer(msg.sender, amountOut);
+
+        // Refund excess ETH to sender
+        uint256 excess = msg.value - amountETHIn;
+        if (excess > 0) {
+            (bool success, ) = msg.sender.call{value: excess}("");
+            require(success, "MockExtRouter: ETH refund failed");
+        }
+    }
+
     /// @notice Swap that sends output to a specific receiver (not msg.sender)
     /// @param tokenIn Address of the input token
     /// @param tokenOut Address of the output token
