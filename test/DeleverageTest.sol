@@ -232,7 +232,7 @@ contract DeleverageTest is TestBase {
         uint256 aliceBefore = loanToken.balanceOf(alice);
 
         vm.prank(alice);
-        fl.deleverage(posId, swap, 0);
+        fl.deleverage(posId, 0, swap, 0);
 
         LeveragePosition memory posAfter = fl.getUserLeveragePosition(
             alice,
@@ -279,7 +279,7 @@ contract DeleverageTest is TestBase {
         uint256 aliceBefore = loanToken.balanceOf(alice);
 
         vm.prank(alice);
-        fl.deleverage(posId, swap, 0);
+        fl.deleverage(posId, 0, swap, 0);
 
         LeveragePosition memory posAfter = fl.getUserLeveragePosition(
             alice,
@@ -350,7 +350,7 @@ contract DeleverageTest is TestBase {
 
         vm.prank(alice);
         vm.expectRevert(FLError.FlashLeverage__PositionAlreadyClosed.selector);
-        fl.deleverage(posId, _emptySwap(), 0);
+        fl.deleverage(posId, 0, _emptySwap(), 0);
     }
 
     function test_deleverage_revertsOnNonOwner() external {
@@ -362,7 +362,7 @@ contract DeleverageTest is TestBase {
 
         vm.prank(bob);
         vm.expectRevert();
-        fl.deleverage(posId, _emptySwap(), 0);
+        fl.deleverage(posId, 0, _emptySwap(), 0);
     }
 
     // ─── Internal helpers ───
@@ -386,7 +386,7 @@ contract DeleverageTest is TestBase {
         );
 
         vm.prank(user);
-        fl.deleverage(posId, swap, 0);
+        fl.deleverage(posId, 0, swap, 0);
     }
 
     function _repayAllDebt(

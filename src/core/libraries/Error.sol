@@ -16,6 +16,7 @@ library FLError {
     error FlashLeverage__ExceedsMaxLTV(uint256 effectiveLtv, uint256 maxLtv);
     error FlashLeverage__PositionAlreadyClosed();
     error FlashLeverage__BorrowExceedsDepositedForCorrelatedPairs();
+    error FlashLeverage__ExceedsCollateral();
 
     // Configuration
     error FlashLeverage__UnsupportedMarket();

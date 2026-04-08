@@ -109,7 +109,7 @@ abstract contract TestBase is Test {
         morpho.enableLltv(NON_CORRELATED_LLTV);
 
         // ─── Deploy FlashLeverage ───
-        fl = new FlashLeverage(address(morpho), treasury);
+        fl = new FlashLeverage(owner, address(morpho), treasury);
 
         // ─── Deploy and whitelist router ───
         router = new MockExtRouter();
@@ -206,13 +206,14 @@ abstract contract TestBase is Test {
         // Pre-fund the router with tokenOut
         MockERC20(tokenOut).mint(address(router), amountOut);
 
-        return SwapData({
-            extRouter: address(router),
-            extCalldata: abi.encodeCall(
-                MockExtRouter.swap,
-                (tokenIn, tokenOut, amountIn, amountOut)
-            )
-        });
+        return
+            SwapData({
+                extRouter: address(router),
+                extCalldata: abi.encodeCall(
+                    MockExtRouter.swap,
+                    (tokenIn, tokenOut, amountIn, amountOut)
+                )
+            });
     }
 
     /// @notice Calculate flash loan amount for a target LTV
@@ -224,9 +225,16 @@ abstract contract TestBase is Test {
         uint256 colVal = fl.getCollateralValueInLoanToken(mkt, collateral);
         uint8 loanDecimals = MockERC20(mkt.loanToken).decimals();
 
-        uint256 colValStd = colVal.scaleTo(loanDecimals, Math.STANDARD_DECIMALS);
+        uint256 colValStd = colVal.scaleTo(
+            loanDecimals,
+            Math.STANDARD_DECIMALS
+        );
         uint256 totalPos = colValStd.divDown(Math.ONE - ltv);
-        return (totalPos - colValStd).scaleTo(Math.STANDARD_DECIMALS, loanDecimals);
+        return
+            (totalPos - colValStd).scaleTo(
+                Math.STANDARD_DECIMALS,
+                loanDecimals
+            );
     }
 
     /// @notice Calculate expected collateral output from a flash loan swap
@@ -250,7 +258,11 @@ abstract contract TestBase is Test {
     ) internal returns (uint256 positionId) {
         collateralToken.mint(user, collateralAmount);
 
-        uint256 flashLoan = _calcFlashLoan(targetLtv, collateralAmount, correlatedMarket);
+        uint256 flashLoan = _calcFlashLoan(
+            targetLtv,
+            collateralAmount,
+            correlatedMarket
+        );
         uint256 swapOut = _calcSwapOutput(flashLoan, correlatedMarket);
         SwapData memory swap = _buildSwapData(
             address(loanToken),
@@ -284,7 +296,11 @@ abstract contract TestBase is Test {
     ) internal returns (uint256 positionId) {
         ncCollateralToken.mint(user, collateralAmount);
 
-        uint256 flashLoan = _calcFlashLoan(targetLtv, collateralAmount, nonCorrelatedMarket);
+        uint256 flashLoan = _calcFlashLoan(
+            targetLtv,
+            collateralAmount,
+            nonCorrelatedMarket
+        );
         uint256 swapOut = _calcSwapOutput(flashLoan, nonCorrelatedMarket);
         SwapData memory swap = _buildSwapData(
             address(ncLoanToken),
@@ -316,7 +332,10 @@ abstract contract TestBase is Test {
         uint256 positionId,
         MarketParams memory mkt
     ) internal view returns (Position memory) {
-        LeveragePosition memory pos = fl.getUserLeveragePosition(user, positionId);
+        LeveragePosition memory pos = fl.getUserLeveragePosition(
+            user,
+            positionId
+        );
         return fl.getMorphoPosition(pos.userProxy, mkt);
     }
 }

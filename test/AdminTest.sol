@@ -35,7 +35,7 @@ contract AdminTest is TestBase {
 
         vm.prank(alice);
         vm.expectRevert();
-        fl.deleverage(posId, _emptySwap(), 0);
+        fl.deleverage(posId, 0, _emptySwap(), 0);
     }
 
     function test_pause_blocksIncreaseLeverage() external {
@@ -167,7 +167,7 @@ contract AdminTest is TestBase {
         );
 
         vm.prank(alice);
-        fl.deleverage(posId, swap, 0);
+        fl.deleverage(posId, 0, swap, 0);
 
         assertFalse(fl.getUserLeveragePosition(alice, posId).open);
     }
@@ -265,7 +265,7 @@ contract AdminTest is TestBase {
         uint256 treasuryBefore = loanToken.balanceOf(treasury);
 
         vm.prank(alice);
-        fl.deleverage(posId, swap, 0);
+        fl.deleverage(posId, 0, swap, 0);
 
         uint256 fee = loanToken.balanceOf(treasury) - treasuryBefore;
         // Fee should reflect 5%, not 10%
@@ -303,7 +303,7 @@ contract AdminTest is TestBase {
 
         uint256 treasuryBefore2 = loanToken.balanceOf(treasury);
         vm.prank(alice);
-        fl.deleverage(posId2, swap2, 0);
+        fl.deleverage(posId2, 0, swap2, 0);
 
         uint256 fee2 = loanToken.balanceOf(treasury) - treasuryBefore2;
         assertGt(fee2, fee, "10% fee should be larger than 5% fee");
@@ -381,7 +381,7 @@ contract AdminTest is TestBase {
         );
 
         vm.prank(alice);
-        fl.deleverage(posId, swap, 0);
+        fl.deleverage(posId, 0, swap, 0);
 
         // Fee should go to new treasury
         assertGt(

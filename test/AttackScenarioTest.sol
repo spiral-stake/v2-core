@@ -61,7 +61,7 @@ contract AttackScenarioTest is TestBase {
 
         // This should not revert — dust should be handleable
         vm.prank(alice);
-        fl.deleverage(posId, swap, 0);
+        fl.deleverage(posId, 0, swap, 0);
 
         LeveragePosition memory posAfter = fl.getUserLeveragePosition(
             alice,
@@ -564,6 +564,6 @@ contract AttackScenarioTest is TestBase {
         );
 
         vm.prank(user);
-        fl.deleverage(posId, swap, 0);
+        fl.deleverage(posId, 0, swap, 0);
     }
 }

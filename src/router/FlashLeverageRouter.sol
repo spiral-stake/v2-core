@@ -73,6 +73,10 @@ contract FlashLeverageRouter is TokenHelper {
                 swapData.extCalldata
             );
         } else {
+            require(
+                msg.value == 0,
+                FLRError.FlashLeverageRouter__InvalidMsgValue()
+            );
             _transferIn(tokenIn, user, amountIn);
             _forceApprove(tokenIn, address(swapData.extRouter), amountIn);
             (success, ) = swapData.extRouter.call(swapData.extCalldata);
@@ -98,18 +102,7 @@ contract FlashLeverageRouter is TokenHelper {
         i_flashLeverage.leverage(user, leverageParams);
 
         // Refund unconsumed tokenIn to user, if any
-        uint256 tokenInAfter = tokenIn == NATIVE
-            ? address(this).balance
-            : _selfBalance(tokenIn);
-
-        if (tokenInAfter > 0) {
-            if (tokenIn == NATIVE) {
-                (bool sent, ) = user.call{value: tokenInAfter}("");
-                require(sent);
-            } else {
-                _transferOut(tokenIn, user, tokenInAfter);
-            }
-        }
+        _transferOut(tokenIn, user, _selfBalance(tokenIn));
     }
 
     /// @notice Allows the contract to receive native tokens from swap routers

@@ -324,6 +324,6 @@ contract SupplyCollateralTest is TestBase {
         );
 
         vm.prank(user);
-        fl.deleverage(posId, swap, 0);
+        fl.deleverage(posId, 0, swap, 0);
     }
 }

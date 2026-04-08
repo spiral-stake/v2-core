@@ -38,6 +38,10 @@ contract UserProxy is TokenHelper {
     /// @dev Called once per clone in the same tx after deployment by the factory
     function initialize(address _user) external {
         require(
+            msg.sender == i_flashLeverage,
+            FLError.FlashLeverage__Unauthorised()
+        );
+        require(
             s_user == address(0),
             FLError.FlashLeverage__ProxyAlreadyInitialized()
         );

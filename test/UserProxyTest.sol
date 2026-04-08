@@ -61,6 +61,7 @@ contract UserProxyTest is TestBase {
         vm.expectRevert(
             FLError.FlashLeverage__ProxyAlreadyInitialized.selector
         );
+        vm.prank(address(fl));
         UserProxy(pos.userProxy).initialize(bob);
     }
 

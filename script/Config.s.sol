@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import {MarketConfig} from "../src/core/structs/MarketConfig.sol";
 
 struct ChainConfig {
+    address owner;
     address morpho;
     address[] swapRouters;
     address treasury;
@@ -20,6 +21,7 @@ contract Config {
     function getChainConfig() internal view returns (ChainConfig memory chain) {
         // Commons
         chain.treasury = 0xeB90258b1F74a846F7941514C7c02Bb03EB249D5;
+        chain.owner = 0x47C9fD3AFd07ec00a2264c74FA4AC889f11454cc;
 
         if (block.chainid == 31337 || block.chainid == 1) {
             chain.morpho = 0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb;

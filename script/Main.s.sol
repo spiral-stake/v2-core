@@ -44,6 +44,7 @@ contract Main is Script, WriteAddresses, Config {
         MarketConfig[] memory marketConfigs
     ) private returns (address flashLeverage) {
         flashLeverage = new DeployFlashLeverage().run(
+            chain.owner,
             chain.morpho,
             chain.swapRouters,
             chain.treasury,

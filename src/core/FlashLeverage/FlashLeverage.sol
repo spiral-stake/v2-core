@@ -111,7 +111,7 @@ contract FlashLeverage is
     // Modifiers
 
     /**
-     * @notice Validates that the user address is not zero and the caller is authorized
+     * @notice Validates the user address and the caller is authorized
      * @param user The address of the user for whom the action is being performed
      * @dev Reverts if user is zero address or caller is neither the user nor an approved operator
      */
@@ -137,9 +137,10 @@ contract FlashLeverage is
      * @param morphoAddress Address of the Morpho protocol contract
      */
     constructor(
+        address owner,
         address morphoAddress,
         address treasury
-    ) Ownable(msg.sender) MarketPositionManager(morphoAddress) {
+    ) Ownable(owner) MarketPositionManager(morphoAddress) {
         if (morphoAddress == address(0) || treasury == address(0)) {
             revert FLError.FlashLeverage__CannotBeZeroAddress();
         }
@@ -219,9 +220,15 @@ contract FlashLeverage is
     /**
      * @notice Closes an existing leveraged position and returns the final amount (in loan token) to the user.
      * @dev Only the leverage position's owner can call this function
+     * @param positionId The unique identifier of the leverage position.
+     * @param amountCollateral The amount of collateral to withdraw. Pass 0 to withdraw all.
+     *        When non-zero, used to prevent front-running DoS on swap calldata as partial swap reverts in SwapManager
+     * @param swapData Swap configuration for converting collateral to loan token.
+     * @param minTokenOut Minimum loan tokens expected from swap.
      */
     function deleverage(
         uint256 positionId,
+        uint256 amountCollateral,
         SwapData memory swapData,
         uint256 minTokenOut
     ) external nonReentrant whenNotPaused returns (uint256) {
@@ -239,12 +246,32 @@ contract FlashLeverage is
             market
         );
 
+        // Short-circuit for fully liquidated / empty positions
+        if (
+            morphoPosition.borrowShares == 0 && morphoPosition.collateral == 0
+        ) {
+            position.amountReturnedInLoanToken = 0;
+            emit LeveragePositionClosed(user, positionId, 0);
+            return 0;
+        }
+
+        // If user passes 0, use full Morpho collateral (default behavior)
+        // If non-zero, validate it doesn't exceed actual collateral
+        uint256 collateralToWithdraw = amountCollateral == 0
+            ? morphoPosition.collateral
+            : amountCollateral;
+
+        require(
+            collateralToWithdraw <= morphoPosition.collateral,
+            FLError.FlashLeverage__ExceedsCollateral()
+        );
+
         bytes memory data = abi.encode(
             Action.UNLEVERAGE,
-            user, // user
+            user,
             positionId,
             morphoPosition.borrowShares,
-            morphoPosition.collateral, // amountLeveragedCollateral
+            collateralToWithdraw,
             swapData,
             minTokenOut
         );
@@ -414,6 +441,15 @@ contract FlashLeverage is
             borrowShares
         );
         position.amountDepositedInLoanToken += amountRepaid;
+
+        uint256 excess = amountRepay - amountRepaid;
+        if (excess > 0) {
+            _transferOut(market.loanToken, msg.sender, excess);
+        }
+
+        // Clear stale Morpho approval
+        _forceApprove(market.loanToken, address(i_morpho), 0);
+
         emit LoanRepaid(user, positionId, amountRepaid);
     }
 
@@ -914,12 +950,17 @@ contract FlashLeverage is
             amountLeveragedCollateral
         ).scaleTo(loanTokenDecimals, Math.STANDARD_DECIMALS);
 
-        if (amountCollateralInLoanToken == 0 && amountLoan == 0) {
-            return;
+        uint256 maxLtv = getMaxLtv(market);
+
+        if (amountCollateralInLoanToken == 0) {
+            if (amountLoan == 0) return;
+            revert FLError.FlashLeverage__ExceedsMaxLTV(
+                type(uint256).max,
+                maxLtv
+            );
         }
 
         uint256 effectiveLtv = amountLoan.divDown(amountCollateralInLoanToken);
-        uint256 maxLtv = getMaxLtv(market);
         require(
             effectiveLtv <= maxLtv,
             FLError.FlashLeverage__ExceedsMaxLTV(effectiveLtv, maxLtv)

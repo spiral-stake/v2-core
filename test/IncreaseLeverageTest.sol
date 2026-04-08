@@ -293,7 +293,7 @@ contract IncreaseLeverageTest is TestBase {
         );
 
         vm.prank(user);
-        fl.deleverage(posId, swap, 0);
+        fl.deleverage(posId, 0, swap, 0);
     }
 
     function _emptySwap() internal view returns (SwapData memory) {

@@ -7,6 +7,7 @@ import {MarketConfig} from "../src/core/structs/MarketConfig.sol";
 
 contract DeployFlashLeverage is Script {
     function run(
+        address owner,
         address morpho,
         address[] memory swapRouters,
         address treasury,
@@ -15,7 +16,11 @@ contract DeployFlashLeverage is Script {
         vm.startBroadcast();
 
         // Deploy
-        FlashLeverage flashLeverage = new FlashLeverage(morpho, treasury);
+        FlashLeverage flashLeverage = new FlashLeverage(
+            owner,
+            morpho,
+            treasury
+        );
 
         // Add supported collateral token
         flashLeverage.addSupportedMarkets(marketConfigs);
