@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 
 import {IMorpho, MarketParams, Id} from "@morpho/interfaces/IMorpho.sol";
+import {Withdrawal, IPublicAllocator, MarketParams as SupplyMarketParams} from "@morpho-public-allocator/interfaces/IPublicAllocator.sol";
 import {LeverageParams} from "../core/structs/LeverageParams.sol";
 import {SwapData} from "../core/structs/SwapData.sol";
 import {TokenHelper} from "../core/libraries/TokenHelper.sol";
@@ -13,6 +14,7 @@ library FLRError {
     error FlashLeverageRouter__SwapRouterCallFailed();
     error FlashLeverageRouter__MinTokenOutNotMet();
     error FlashLeverageRouter__InvalidMsgValue();
+    error FlashLeverageRouter__ReallocateFailed();
 }
 
 interface IFlashLeverage {
@@ -24,36 +26,132 @@ interface IFlashLeverage {
     function isValidSwapRouter(address router) external returns (bool);
 }
 
+struct ReallocateParams {
+    address vault;
+    uint256 fee;
+    Withdrawal[] withdrawals;
+    SupplyMarketParams supplyMarketParams;
+}
+
 contract FlashLeverageRouter is TokenHelper {
     IMorpho public immutable i_morpho;
     IFlashLeverage public immutable i_flashLeverage;
+    IPublicAllocator public immutable i_publicAllocator;
 
-    constructor(address morphoAddress, address flashLeverageAddress) {
+    constructor(
+        address morphoAddress,
+        address publicAllocatorAddress,
+        address flashLeverageAddress
+    ) {
         require(
-            morphoAddress != address(0) && flashLeverageAddress != address(0),
+            morphoAddress != address(0) &&
+                flashLeverageAddress != address(0) &&
+                publicAllocatorAddress != address(0),
             FLRError.FlashLeverageRouter__ZeroAddress()
         );
         i_flashLeverage = IFlashLeverage(flashLeverageAddress);
         i_morpho = IMorpho(morphoAddress);
+        i_publicAllocator = IPublicAllocator(publicAllocatorAddress);
     }
 
-    /**
-     * @notice Swaps an input token to the market's collateral token, then opens a leveraged position.
-     * @param leverageParams Leverage parameters. amountCollateral will be overwritten with swap output.
-     * @param tokenIn The token to swap from. address(0) for native token
-     * @param amountIn The amount of tokenIn to swap.
-     * @param swapData Swap configuration for the external router.
-     * @param minTokenOut Minimum collateral tokens expected from the swap (slippage protection).
-     */
     function swapAndLeverage(
-        LeverageParams memory leverageParams,
         address tokenIn,
         uint256 amountIn,
         SwapData calldata swapData,
-        uint256 minTokenOut
+        uint256 minTokenOut,
+        LeverageParams memory leverageParams
+    ) external payable {
+        _swapAndLeverage(
+            msg.sender,
+            tokenIn,
+            amountIn,
+            swapData,
+            minTokenOut,
+            leverageParams,
+            0 // no reallocation fees
+        );
+    }
+
+    function reallocateAndLeverage(
+        ReallocateParams[] memory reallocateParams,
+        LeverageParams memory leverageParams
     ) external payable {
         address user = msg.sender;
 
+        _reallocate(reallocateParams);
+
+        MarketParams memory market = i_morpho.idToMarketParams(
+            Id.wrap(leverageParams.marketId)
+        );
+
+        _transferIn(
+            market.collateralToken,
+            user,
+            leverageParams.amountCollateral
+        );
+
+        _forceApprove(
+            market.collateralToken,
+            address(i_flashLeverage),
+            leverageParams.amountCollateral
+        );
+
+        i_flashLeverage.leverage(user, leverageParams);
+
+        // Refund unconsumed fees
+        _transferOut(NATIVE, user, _selfBalance(NATIVE));
+    }
+
+    function reallocateSwapAndLeverage(
+        ReallocateParams[] memory reallocateParams,
+        address tokenIn,
+        uint256 amountIn,
+        SwapData calldata swapData,
+        uint256 minTokenOut,
+        LeverageParams memory leverageParams
+    ) external payable {
+        uint256 totalFees = _reallocate(reallocateParams);
+
+        _swapAndLeverage(
+            msg.sender,
+            tokenIn,
+            amountIn,
+            swapData,
+            minTokenOut,
+            leverageParams,
+            totalFees
+        );
+    }
+
+    // ─── Internal ───
+
+    function _reallocate(
+        ReallocateParams[] memory reallocateParams
+    ) internal returns (uint256 totalFees) {
+        for (uint256 i; i < reallocateParams.length; ++i) {
+            ReallocateParams memory params = reallocateParams[i];
+
+            if (params.withdrawals.length > 0) {
+                i_publicAllocator.reallocateTo{value: params.fee}(
+                    params.vault,
+                    params.withdrawals,
+                    params.supplyMarketParams
+                );
+
+                totalFees += params.fee;
+            }
+        }
+    }
+
+    function _swapAndLeverage(
+        address user,
+        address tokenIn,
+        uint256 amountIn,
+        SwapData calldata swapData,
+        uint256 minTokenOut,
+        LeverageParams memory leverageParams,
+        uint256 reallocateFees
+    ) internal {
         require(
             amountIn > 0,
             FLRError.FlashLeverageRouter__AmountInCannotBeZero()
@@ -65,8 +163,9 @@ contract FlashLeverageRouter is TokenHelper {
 
         bool success;
         if (tokenIn == NATIVE) {
+            // msg.value must cover both reallocation fees and swap amount
             require(
-                msg.value == amountIn,
+                msg.value == amountIn + reallocateFees,
                 FLRError.FlashLeverageRouter__InvalidMsgValue()
             );
             (success, ) = swapData.extRouter.call{value: amountIn}(
@@ -74,7 +173,7 @@ contract FlashLeverageRouter is TokenHelper {
             );
         } else {
             require(
-                msg.value == 0,
+                msg.value == reallocateFees,
                 FLRError.FlashLeverageRouter__InvalidMsgValue()
             );
             _transferIn(tokenIn, user, amountIn);
@@ -101,10 +200,12 @@ contract FlashLeverageRouter is TokenHelper {
 
         i_flashLeverage.leverage(user, leverageParams);
 
-        // Refund unconsumed tokenIn to user, if any
+        // Refund unconsumed tokenIn and any leftover ETH
         _transferOut(tokenIn, user, _selfBalance(tokenIn));
+        if (tokenIn != NATIVE) {
+            _transferOut(NATIVE, user, _selfBalance(NATIVE));
+        }
     }
 
-    /// @notice Allows the contract to receive native tokens from swap routers
     receive() external payable {}
 }

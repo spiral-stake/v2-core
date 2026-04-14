@@ -8,13 +8,14 @@ import {FlashLeverage} from "../src/core/FlashLeverage/FlashLeverage.sol";
 contract DeployFlashLeverageRouter is Script {
     function run(
         address morpho,
+        address publicAllocator,
         address flashLeverage
     ) external returns (address flashLeverageRouter) {
         vm.startBroadcast();
 
         // Deploy
         flashLeverageRouter = address(
-            new FlashLeverageRouter(morpho, flashLeverage)
+            new FlashLeverageRouter(morpho, publicAllocator, flashLeverage)
         );
 
         // Set router as operator

@@ -6,6 +6,7 @@ import {MarketConfig} from "../src/core/structs/MarketConfig.sol";
 struct ChainConfig {
     address owner;
     address morpho;
+    address publicAllocator;
     address[] swapRouters;
     address treasury;
     address WETH;
@@ -25,6 +26,7 @@ contract Config {
 
         if (block.chainid == 31337 || block.chainid == 1) {
             chain.morpho = 0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb;
+            chain.publicAllocator = 0xfd32fA2ca22c76dD6E550706Ad913FC6CE91c75D;
 
             chain.swapRouters = new address[](2);
             chain.swapRouters[0] = 0x6131B5fae19EA4f9D964eAc0408E4408b66337b5; // Kyberswap Router
@@ -32,18 +34,21 @@ contract Config {
         } else if (block.chainid == 137) {
             // Polygon
             chain.morpho = 0x1bF0c2541F820E775182832f06c0B7Fc27A25f67;
+            chain.publicAllocator = 0xfac15aff53ADd2ff80C2962127C434E8615Df0d3;
 
             chain.swapRouters = new address[](1);
             chain.swapRouters[0] = 0x6131B5fae19EA4f9D964eAc0408E4408b66337b5; // Kyberswap Router
         } else if (block.chainid == 747474) {
             // Katana
             chain.morpho = 0xD50F2DffFd62f94Ee4AEd9ca05C61d0753268aBc;
+            chain.publicAllocator = 0x39EB6Da5e88194C82B13491Df2e8B3E213eD2412;
 
             chain.swapRouters = new address[](1);
             chain.swapRouters[0] = 0xAC4c6e212A361c968F1725b4d055b47E63F80b75; // Sushiswap
         } else if (block.chainid == 98866) {
             // Plume
             chain.morpho = 0x42b18785CE0Aed7BF7Ca43a39471ED4C0A3e0bB5;
+            chain.publicAllocator = 0x58485338D93F4e3b4Bf2Af1C9f9C0aDF087AEf1C;
 
             chain.swapRouters = new address[](1);
             chain.swapRouters[0] = 0x85EFA14c12F5fE42Ff9D7Da460A71088b26bEa31; // Eisen Router
@@ -62,7 +67,7 @@ contract Config {
         returns (MarketConfig[] memory marketConfigs)
     {
         if (block.chainid == 31337 || block.chainid == 1) {
-            marketConfigs = new MarketConfig[](41);
+            marketConfigs = new MarketConfig[](46);
 
             // weETH
             marketConfigs[0] = MarketConfig({
@@ -269,6 +274,38 @@ contract Config {
                 marketId: 0xca432a8b0f33541cfe164d388823d05b607db43b690d4856f343eec3b42402c0,
                 isCorrelated: true
             });
+
+            // Non correlated markets
+
+            // cbBTC/USDC
+            marketConfigs[41] = MarketConfig({
+                marketId: 0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64,
+                isCorrelated: false
+            });
+
+            // wstETH/USDT
+            marketConfigs[42] = MarketConfig({
+                marketId: 0xe7e9694b754c4d4f7e21faf7223f6fa71abaeb10296a4c43a54a7977149687d2,
+                isCorrelated: false
+            });
+
+            // cbBTC/PYUSD
+            marketConfigs[43] = MarketConfig({
+                marketId: 0xd8a8e6667f58aa9229e8979bd619742b1660ee856c200a93e407dbccb7222323,
+                isCorrelated: false
+            });
+
+            // WBTC/USDC
+            marketConfigs[44] = MarketConfig({
+                marketId: 0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49,
+                isCorrelated: false
+            });
+
+            // wstETH/USDC
+            marketConfigs[45] = MarketConfig({
+                marketId: 0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc,
+                isCorrelated: false
+            });
         } else if (block.chainid == 137) {
             marketConfigs = new MarketConfig[](2);
             // wstETH
@@ -347,24 +384,6 @@ contract Config {
                 marketId: 0x6243736b94609da57ca7cb399df512cfae8a112fa5a325d08fd5f4234f5ccd2c,
                 isCorrelated: true
             });
-        }
-    }
-
-    function getCollateralTokenWhales()
-        internal
-        view
-        returns (address[] memory tokenWhales)
-    {
-        if (block.chainid == 31337 || block.chainid == 1) {
-            tokenWhales = new address[](4);
-            tokenWhales[0] = 0x41db15f894D304AA2cae85f5D7a5994e4f1D3C12; // wstETH
-            tokenWhales[1] = 0x289C204B35859bFb924B9C0759A4FE80f610671c; // siUSD
-            tokenWhales[2] = 0x8Cc5a546408C6cE3C9eeB99788F9EC3b8FA6b9F3; // PT-reUSD
-            tokenWhales[3] = 0xa427DEf3f920F718A89e5ab473c79C065ab10Ef4; // PT-reUSD
-        } else if (block.chainid == 137) {
-            tokenWhales = new address[](2);
-            tokenWhales[0] = 0xf81bF14Ae234D1B1F13414Fd63Ca064D16b79ad4; // wstETH
-            tokenWhales[1] = 0x03ec2cE18792cEff5F835711B294D568E8Cb078a; // MaticX
         }
     }
 }

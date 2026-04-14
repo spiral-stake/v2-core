@@ -27,6 +27,7 @@ contract Main is Script, WriteAddresses, Config {
         flashLeverage = _deployFlashLeverage(chain, marketConfigs);
         address flashLeverageRouter = _deployFlashLeverageRouter(
             chain.morpho,
+            chain.publicAllocator,
             flashLeverage
         );
 
@@ -54,10 +55,12 @@ contract Main is Script, WriteAddresses, Config {
 
     function _deployFlashLeverageRouter(
         address morpho,
+        address publicAllocator,
         address flashLeverage
     ) private returns (address flashLeverageRouter) {
         flashLeverageRouter = new DeployFlashLeverageRouter().run(
             morpho,
+            publicAllocator,
             flashLeverage
         );
     }

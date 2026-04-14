@@ -75,6 +75,11 @@ contract WriteAddresses is Script {
                 loanToken.decimals()
             );
 
+            vm.serializeBool(
+                marketObj,
+                "correlated",
+                marketConfigs[i].isCorrelated
+            );
             vm.serializeAddress(marketObj, "irm", market.irm);
             vm.serializeAddress(marketObj, "oracle", market.oracle);
             vm.serializeUint(marketObj, "liqLtv", market.lltv);

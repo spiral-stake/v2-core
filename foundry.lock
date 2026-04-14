@@ -10,5 +10,11 @@
   },
   "lib/openzeppelin-contracts": {
     "rev": "e4f70216d759d8e6a64144a9e1f7bbeed78e7079"
+  },
+  "lib/public-allocator": {
+    "tag": {
+      "name": "v1.0.0",
+      "rev": "7271fbd60881ff32a466a588f99344c6bf72629a"
+    }
   }
 }
