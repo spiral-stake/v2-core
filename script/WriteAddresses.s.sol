@@ -59,6 +59,26 @@ contract WriteAddresses is Script {
                     "maturity",
                     IPT(address(token)).expiry()
                 );
+
+                string memory underlyingObj = "underlyingObj";
+
+                (
+                    address underlying,
+                    string memory underlyingName,
+                    string memory underlyingSymbol,
+                    uint underlyingDecimals
+                ) = _getUnderlyingToken(address(token));
+
+                vm.serializeAddress(underlyingObj, "address", underlying);
+                vm.serializeString(underlyingObj, "name", underlyingName);
+                vm.serializeString(underlyingObj, "symbol", underlyingSymbol);
+                underlyingObj = vm.serializeUint(
+                    underlyingObj,
+                    "decimals",
+                    underlyingDecimals
+                );
+
+                vm.serializeString(tokenObj, "underlying", underlyingObj);
             }
             tokenObj = vm.serializeUint(tokenObj, "decimals", token.decimals());
 
@@ -129,5 +149,30 @@ contract WriteAddresses is Script {
             if (strBytes[i] != prefixBytes[i]) return false;
         }
         return true;
+    }
+
+    function _getUnderlyingToken(
+        address PT
+    ) internal view returns (address, string memory, string memory, uint8) {
+        (bool success1, bytes memory syData) = address(PT).staticcall(
+            abi.encodeWithSignature("SY()")
+        );
+        require(success1, "call failed");
+        address SY = abi.decode(syData, (address));
+
+        (bool success2, bytes memory underlyingData) = address(SY).staticcall(
+            abi.encodeWithSignature("yieldToken()")
+        );
+        require(success2, "call failed");
+        address underlyingToken = abi.decode(underlyingData, (address));
+
+        IERC20Metadata token = IERC20Metadata(underlyingToken);
+
+        return (
+            underlyingToken,
+            token.name(),
+            token.symbol(),
+            token.decimals()
+        );
     }
 }

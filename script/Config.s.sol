@@ -67,243 +67,280 @@ contract Config {
         returns (MarketConfig[] memory marketConfigs)
     {
         if (block.chainid == 31337 || block.chainid == 1) {
-            marketConfigs = new MarketConfig[](46);
+            marketConfigs = new MarketConfig[](53);
 
-            // weETH
+            // ============ Correlated Markets ============
+
+            // sUSDS/USDT
             marketConfigs[0] = MarketConfig({
-                marketId: 0x37e7484d642d90f14451f1910ba4b7b8e4c3ccdd0ec28f8b2bdb35479e472ba7,
-                isCorrelated: true
-            });
-            // wstETH
-            marketConfigs[1] = MarketConfig({
-                marketId: 0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e,
-                isCorrelated: true
-            });
-            // siUSD
-            marketConfigs[2] = MarketConfig({
-                marketId: 0xbbf7ce1b40d32d3e3048f5cf27eeaa6de8cb27b80194690aab191a63381d8c99,
-                isCorrelated: true
-            });
-            // RLP
-            marketConfigs[3] = MarketConfig({
-                marketId: 0xe1b65304edd8ceaea9b629df4c3c926a37d1216e27900505c04f14b2ed279f33,
-                isCorrelated: true
-            });
-            // stcUSD
-            marketConfigs[4] = MarketConfig({
-                marketId: 0xeb17955ea422baeddbfb0b8d8c9086c5be7a9cfdefb292119a102e981a30062e,
-                isCorrelated: true
-            });
-            // sUSDS
-            marketConfigs[5] = MarketConfig({
                 marketId: 0x3274643db77a064abd3bc851de77556a4ad2e2f502f4f0c80845fa8f909ecf0b,
                 isCorrelated: true
             });
-            // sUSDe
-            marketConfigs[6] = MarketConfig({
+            // sUSDe/PYUSD
+            marketConfigs[1] = MarketConfig({
                 marketId: 0x90ef0c5a0dc7c4de4ad4585002d44e9d411d212d2f6258e94948beecf8b4c0d5,
                 isCorrelated: true
             });
-            // sUSDD
-            marketConfigs[7] = MarketConfig({
-                marketId: 0x29ae8cad946d861464d5e829877245a863a18157c0cde2c3524434dafa34e476,
-                isCorrelated: true
-            });
-            // syrupUSDT
-            marketConfigs[8] = MarketConfig({
-                marketId: 0xa4774e3e693fff2ebd1dcbbd69b1b0a5b9bb0ccc753bfda5dd07bdac97c4818a,
-                isCorrelated: true
-            });
-            // wsrUSD
-            marketConfigs[9] = MarketConfig({
+            // wsrUSD/USDC
+            marketConfigs[2] = MarketConfig({
                 marketId: 0x1590cb22d797e226df92ebc6e0153427e207299916e7e4e53461389ad68272fb,
                 isCorrelated: true
             });
-            // stUSDS
-            marketConfigs[10] = MarketConfig({
-                marketId: 0x77e624dd9dd980810c2b804249e88f3598d9c7ec91f16aa5fbf6e3fdf6087f82,
+            // syrupUSDC/RLUSD
+            marketConfigs[3] = MarketConfig({
+                marketId: 0xc0ae375fd761ff19b3f04de5534c0f1ec110f80e1c2ede27c42c1c43c3040394,
                 isCorrelated: true
             });
-            // syrupUSDC
-            marketConfigs[11] = MarketConfig({
-                marketId: 0xc9629945524f3fde56c7e8854a6c3d48e76b9d97236abbe73c750fcc7aeb8501,
+            // wstETH/WETH
+            marketConfigs[4] = MarketConfig({
+                marketId: 0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e,
                 isCorrelated: true
             });
-            // wsrUSD
-            marketConfigs[12] = MarketConfig({
-                marketId: 0xa9f70093360419b4544f17a4553ac5847d896be23f020295bd95c24af4df700e,
+            // AA_FalconXUSDC/USDC
+            marketConfigs[5] = MarketConfig({
+                marketId: 0xe83d72fa5b00dcd46d9e0e860d95aa540d5ec106da5833108a9f826f21f36f52,
                 isCorrelated: true
             });
-            // sUSDe
-            marketConfigs[13] = MarketConfig({
+            // weETH/WETH
+            marketConfigs[6] = MarketConfig({
+                marketId: 0x37e7484d642d90f14451f1910ba4b7b8e4c3ccdd0ec28f8b2bdb35479e472ba7,
+                isCorrelated: true
+            });
+            // LBTC/WBTC
+            marketConfigs[7] = MarketConfig({
+                marketId: 0xf6a056627a51e511ec7f48332421432ea6971fc148d8f3c451e14ea108026549,
+                isCorrelated: true
+            });
+            // sUSDe/USDtb
+            marketConfigs[8] = MarketConfig({
                 marketId: 0x88a18b2f4d94e7ad27a381b15531c06abf05a7c99dd5d3c3679875fed6f7e742,
                 isCorrelated: true
             });
-            // wsrUSD
+            // wsrUSD/USDT
+            marketConfigs[9] = MarketConfig({
+                marketId: 0xa9f70093360419b4544f17a4553ac5847d896be23f020295bd95c24af4df700e,
+                isCorrelated: true
+            });
+            // stcUSD/USDC
+            marketConfigs[10] = MarketConfig({
+                marketId: 0xeb17955ea422baeddbfb0b8d8c9086c5be7a9cfdefb292119a102e981a30062e,
+                isCorrelated: true
+            });
+            // mF-ONE/USDC
+            marketConfigs[11] = MarketConfig({
+                marketId: 0xef2c308b5abecf5c8750a1aa82b47c558005feb7a03f4f8e1ad682d71ac8d0ba,
+                isCorrelated: true
+            });
+            // stUSDS/USDC
+            marketConfigs[12] = MarketConfig({
+                marketId: 0xd570c19c0dc0fbe4ab7faf4a37c4150e1c141c8aada8ca3e1b4b6c1b712af93d,
+                isCorrelated: true
+            });
+            // syrupUSDC/PYUSD
+            marketConfigs[13] = MarketConfig({
+                marketId: 0xc9629945524f3fde56c7e8854a6c3d48e76b9d97236abbe73c750fcc7aeb8501,
+                isCorrelated: true
+            });
+            // sUSDS/AUSD
             marketConfigs[14] = MarketConfig({
-                marketId: 0x32e253d33f1594a67fc6ef51bf7a39cc4bf2d14904998dee769706fcde489ed9,
+                marketId: 0x09cf702bb8b6fe8c6effb6021744e365f598b89bc28f3ea7cd6c55115af825df,
                 isCorrelated: true
             });
-            // sUSDS
+            // ETH+/WETH
             marketConfigs[15] = MarketConfig({
-                marketId: 0xa5beccdffd156dfe8c0871f143648c512f0a34f37c8a4ae2ff31ebfe944641d1,
+                marketId: 0x5f8a138ba332398a9116910f4d5e5dcd9b207024c5290ce5bc87bc2dbd8e4a86,
                 isCorrelated: true
             });
-            // sUSDe
+            // sUSDD/USDT
             marketConfigs[16] = MarketConfig({
-                marketId: 0xc9098061d437a9dd53b0070cb33df6fca1a0a5ead288588c88699b0420c1c078,
+                marketId: 0x29ae8cad946d861464d5e829877245a863a18157c0cde2c3524434dafa34e476,
                 isCorrelated: true
             });
-            // reUSD
+            // sUSDat/AUSD
             marketConfigs[17] = MarketConfig({
-                marketId: 0x4565ac05d38b19374ccbb04c17cca60ca9353cd41824f0803d0fc7704f60eaed,
+                marketId: 0x582fdc4176da0ab5c65e086603ab9ecd9188e889e16efef6e35854cf14e15065,
                 isCorrelated: true
             });
-            // syzUSD
+            // siUSD/msUSD
             marketConfigs[18] = MarketConfig({
-                marketId: 0xf4e9fb49e95a34320aea8b5e0ef515391a72368c39bdcf8ad8910645fd6eab97,
+                marketId: 0x64d2f82e674b764d618b630297813cd34bdc42a0fa66f92efa2ac8b1efe4bbd5,
                 isCorrelated: true
             });
-            // RLP
+            // stcUSD/USDT
             marketConfigs[19] = MarketConfig({
-                marketId: 0x4b86442549b52826e0fc11770ec5154450cb3c5c14dc751a761d81dcfbe7a7b2,
+                marketId: 0xdbf4bc065d4e76f4505a523f2bba5e5ccdca94c16d67c3a6ff1dadbcbb26d4aa,
                 isCorrelated: true
             });
-            // sNUSD
+            // sUSN/USDC
             marketConfigs[20] = MarketConfig({
-                marketId: 0xae60b71b407e0517ead445b7113a7ffa07ea4a9379d526ade541a3e9ec777cb4,
-                isCorrelated: true
-            });
-            // syzUSD
-            marketConfigs[21] = MarketConfig({
-                marketId: 0x9be0fb56b4d52d3632683b632514a2304f6fe1103e081acc358ded09e8e9a1e7,
-                isCorrelated: true
-            });
-            // upGAMMAusdc
-            marketConfigs[22] = MarketConfig({
-                marketId: 0xe9d96a2f8042486bfd8cfd22692e49cd355e8a51da2f427bdb2d3671fbe978ea,
-                isCorrelated: true
-            });
-            // mAPOLLO
-            marketConfigs[23] = MarketConfig({
-                marketId: 0x031c7333014af51e4fd18031d14e4eaada58348cde3f6dc6ea8cca16f7387fb2,
-                isCorrelated: true
-            });
-            // sUSN
-            marketConfigs[24] = MarketConfig({
                 marketId: 0x8924445a76b678c536df977ed9222fb0b23ee5311497dd0223fe6270bb20b4e6,
                 isCorrelated: true
             });
-            // upUSDC
-            marketConfigs[25] = MarketConfig({
-                marketId: 0xa0c6499787a7d046f91f2687558c021e2baae5a378885280a448183a926ef5f7,
+            // upGAMMAusdc/AUSD
+            marketConfigs[21] = MarketConfig({
+                marketId: 0xe9d96a2f8042486bfd8cfd22692e49cd355e8a51da2f427bdb2d3671fbe978ea,
                 isCorrelated: true
             });
-            // wsrUSD
-            marketConfigs[26] = MarketConfig({
-                marketId: 0x08bd0186c5d6ee272f973a307815ac9a8f5ed42bc8308d4b109f254011776c34,
-                isCorrelated: true
-            });
-            // sUSDe
-            marketConfigs[27] = MarketConfig({
-                marketId: 0x39d11026eae1c6ec02aa4c0910778664089cdd97c3fd23f68f7cd05e2e95af48,
-                isCorrelated: true
-            });
-            // savUSD
-            marketConfigs[28] = MarketConfig({
+            // savUSD/USDC
+            marketConfigs[22] = MarketConfig({
                 marketId: 0xe07d416323a1afbfe0bf2fe27ffb549ff565cf5c86d21b79fc60664038e597c9,
                 isCorrelated: true
             });
-            // jrUSDe
-            marketConfigs[29] = MarketConfig({
-                marketId: 0x54cebd0c5d5ad84f551a883991c39c470e081a20452eaef47eec2377ffae9f98,
+            // siUSD/USDC
+            marketConfigs[23] = MarketConfig({
+                marketId: 0xbbf7ce1b40d32d3e3048f5cf27eeaa6de8cb27b80194690aab191a63381d8c99,
                 isCorrelated: true
             });
-            // PT-iUSD-19FEB2026
-            marketConfigs[30] = MarketConfig({
-                marketId: 0xb4b257c2b8001847d361a55fcd30a7bd630750bf492b85b37c4646e42e8e0d8c,
+            // savETH/WETH
+            marketConfigs[24] = MarketConfig({
+                marketId: 0xd98cd88ae5b336086b39fb1d62ba6171282e946105b010143f0e89f8fe7cff36,
                 isCorrelated: true
             });
-            // PT-reUSD-25JUN2026
-            marketConfigs[31] = MarketConfig({
+            // syrupUSDC/AUSD
+            marketConfigs[25] = MarketConfig({
+                marketId: 0xab3196447663a41382ba4b4d55eab3fa702ee2cf071db224fd72492953040056,
+                isCorrelated: true
+            });
+            // syzUSD/USDC
+            marketConfigs[26] = MarketConfig({
+                marketId: 0xf4e9fb49e95a34320aea8b5e0ef515391a72368c39bdcf8ad8910645fd6eab97,
+                isCorrelated: true
+            });
+
+            // ============ Pendle PT Markets (Correlated) ============
+
+            // PT-apyUSD-18JUN2026/USDC
+            marketConfigs[27] = MarketConfig({
+                marketId: 0xa75bb490ecfee90c86a9d22ebc2dde42fb83478b3f18722b9fc6f5f668cab124,
+                isCorrelated: true
+            });
+            // PT-reUSD-25JUN2026/USDC
+            marketConfigs[28] = MarketConfig({
                 marketId: 0x9bc98c2f20ac58287ef2c860eea53a2fdc27c17a7817ff1206c0b7840cc7cd79,
                 isCorrelated: true
             });
-            // PT-stcUSD-23JUL2026
+            // PT-USDG-28MAY2026/USDC
+            marketConfigs[29] = MarketConfig({
+                marketId: 0x5cebfae10f5e88d33df2421923f3d9f32359429fda2f78edacc9b4fdb09b0553,
+                isCorrelated: true
+            });
+            // PT-reUSD-25JUN2026/USDT
+            marketConfigs[30] = MarketConfig({
+                marketId: 0x3fea56ab83b05840dc83dc6b3d2f2fbd938147cbaa8126bac529e6c820058253,
+                isCorrelated: true
+            });
+            // PT-sUSDE-7MAY2026/PYUSD
+            marketConfigs[31] = MarketConfig({
+                marketId: 0xcb12dcbc7c6c4f20ca1537a3cc1a41ec27501f85a3e322a710d9a16a88a28c0e,
+                isCorrelated: true
+            });
+            // PT-apxUSD-18JUN2026/USDC
             marketConfigs[32] = MarketConfig({
-                marketId: 0x2fb3713487c7812e7309935b034f40228841666f6b048faf31fd2110ae674f20,
+                marketId: 0xed05fcc2893b78b3fa468d21b6e4d2925e7f2c64eb1f16279757c43f87502a99,
                 isCorrelated: true
             });
-            // PT-srUSDe-2APR2026
+            // PT-avUSD-14MAY2026/USDC
             marketConfigs[33] = MarketConfig({
-                marketId: 0x27b9a0a5bfee98a31eb51e3850250d103a9f8e41673c782defc66aa943af0e65,
+                marketId: 0xf80a664057fe3cadcd9e83f27bb1effe5c15d1d2648acc7634daff1581951b5e,
                 isCorrelated: true
             });
-            // PT-RLP-9APR2026
+            // PT-savUSD-14MAY2026/USDC
             marketConfigs[34] = MarketConfig({
-                marketId: 0x1cfdc0154ae6b9f1887a8250f2582d55606e1a2008e65108fb83dd50a928593e,
+                marketId: 0xc978f01522ff64adafd91856065d602c56e326a0368b895bd9244d5998e60076,
                 isCorrelated: true
             });
-            // PT-cUSD-23JUL2026
+            // PT-srNUSD-28MAY2026/USDC
             marketConfigs[35] = MarketConfig({
+                marketId: 0xc2bc5e1e304fb1ea103dcbee37ece3c7e9219fb4b2b19d8ffdf81c39f4fbf180,
+                isCorrelated: true
+            });
+            // PT-sNUSD-4JUN2026/USDC
+            marketConfigs[36] = MarketConfig({
+                marketId: 0xb62aac664f81d19f21a158aa0373967ef60fd1ac8de4a9091bd225c007973ca6,
+                isCorrelated: true
+            });
+            // PT-apxUSD-18JUN2026/apxUSD
+            marketConfigs[37] = MarketConfig({
+                marketId: 0xf3814af4869a6ce59ffef016e555dd4c1e92bf383b5ab89abe496044c6364746,
+                isCorrelated: true
+            });
+            // PT-cUSD-23JUL2026/USDC
+            marketConfigs[38] = MarketConfig({
                 marketId: 0x702b7ec7628de2622e51e1bb34a7e6ad9e95f3a25a2ed361e4ce621f23f5e642,
                 isCorrelated: true
             });
-            // PT-mAPOLLO-30APR2026
-            marketConfigs[36] = MarketConfig({
+            // PT-mAPOLLO-30APR2026/USDC
+            marketConfigs[39] = MarketConfig({
                 marketId: 0x3d353ef0436b85c3b12d53536c19b21c533c046b07c9d92d791a1510e7ef0b74,
                 isCorrelated: true
             });
-            // PT-siUSD-26MAR2026
-            marketConfigs[37] = MarketConfig({
-                marketId: 0xaac3ffcdf8a75919657e789fa72ab742a7bbfdf5bb0b87e4bbeb3c29bbbbb05c,
-                isCorrelated: true
-            });
-            // PT-srUSDe-2APR2026
-            marketConfigs[38] = MarketConfig({
-                marketId: 0xb2f87218f0e2478ba7a2b8be9fe76cbd6f54f8654b9651d4bd1f0ea536674691,
-                isCorrelated: true
-            });
-            // PT-jrUSDe-2APR2026
-            marketConfigs[39] = MarketConfig({
-                marketId: 0x2afd063a5af8e050069cfad4da95c81768b85b140bea2bd89e00407b15ce82c8,
-                isCorrelated: true
-            });
-            // PT-mHYPER-30APR2026
-            marketConfigs[40] = MarketConfig({
-                marketId: 0xca432a8b0f33541cfe164d388823d05b607db43b690d4856f343eec3b42402c0,
-                isCorrelated: true
-            });
 
-            // Non correlated markets
+            // ============ Non-Correlated Markets ============
 
             // cbBTC/USDC
-            marketConfigs[41] = MarketConfig({
+            marketConfigs[40] = MarketConfig({
                 marketId: 0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64,
                 isCorrelated: false
             });
-
             // wstETH/USDT
-            marketConfigs[42] = MarketConfig({
+            marketConfigs[41] = MarketConfig({
                 marketId: 0xe7e9694b754c4d4f7e21faf7223f6fa71abaeb10296a4c43a54a7977149687d2,
                 isCorrelated: false
             });
-
-            // cbBTC/PYUSD
-            marketConfigs[43] = MarketConfig({
-                marketId: 0xd8a8e6667f58aa9229e8979bd619742b1660ee856c200a93e407dbccb7222323,
-                isCorrelated: false
-            });
-
             // WBTC/USDC
-            marketConfigs[44] = MarketConfig({
+            marketConfigs[42] = MarketConfig({
                 marketId: 0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49,
                 isCorrelated: false
             });
-
             // wstETH/USDC
-            marketConfigs[45] = MarketConfig({
+            marketConfigs[43] = MarketConfig({
                 marketId: 0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc,
+                isCorrelated: false
+            });
+            // WBTC/USDT
+            marketConfigs[44] = MarketConfig({
+                marketId: 0xa921ef34e2fc7a27ccc50ae7e4b154e16c9799d3387076c421423ef52ac4df99,
+                isCorrelated: false
+            });
+            // weETH/PYUSD
+            marketConfigs[45] = MarketConfig({
+                marketId: 0x85d59152eeeab7ca024804895b358868d8dd1e134171be400d7792d5604a212c,
+                isCorrelated: false
+            });
+            // cbBTC/USDT
+            marketConfigs[46] = MarketConfig({
+                marketId: 0x45671fb8d5dea1c4fbca0b8548ad742f6643300eeb8dbd34ad64a658b2b05bca,
+                isCorrelated: false
+            });
+            // OETH/USDC
+            marketConfigs[47] = MarketConfig({
+                marketId: 0xb8fef900b383db2dbbf4458c7f46acf5b140f26d603a6d1829963f241b82510e,
+                isCorrelated: false
+            });
+            // weETH/RLUSD
+            marketConfigs[48] = MarketConfig({
+                marketId: 0xea4bfb18df0ee6bffb7b3f0270899a8adb92ab6b684709634c8276128813cfd4,
+                isCorrelated: false
+            });
+            // WBTC/EURC
+            marketConfigs[49] = MarketConfig({
+                marketId: 0xff527fe9c6516f9d82a3d51422ccb031d123266e6e26d4c22c942a948c180a75,
+                isCorrelated: false
+            });
+            // weETH/USDC
+            marketConfigs[50] = MarketConfig({
+                marketId: 0x61765602144e91e5ac9f9e98b8584eae308f9951596fd7f5e0f59f21cd2bf664,
+                isCorrelated: false
+            });
+            // cbBTC/EURCV
+            marketConfigs[51] = MarketConfig({
+                marketId: 0x82053fe2fc3a3d6cb856458948e9c3589e76f20f3a2079606739b517587267ce,
+                isCorrelated: false
+            });
+
+            // Tokenised Stocks
+            marketConfigs[52] = MarketConfig({
+                marketId: 0xbf0432567b44ef5ce013ffcd7dd756c522252503f7986a406e780715b32c74fc,
                 isCorrelated: false
             });
         } else if (block.chainid == 137) {
@@ -319,22 +356,58 @@ contract Config {
                 isCorrelated: true
             });
         } else if (block.chainid == 747474) {
-            marketConfigs = new MarketConfig[](3);
-            // wsrUSD
-            marketConfigs[0] = MarketConfig({
-                marketId: 0xd8a93a4cd16f843c385391e208a9a9f2fd75aedfcca05e4810e5fbfcaa6baec6,
-                isCorrelated: true
-            });
+            marketConfigs = new MarketConfig[](7);
+            // Correlated Markets //
+
             // weETH
-            marketConfigs[1] = MarketConfig({
+            marketConfigs[0] = MarketConfig({
                 marketId: 0x1e74d36ffbda65b8a45d72754b349cdd5ce807c5fa814f91ba8e3cd27881c34b,
                 isCorrelated: true
             });
-            // wstETH
-            marketConfigs[2] = MarketConfig({
-                marketId: 0x22f9f76056c10ee3496dea6fefeaf2f98198ef597eda6f480c148c6d3aaa70db,
-                isCorrelated: true
+
+            // Non-correlated Markets
+
+            // vbwbtc-vbusdc
+            marketConfigs[1] = MarketConfig({
+                marketId: 0xcd2dc555dced7422a3144a4126286675449019366f83e9717be7c2deb3daae3e,
+                isCorrelated: false
             });
+
+            // weeth-vbusdt
+            marketConfigs[2] = MarketConfig({
+                marketId: 0xa6ce59291d90ae348b2fa956cc66f31df605a3304a9325e494c94e2cf5b0485a,
+                isCorrelated: false
+            });
+
+            // vbWBTC/vbUSDT
+            marketConfigs[3] = MarketConfig({
+                marketId: 0xd4ab732112fa9087c9c3c3566cd25bc78ee7be4f1b8bdfe20d6328debb818656,
+                isCorrelated: false
+            });
+
+            // weETH/vbUSDT
+            marketConfigs[4] = MarketConfig({
+                marketId: 0xbb4fb94ca819744df6a8f3932fffad47d31e8d76d3c48216878295c4cf588caf,
+                isCorrelated: false
+            });
+
+            // vbETH/vbUSDT
+            marketConfigs[5] = MarketConfig({
+                marketId: 0x9e03fc0dc3110daf28bc6bd23b32cb20b150a6da151856ead9540d491069db1c,
+                isCorrelated: false
+            });
+
+            //vbETH/vbUSDC
+            marketConfigs[6] = MarketConfig({
+                marketId: 0x2fb14719030835b8e0a39a1461b384ad6a9c8392550197a7c857cf9fcbd6c534,
+                isCorrelated: false
+            });
+
+            // Future listings (swap route unavailable ATM)
+            // yvvbETH/vbUSDC
+            // yvvbUSDC/vbUSDT
+            // yvvbUSDT/vbUSDC
+            // yvAUSD/vbUSDC
         } else if (block.chainid == 98866) {
             marketConfigs = new MarketConfig[](4);
             // nALPHA
