@@ -174,15 +174,16 @@ abstract contract MarketPositionManager is
     }
 
     /**
-     * @notice Repays borrowed shares to Morpho market.
-     * @dev When repaying by shares, amount must be 0 per Morpho's interface.
-     *      When repaying by amount, shares must be 0. Full amount is approved for safety margin.
-     * @param userProxy Address of the user's proxy contract, to repay on behalf of
+     * @notice Repays borrowed assets to Morpho market.
+     * @dev Amount must always be > 0 as it is used for token approval.
+     *      When borrowShares > 0: amount is used for approval, Morpho repays exact shares.
+     *      When borrowShares == 0: amount is used for both approval and repayment.
+     * @param userProxy Address of the user's proxy contract, to repay on behalf of.
      * @param marketParams Market configuration details.
-     * @param amount Stablecoin value of repayment (used only for approval).
-     * @param borrowShares Shares to repay.
-     * @return assetsRepaid Actual assets repaid.
-     * @return sharesRepaid Shares repaid.
+     * @param amount Loan token amount — used for approval, and as repayment amount when borrowShares is 0.
+     * @param borrowShares Shares to repay. Pass 0 to repay by amount instead.
+     * @return assetsRepaid Actual assets repaid by Morpho.
+     * @return sharesRepaid Actual shares repaid by Morpho.
      */
     function _morphoRepay(
         address userProxy,
