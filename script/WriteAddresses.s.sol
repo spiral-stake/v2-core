@@ -38,86 +38,10 @@ contract WriteAddresses is Script {
 
         uint256 marketsLength = marketConfigs.length;
         for (uint256 i; i < marketsLength; ++i) {
-            string memory marketObj = "marketObj";
-
-            bytes32 marketId = marketConfigs[i].marketId;
-
-            MarketParams memory market = IMorpho(morphoAddress)
-                .idToMarketParams(Id.wrap(marketId));
-
-            IERC20Metadata token = IERC20Metadata(market.collateralToken);
-
-            // Create collateral token metadata object
-            string memory tokenObj = "tokenObj";
-            vm.serializeAddress(tokenObj, "address", address(token));
-            vm.serializeString(tokenObj, "name", token.name());
-            string memory symbol = token.symbol();
-            vm.serializeString(tokenObj, "symbol", symbol);
-            if (_startsWith(symbol, "PT-")) {
-                vm.serializeUint(
-                    tokenObj,
-                    "maturity",
-                    IPT(address(token)).expiry()
-                );
-
-                string memory underlyingObj = "underlyingObj";
-
-                (
-                    address underlying,
-                    string memory underlyingName,
-                    string memory underlyingSymbol,
-                    uint underlyingDecimals
-                ) = _getUnderlyingToken(address(token));
-
-                vm.serializeAddress(underlyingObj, "address", underlying);
-                vm.serializeString(underlyingObj, "name", underlyingName);
-                vm.serializeString(underlyingObj, "symbol", underlyingSymbol);
-                underlyingObj = vm.serializeUint(
-                    underlyingObj,
-                    "decimals",
-                    underlyingDecimals
-                );
-
-                vm.serializeString(tokenObj, "underlying", underlyingObj);
-            }
-            tokenObj = vm.serializeUint(tokenObj, "decimals", token.decimals());
-
-            // Create loan token metadata object
-            address loanTokenAddress = market.loanToken;
-            IERC20Metadata loanToken = IERC20Metadata(loanTokenAddress);
-            string memory loanTokenObj = "loanTokenObj";
-            vm.serializeAddress(loanTokenObj, "address", loanTokenAddress);
-            vm.serializeString(loanTokenObj, "name", loanToken.name());
-            vm.serializeString(loanTokenObj, "symbol", loanToken.symbol());
-            loanTokenObj = vm.serializeUint(
-                loanTokenObj,
-                "decimals",
-                loanToken.decimals()
-            );
-
-            vm.serializeBool(
-                marketObj,
-                "correlated",
-                marketConfigs[i].isCorrelated
-            );
-            vm.serializeAddress(marketObj, "irm", market.irm);
-            vm.serializeAddress(marketObj, "oracle", market.oracle);
-            vm.serializeUint(marketObj, "liqLtv", market.lltv);
-
-            vm.serializeUint(
-                marketObj,
-                "maxLtv",
-                FlashLeverage(flashLeverageAddress).getMaxLtv(market)
-            );
-
-            vm.serializeBytes32(marketObj, "morphoMarketId", marketId);
-
-            vm.serializeString(marketObj, "collateralToken", tokenObj);
-
-            marketObj = vm.serializeString(
-                marketObj,
-                "loanToken",
-                loanTokenObj
+            (bytes32 marketId, string memory marketObj) = _buildMarketObject(
+                morphoAddress,
+                marketConfigs[i],
+                flashLeverageAddress
             );
 
             vm.serializeString(markets, vm.toString(marketId), marketObj);
@@ -136,6 +60,90 @@ contract WriteAddresses is Script {
             addresses,
             string.concat(path, vm.toString(block.chainid), ".json")
         );
+    }
+
+    function _buildMarketObject(
+        address morphoAddress,
+        MarketConfig memory marketConfig,
+        address flashLeverageAddress
+    ) internal returns (bytes32 marketId, string memory marketObj) {
+        marketObj = "marketObj";
+        marketId = marketConfig.marketId;
+
+        MarketParams memory market = IMorpho(morphoAddress).idToMarketParams(
+            Id.wrap(marketId)
+        );
+
+        IERC20Metadata token = IERC20Metadata(market.collateralToken);
+
+        // Create collateral token metadata object
+        string memory tokenObj = "tokenObj";
+        vm.serializeAddress(tokenObj, "address", address(token));
+        vm.serializeString(tokenObj, "name", token.name());
+        string memory symbol = token.symbol();
+        vm.serializeString(tokenObj, "symbol", symbol);
+        tokenObj = _serializeUnderlyingIfNeeded(tokenObj, symbol, address(token));
+        tokenObj = vm.serializeUint(tokenObj, "decimals", token.decimals());
+
+        // Create loan token metadata object
+        string memory loanTokenObj = _serializeLoanToken(market.loanToken);
+
+        vm.serializeBool(marketObj, "correlated", marketConfig.isCorrelated);
+        vm.serializeAddress(marketObj, "irm", market.irm);
+        vm.serializeAddress(marketObj, "oracle", market.oracle);
+        vm.serializeUint(marketObj, "liqLtv", market.lltv);
+        vm.serializeUint(
+            marketObj,
+            "maxLtv",
+            FlashLeverage(flashLeverageAddress).getMaxLtv(market)
+        );
+        vm.serializeBytes32(marketObj, "morphoMarketId", marketId);
+        vm.serializeString(marketObj, "collateralToken", tokenObj);
+
+        marketObj = vm.serializeString(marketObj, "loanToken", loanTokenObj);
+    }
+
+    function _serializeUnderlyingIfNeeded(
+        string memory tokenObj,
+        string memory symbol,
+        address tokenAddress
+    ) internal returns (string memory) {
+        if (!_startsWith(symbol, "PT-")) {
+            return tokenObj;
+        }
+
+        vm.serializeUint(tokenObj, "maturity", IPT(tokenAddress).expiry());
+
+        string memory underlyingObj = "underlyingObj";
+        (
+            address underlying,
+            string memory underlyingName,
+            string memory underlyingSymbol,
+            uint underlyingDecimals
+        ) = _getUnderlyingToken(tokenAddress);
+
+        vm.serializeAddress(underlyingObj, "address", underlying);
+        vm.serializeString(underlyingObj, "name", underlyingName);
+        vm.serializeString(underlyingObj, "symbol", underlyingSymbol);
+        underlyingObj = vm.serializeUint(
+            underlyingObj,
+            "decimals",
+            underlyingDecimals
+        );
+
+        vm.serializeString(tokenObj, "underlying", underlyingObj);
+        return tokenObj;
+    }
+
+    function _serializeLoanToken(
+        address loanTokenAddress
+    ) internal returns (string memory) {
+        IERC20Metadata loanToken = IERC20Metadata(loanTokenAddress);
+        string memory loanTokenObj = "loanTokenObj";
+        vm.serializeAddress(loanTokenObj, "address", loanTokenAddress);
+        vm.serializeString(loanTokenObj, "name", loanToken.name());
+        vm.serializeString(loanTokenObj, "symbol", loanToken.symbol());
+        return vm.serializeUint(loanTokenObj, "decimals", loanToken.decimals());
     }
 
     function _startsWith(

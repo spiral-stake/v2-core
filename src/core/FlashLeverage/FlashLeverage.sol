@@ -140,10 +140,12 @@ contract FlashLeverage is
         address owner,
         address morphoAddress,
         address treasury
-    ) Ownable(owner) MarketPositionManager(morphoAddress) {
-        if (morphoAddress == address(0) || treasury == address(0)) {
+    ) Ownable(msg.sender) MarketPositionManager(morphoAddress) {
+        if (owner == address(0) || morphoAddress == address(0) || treasury == address(0)) {
             revert FLError.FlashLeverage__CannotBeZeroAddress();
         }
+
+        _transferOwnership(owner);
 
         // Deploy the implementation contract to clone user proxies from
         i_userProxyImplementation = address(
@@ -744,6 +746,25 @@ contract FlashLeverage is
                 data,
                 (Action, address, uint256, uint256, SwapData, uint256)
             );
+
+        _executeLeverage(
+            user,
+            positionId,
+            amountCollateral,
+            swapData,
+            minTokenOut,
+            amountLoan
+        );
+    }
+
+    function _executeLeverage(
+        address user,
+        uint256 positionId,
+        uint256 amountCollateral,
+        SwapData memory swapData,
+        uint256 minTokenOut,
+        uint256 amountLoan
+    ) internal {
 
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
