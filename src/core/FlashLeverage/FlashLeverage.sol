@@ -117,6 +117,10 @@ contract FlashLeverage is
      */
     modifier validateUser(address user) {
         require(
+            user != address(0),
+            FLError.FlashLeverage__CannotBeZeroAddress()
+        );
+        require(
             msg.sender == user || s_approvedOperators[msg.sender],
             FLError.FlashLeverage__NotApprovedOperator()
         );

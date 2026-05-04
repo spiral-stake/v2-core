@@ -262,6 +262,18 @@ contract LeverageTest is TestBase {
     }
 
     // ─── Revert cases ───
+    function test_leverage_revertsOnZeroAddressUser() external {
+        fl.setApprovedOperator(alice, true);
+
+        collateralToken.mint(alice, INITIAL_COLLATERAL);
+
+        vm.startPrank(alice);
+        collateralToken.approve(address(fl), INITIAL_COLLATERAL);
+
+        vm.expectRevert(FLError.FlashLeverage__CannotBeZeroAddress.selector);
+        fl.leverage(address(0), _dummyParams(correlatedMarketId));
+        vm.stopPrank();
+    }
 
     function test_leverage_revertsOnUnauthorizedCaller() external {
         vm.prank(bob);
