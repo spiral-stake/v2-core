@@ -569,6 +569,12 @@ contract FlashLeverage is
         for (uint256 i; i < marketConfigsLength; ++i) {
             MarketConfig memory marketConfig = marketConfigs[i];
 
+            // Prevent overwriting existing markets
+            require(
+                s_markets[marketConfig.marketId].collateralToken == address(0),
+                FLError.FlashLeverage__MarketAlreadyExists()
+            );
+
             MarketParams memory market = i_morpho.idToMarketParams(
                 Id.wrap(marketConfig.marketId)
             );

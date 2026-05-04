@@ -195,6 +195,17 @@ contract AdminTest is TestBase {
         fl.addSupportedMarkets(configs);
     }
 
+    function test_addSupportedMarkets_revertsOnExistingMarket() external {
+        MarketConfig[] memory configs = new MarketConfig[](1);
+        configs[0] = MarketConfig({
+            marketId: correlatedMarketId,
+            isCorrelated: false // trying to flip correlated → non-correlated
+        });
+
+        vm.expectRevert(FLError.FlashLeverage__MarketAlreadyExists.selector);
+        fl.addSupportedMarkets(configs);
+    }
+
     // ═══════════════════════════════════════════════
     //                  FEE UPDATES
     // ═══════════════════════════════════════════════
