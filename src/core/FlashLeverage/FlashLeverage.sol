@@ -141,7 +141,11 @@ contract FlashLeverage is
         address morphoAddress,
         address treasury
     ) Ownable(owner) MarketPositionManager(morphoAddress) {
-        if (morphoAddress == address(0) || treasury == address(0)) {
+        if (
+            owner == address(0) ||
+            morphoAddress == address(0) ||
+            treasury == address(0)
+        ) {
             revert FLError.FlashLeverage__CannotBeZeroAddress();
         }
 
