@@ -414,17 +414,20 @@ contract FlashLeverage is
     }
 
     /**
-     * @notice Repays a portion of the borrowed debt on an existing leverage position to reduce LTV.
+     * @notice Repays a portion or all of the borrowed debt on an existing leverage position.
      * @dev The repaid amount is added to amountDepositedInLoanToken for accurate yield tracking.
      * @param user The address of the position owner.
      * @param positionId The unique identifier of the leverage position.
      * @param amountRepay The amount of loan tokens to repay.
+     * @param borrowShares Shares to repay. Pass 0 to repay by amount. Pass type(uint256).max
+     *        for full debt repayment — shares are fetched from Morpho at execution time
+     *        to prevent front-running griefing.
      */
     function repay(
         address user,
         uint256 positionId,
         uint256 amountRepay,
-        uint256 borrowShares // Can be 0, mostly used for full loan repayment
+        uint256 borrowShares
     ) external nonReentrant whenNotPaused validateAmount(amountRepay) {
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
@@ -441,6 +444,13 @@ contract FlashLeverage is
             position.marketId,
             amountRepay
         );
+
+        // type(uint256).max signals full repay — fetch actual shares from Morpho
+        // to prevent front-running griefing
+        if (borrowShares == type(uint256).max) {
+            borrowShares = getMorphoPosition(position.userProxy, market)
+                .borrowShares;
+        }
 
         (uint256 amountRepaid, ) = _morphoRepay(
             position.userProxy,
