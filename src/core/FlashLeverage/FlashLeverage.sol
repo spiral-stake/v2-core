@@ -487,7 +487,6 @@ contract FlashLeverage is
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
         ];
-        require(position.open, FLError.FlashLeverage__PositionAlreadyClosed());
 
         MarketParams memory market = s_markets[position.marketId];
         address userProxy = position.userProxy;
@@ -909,6 +908,10 @@ contract FlashLeverage is
         _transferOut(market.loanToken, user, amountReturned);
 
         position.amountReturnedInLoanToken = amountReturned;
+        position.amountDepositedInLoanToken = position
+            .amountDepositedInLoanToken > amountReturned
+            ? position.amountDepositedInLoanToken - amountReturned
+            : 0;
         emit LeveragePositionClosed(user, positionId, amountReturned);
     }
 
