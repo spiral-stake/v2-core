@@ -117,6 +117,10 @@ contract FlashLeverage is
      */
     modifier validateUser(address user) {
         require(
+            user != address(0),
+            FLError.FlashLeverage__CannotBeZeroAddress()
+        );
+        require(
             msg.sender == user || s_approvedOperators[msg.sender],
             FLError.FlashLeverage__NotApprovedOperator()
         );
@@ -141,7 +145,11 @@ contract FlashLeverage is
         address morphoAddress,
         address treasury
     ) Ownable(owner) MarketPositionManager(morphoAddress) {
-        if (morphoAddress == address(0) || treasury == address(0)) {
+        if (
+            owner == address(0) ||
+            morphoAddress == address(0) ||
+            treasury == address(0)
+        ) {
             revert FLError.FlashLeverage__CannotBeZeroAddress();
         }
 
@@ -406,17 +414,20 @@ contract FlashLeverage is
     }
 
     /**
-     * @notice Repays a portion of the borrowed debt on an existing leverage position to reduce LTV.
+     * @notice Repays a portion or all of the borrowed debt on an existing leverage position.
      * @dev The repaid amount is added to amountDepositedInLoanToken for accurate yield tracking.
      * @param user The address of the position owner.
      * @param positionId The unique identifier of the leverage position.
      * @param amountRepay The amount of loan tokens to repay.
+     * @param borrowShares Shares to repay. Pass 0 to repay by amount. Pass type(uint256).max
+     *        for full debt repayment — shares are fetched from Morpho at execution time
+     *        to prevent front-running griefing.
      */
     function repay(
         address user,
         uint256 positionId,
         uint256 amountRepay,
-        uint256 borrowShares // Can be 0, mostly used for full loan repayment
+        uint256 borrowShares
     ) external nonReentrant whenNotPaused validateAmount(amountRepay) {
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
@@ -433,6 +444,13 @@ contract FlashLeverage is
             position.marketId,
             amountRepay
         );
+
+        // type(uint256).max signals full repay — fetch actual shares from Morpho
+        // to prevent front-running griefing
+        if (borrowShares == type(uint256).max) {
+            borrowShares = getMorphoPosition(position.userProxy, market)
+                .borrowShares;
+        }
 
         (uint256 amountRepaid, ) = _morphoRepay(
             position.userProxy,
@@ -469,7 +487,6 @@ contract FlashLeverage is
         LeveragePosition storage position = s_userLeveragePositions[user][
             positionId
         ];
-        require(position.open, FLError.FlashLeverage__PositionAlreadyClosed());
 
         MarketParams memory market = s_markets[position.marketId];
         address userProxy = position.userProxy;
@@ -564,6 +581,12 @@ contract FlashLeverage is
 
         for (uint256 i; i < marketConfigsLength; ++i) {
             MarketConfig memory marketConfig = marketConfigs[i];
+
+            // Prevent overwriting existing markets
+            require(
+                s_markets[marketConfig.marketId].collateralToken == address(0),
+                FLError.FlashLeverage__MarketAlreadyExists()
+            );
 
             MarketParams memory market = i_morpho.idToMarketParams(
                 Id.wrap(marketConfig.marketId)
@@ -885,6 +908,10 @@ contract FlashLeverage is
         _transferOut(market.loanToken, user, amountReturned);
 
         position.amountReturnedInLoanToken = amountReturned;
+        position.amountDepositedInLoanToken = position
+            .amountDepositedInLoanToken > amountReturned
+            ? position.amountDepositedInLoanToken - amountReturned
+            : 0;
         emit LeveragePositionClosed(user, positionId, amountReturned);
     }
 

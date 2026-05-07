@@ -214,6 +214,166 @@ contract RepayTest is TestBase {
         );
     }
 
+    // ─── Full repay via type(uint256).max ───
+
+    function test_repay_fullRepayViaMaxUint_clearsAllDebt() external {
+        uint256 posId = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            STANDARD_LTV
+        );
+
+        LeveragePosition memory pos = fl.getUserLeveragePosition(alice, posId);
+        Position memory morphoPos = fl.getMorphoPosition(
+            pos.userProxy,
+            correlatedMarket
+        );
+        uint256 debt = fl.getSharesValueInLoanToken(
+            correlatedMarket,
+            morphoPos.borrowShares
+        );
+
+        // Overpay slightly to cover any rounding
+        uint256 repayAmount = debt + 1e18;
+        loanToken.mint(alice, repayAmount);
+
+        vm.startPrank(alice);
+        loanToken.approve(address(fl), repayAmount);
+        fl.repay(alice, posId, repayAmount, type(uint256).max);
+        vm.stopPrank();
+
+        morphoPos = fl.getMorphoPosition(pos.userProxy, correlatedMarket);
+        assertEq(morphoPos.borrowShares, 0, "All debt should be cleared");
+    }
+
+    function test_repay_fullRepayViaMaxUint_refundsExcess() external {
+        uint256 posId = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            STANDARD_LTV
+        );
+
+        LeveragePosition memory pos = fl.getUserLeveragePosition(alice, posId);
+        Position memory morphoPos = fl.getMorphoPosition(
+            pos.userProxy,
+            correlatedMarket
+        );
+        uint256 debt = fl.getSharesValueInLoanToken(
+            correlatedMarket,
+            morphoPos.borrowShares
+        );
+
+        uint256 buffer = 5e18;
+        uint256 repayAmount = debt + buffer;
+        loanToken.mint(alice, repayAmount);
+
+        uint256 aliceBefore = loanToken.balanceOf(alice);
+
+        vm.startPrank(alice);
+        loanToken.approve(address(fl), repayAmount);
+        fl.repay(alice, posId, repayAmount, type(uint256).max);
+        vm.stopPrank();
+
+        uint256 aliceAfter = loanToken.balanceOf(alice);
+
+        // Alice should get back roughly the buffer amount
+        assertGt(aliceAfter, 0, "Should refund excess");
+        assertApproxEqAbs(
+            aliceAfter,
+            aliceBefore - debt,
+            1,
+            "Should only spend actual debt amount"
+        );
+    }
+
+    function test_repay_fullRepayViaMaxUint_resistsFrontRunning() external {
+        uint256 posId = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            STANDARD_LTV
+        );
+
+        LeveragePosition memory pos = fl.getUserLeveragePosition(alice, posId);
+        Position memory morphoPos = fl.getMorphoPosition(
+            pos.userProxy,
+            correlatedMarket
+        );
+        uint256 debt = fl.getSharesValueInLoanToken(
+            correlatedMarket,
+            morphoPos.borrowShares
+        );
+
+        // Simulate front-runner: bob repays 1 share directly on Morpho
+        uint256 oneShareCost = fl.getSharesValueInLoanToken(
+            correlatedMarket,
+            1
+        );
+        loanToken.mint(bob, oneShareCost);
+        vm.startPrank(bob);
+        loanToken.approve(address(morpho), oneShareCost);
+        morpho.repay(correlatedMarket, oneShareCost, 0, pos.userProxy, "");
+        vm.stopPrank();
+
+        // Alice's tx should still succeed with type(uint256).max
+        uint256 repayAmount = debt; // original debt estimate, now slightly more than needed
+        loanToken.mint(alice, repayAmount);
+
+        vm.startPrank(alice);
+        loanToken.approve(address(fl), repayAmount);
+        fl.repay(alice, posId, repayAmount, type(uint256).max);
+        vm.stopPrank();
+
+        morphoPos = fl.getMorphoPosition(pos.userProxy, correlatedMarket);
+        assertEq(
+            morphoPos.borrowShares,
+            0,
+            "All debt should be cleared despite front-run"
+        );
+    }
+
+    function test_repay_fullRepayViaMaxUint_depositsTrackedCorrectly()
+        external
+    {
+        uint256 posId = _openCorrelatedPosition(
+            alice,
+            INITIAL_COLLATERAL,
+            STANDARD_LTV
+        );
+
+        LeveragePosition memory posBefore = fl.getUserLeveragePosition(
+            alice,
+            posId
+        );
+        Position memory morphoPos = fl.getMorphoPosition(
+            posBefore.userProxy,
+            correlatedMarket
+        );
+        uint256 debt = fl.getSharesValueInLoanToken(
+            correlatedMarket,
+            morphoPos.borrowShares
+        );
+
+        loanToken.mint(alice, debt);
+
+        vm.startPrank(alice);
+        loanToken.approve(address(fl), debt);
+        fl.repay(alice, posId, debt, type(uint256).max);
+        vm.stopPrank();
+
+        LeveragePosition memory posAfter = fl.getUserLeveragePosition(
+            alice,
+            posId
+        );
+
+        // Deposited should increase by actual amount repaid, not the full input
+        assertApproxEqAbs(
+            posAfter.amountDepositedInLoanToken,
+            posBefore.amountDepositedInLoanToken + debt,
+            1,
+            "Deposited should track actual repaid amount"
+        );
+    }
+
     // ─── Fee verification ───
 
     function test_repay_nonCorrelated_exactDepositFee() external {
