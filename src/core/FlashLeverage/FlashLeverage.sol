@@ -160,8 +160,8 @@ contract FlashLeverage is
         UserProxy(i_userProxyImplementation).initialize(address(this));
 
         s_treasury = treasury;
-        s_yieldFee = MAX_YIELD_FEE;
-        s_depositFee = MAX_DEPOSIT_FEE;
+        s_yieldFee = 5e16; // 5%
+        s_depositFee = 0; // 0%
     }
 
     /////////////////////////

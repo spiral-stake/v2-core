@@ -9,20 +9,10 @@ import {WriteAddresses} from "./WriteAddresses.s.sol";
 import {Config, ChainConfig} from "./Config.s.sol";
 import {MarketConfig} from "../src/core/structs/MarketConfig.sol";
 
-interface IWETH {
-    function deposit() external payable;
-}
-
 contract Main is Script, WriteAddresses, Config {
     function run() external returns (address flashLeverage) {
         ChainConfig memory chain = getChainConfig();
         MarketConfig[] memory marketConfigs = getMarketConfigs();
-
-        if (block.chainid == 31337) {
-            vm.startBroadcast();
-            IWETH(chain.WETH).deposit{value: 10 ether}();
-            vm.stopBroadcast();
-        }
 
         flashLeverage = _deployFlashLeverage(chain, marketConfigs);
         address flashLeverageRouter = _deployFlashLeverageRouter(

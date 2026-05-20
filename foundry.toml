@@ -4,7 +4,6 @@ out = "abi"
 libs = ["lib"]
 remappings = [
     "@openzeppelin=lib/openzeppelin-contracts",
-    "@chainlink=lib/chainlink",
     "@morpho=lib/morpho-blue/src",
     "@morpho-public-allocator=lib/public-allocator/src"
 ]

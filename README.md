@@ -1,6 +1,6 @@
 # Spiral Stake V2
 
-Spiral Stake is a non-custodial leveraged yield protocol built on [Morpho Blue](https://morpho.org). It enables flash-loan-based leverage looping on correlated yield-bearing assets — wstETH/WETH, sUSDe/USDC, PT tokens, and more — with isolated per-user positions and on-chain fee accounting.
+Spiral Stake is leverage execution layer for digital assets. Built on [Morpho Blue](https://morpho.org). It enables flashloan based leverage on correlated & non-correlated markets with isolated user positions.
 
 ## Documentation
 
@@ -16,7 +16,7 @@ Spiral Stake is a non-custodial leveraged yield protocol built on [Morpho Blue](
 ## Setup
 
 ```bash
-git clone --recurse-submodules <repo-url>
+git clone --recurse-submodules https://github.com/spiral-stake/v2-core.git
 cd lib/morpho-blue && forge build && cd ../..
 forge build --via-ir
 ```
@@ -31,7 +31,7 @@ forge test --via-ir
 
 - Audited by [Phage Security](https://phagesecurity.com/)
 - Audited by [Cyfrin](https://cyfrin.io)
-- AI security scan by [Spearbit](https://spearbit.com)
+- Audited by [Sherlock](https://sherlock.xyz)
 - Full test suite with adversarial attack scenarios
 
 ## License

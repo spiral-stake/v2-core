@@ -120,13 +120,14 @@ contract WriteAddresses is Script {
                 loanTokenObj
             );
 
-            vm.serializeString(markets, vm.toString(marketId), marketObj);
             if (i == marketsLength - 1) {
                 markets = vm.serializeString(
                     markets,
                     vm.toString(marketId),
                     marketObj
                 );
+            } else {
+                vm.serializeString(markets, vm.toString(marketId), marketObj);
             }
         }
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.8.30;
 
+import {CommonBase} from "forge-std/Base.sol";
 import {MarketConfig} from "../src/core/structs/MarketConfig.sol";
 
 struct ChainConfig {
@@ -9,8 +10,6 @@ struct ChainConfig {
     address publicAllocator;
     address[] swapRouters;
     address treasury;
-    address WETH;
-    address USDC;
 }
 
 /**
@@ -18,11 +17,11 @@ struct ChainConfig {
  * @dev Configuration contract for collateral token settings
  * @notice Contains all collateral token configurations for the Flash Leverage system
  */
-contract Config {
+contract Config is CommonBase {
     function getChainConfig() internal view returns (ChainConfig memory chain) {
         // Commons
-        chain.treasury = 0xeB90258b1F74a846F7941514C7c02Bb03EB249D5;
-        chain.owner = 0x47C9fD3AFd07ec00a2264c74FA4AC889f11454cc;
+        chain.treasury = vm.envAddress("TREASURY");
+        chain.owner = msg.sender;
 
         if (block.chainid == 31337 || block.chainid == 1) {
             chain.morpho = 0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb;
@@ -54,6 +53,7 @@ contract Config {
             chain.swapRouters[0] = 0x85EFA14c12F5fE42Ff9D7Da460A71088b26bEa31; // Eisen Router
         } else if (block.chainid == 999) {
             chain.morpho = 0x68e37dE8d93d3496ae143F2E900490f6280C57cD;
+            chain.publicAllocator = 0x517505be22D9068687334e69ae7a02fC77edf4Fc;
 
             chain.swapRouters = new address[](2);
             chain.swapRouters[0] = 0x6131B5fae19EA4f9D964eAc0408E4408b66337b5; // Kyberswap Router
@@ -67,7 +67,7 @@ contract Config {
         returns (MarketConfig[] memory marketConfigs)
     {
         if (block.chainid == 31337 || block.chainid == 1) {
-            marketConfigs = new MarketConfig[](53);
+            marketConfigs = new MarketConfig[](52);
 
             // ============ Correlated Markets ============
 
@@ -229,118 +229,112 @@ contract Config {
                 marketId: 0x3fea56ab83b05840dc83dc6b3d2f2fbd938147cbaa8126bac529e6c820058253,
                 isCorrelated: true
             });
-            // PT-sUSDE-7MAY2026/PYUSD
-            marketConfigs[31] = MarketConfig({
-                marketId: 0xcb12dcbc7c6c4f20ca1537a3cc1a41ec27501f85a3e322a710d9a16a88a28c0e,
-                isCorrelated: true
-            });
             // PT-apxUSD-18JUN2026/USDC
-            marketConfigs[32] = MarketConfig({
+            marketConfigs[31] = MarketConfig({
                 marketId: 0xed05fcc2893b78b3fa468d21b6e4d2925e7f2c64eb1f16279757c43f87502a99,
                 isCorrelated: true
             });
-            // PT-avUSD-14MAY2026/USDC
-            marketConfigs[33] = MarketConfig({
-                marketId: 0xf80a664057fe3cadcd9e83f27bb1effe5c15d1d2648acc7634daff1581951b5e,
-                isCorrelated: true
-            });
-            // PT-savUSD-14MAY2026/USDC
-            marketConfigs[34] = MarketConfig({
-                marketId: 0xc978f01522ff64adafd91856065d602c56e326a0368b895bd9244d5998e60076,
-                isCorrelated: true
-            });
             // PT-srNUSD-28MAY2026/USDC
-            marketConfigs[35] = MarketConfig({
+            marketConfigs[32] = MarketConfig({
                 marketId: 0xc2bc5e1e304fb1ea103dcbee37ece3c7e9219fb4b2b19d8ffdf81c39f4fbf180,
                 isCorrelated: true
             });
             // PT-sNUSD-4JUN2026/USDC
-            marketConfigs[36] = MarketConfig({
+            marketConfigs[33] = MarketConfig({
                 marketId: 0xb62aac664f81d19f21a158aa0373967ef60fd1ac8de4a9091bd225c007973ca6,
                 isCorrelated: true
             });
             // PT-apxUSD-18JUN2026/apxUSD
-            marketConfigs[37] = MarketConfig({
+            marketConfigs[34] = MarketConfig({
                 marketId: 0xf3814af4869a6ce59ffef016e555dd4c1e92bf383b5ab89abe496044c6364746,
                 isCorrelated: true
             });
             // PT-cUSD-23JUL2026/USDC
-            marketConfigs[38] = MarketConfig({
+            marketConfigs[35] = MarketConfig({
                 marketId: 0x702b7ec7628de2622e51e1bb34a7e6ad9e95f3a25a2ed361e4ce621f23f5e642,
-                isCorrelated: true
-            });
-            // PT-mAPOLLO-30APR2026/USDC
-            marketConfigs[39] = MarketConfig({
-                marketId: 0x3d353ef0436b85c3b12d53536c19b21c533c046b07c9d92d791a1510e7ef0b74,
                 isCorrelated: true
             });
 
             // ============ Non-Correlated Markets ============
 
             // cbBTC/USDC
-            marketConfigs[40] = MarketConfig({
+            marketConfigs[36] = MarketConfig({
                 marketId: 0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64,
                 isCorrelated: false
             });
             // wstETH/USDT
-            marketConfigs[41] = MarketConfig({
+            marketConfigs[37] = MarketConfig({
                 marketId: 0xe7e9694b754c4d4f7e21faf7223f6fa71abaeb10296a4c43a54a7977149687d2,
                 isCorrelated: false
             });
             // WBTC/USDC
-            marketConfigs[42] = MarketConfig({
+            marketConfigs[38] = MarketConfig({
                 marketId: 0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49,
                 isCorrelated: false
             });
             // wstETH/USDC
-            marketConfigs[43] = MarketConfig({
+            marketConfigs[39] = MarketConfig({
                 marketId: 0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc,
                 isCorrelated: false
             });
             // WBTC/USDT
-            marketConfigs[44] = MarketConfig({
+            marketConfigs[40] = MarketConfig({
                 marketId: 0xa921ef34e2fc7a27ccc50ae7e4b154e16c9799d3387076c421423ef52ac4df99,
                 isCorrelated: false
             });
             // weETH/PYUSD
-            marketConfigs[45] = MarketConfig({
+            marketConfigs[41] = MarketConfig({
                 marketId: 0x85d59152eeeab7ca024804895b358868d8dd1e134171be400d7792d5604a212c,
                 isCorrelated: false
             });
             // cbBTC/USDT
-            marketConfigs[46] = MarketConfig({
+            marketConfigs[42] = MarketConfig({
                 marketId: 0x45671fb8d5dea1c4fbca0b8548ad742f6643300eeb8dbd34ad64a658b2b05bca,
                 isCorrelated: false
             });
             // OETH/USDC
-            marketConfigs[47] = MarketConfig({
+            marketConfigs[43] = MarketConfig({
                 marketId: 0xb8fef900b383db2dbbf4458c7f46acf5b140f26d603a6d1829963f241b82510e,
                 isCorrelated: false
             });
             // weETH/RLUSD
-            marketConfigs[48] = MarketConfig({
+            marketConfigs[44] = MarketConfig({
                 marketId: 0xea4bfb18df0ee6bffb7b3f0270899a8adb92ab6b684709634c8276128813cfd4,
                 isCorrelated: false
             });
-            // WBTC/EURC
-            marketConfigs[49] = MarketConfig({
-                marketId: 0xff527fe9c6516f9d82a3d51422ccb031d123266e6e26d4c22c942a948c180a75,
+            // cbBTC/RLUSD
+            marketConfigs[45] = MarketConfig({
+                marketId: 0xffd010618ed3cb39bb2c5de0e3e58d3d2ec9f52187a180f29723c31756a939bc,
                 isCorrelated: false
             });
-            // weETH/USDC
-            marketConfigs[50] = MarketConfig({
-                marketId: 0x61765602144e91e5ac9f9e98b8584eae308f9951596fd7f5e0f59f21cd2bf664,
+            // LBTC/PYUSD
+            marketConfigs[46] = MarketConfig({
+                marketId: 0x6a7e36eb088bd501d73f7ab4c5b8671358559341a78ce521c9e499dc0bc642b9,
+                isCorrelated: false
+            });
+            // weETH/USDT
+            marketConfigs[47] = MarketConfig({
+                marketId: 0xc2c53d2b868e163da71de14a5113cc2743fc9b5ad7488334720ed2846566a8f6,
                 isCorrelated: false
             });
             // cbBTC/EURCV
-            marketConfigs[51] = MarketConfig({
+            marketConfigs[48] = MarketConfig({
                 marketId: 0x82053fe2fc3a3d6cb856458948e9c3589e76f20f3a2079606739b517587267ce,
                 isCorrelated: false
             });
-
-            // Tokenised Stocks
-            marketConfigs[52] = MarketConfig({
-                marketId: 0xbf0432567b44ef5ce013ffcd7dd756c522252503f7986a406e780715b32c74fc,
+            // WBTC/EURCV
+            marketConfigs[49] = MarketConfig({
+                marketId: 0xb7a75cabc2e8eadd0bc661340a9e359d9828bed6d5cbbcd64188bca8c01e399e,
+                isCorrelated: false
+            });
+            // wstETH/RLUSD
+            marketConfigs[50] = MarketConfig({
+                marketId: 0x88abdf8693e663144c3544b9442e9b04520016d6ebc57aa76424c00ab1683c9d,
+                isCorrelated: false
+            });
+            // weETH/USDC
+            marketConfigs[51] = MarketConfig({
+                marketId: 0x61765602144e91e5ac9f9e98b8584eae308f9951596fd7f5e0f59f21cd2bf664,
                 isCorrelated: false
             });
         } else if (block.chainid == 137) {
