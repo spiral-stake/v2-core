@@ -23,6 +23,19 @@ interface IFlashLeverage {
         LeverageParams calldata leverageParams
     ) external;
 
+    function supplyCollateral(
+        address user,
+        uint256 positionId,
+        uint256 amountCollateral
+    ) external;
+
+    function repay(
+        address user,
+        uint256 positionId,
+        uint256 amountRepay,
+        uint256 borrowShares
+    ) external;
+
     function isValidSwapRouter(address router) external returns (bool);
 }
 
@@ -123,6 +136,78 @@ contract FlashLeverageRouter is TokenHelper {
         );
     }
 
+    function swapAndSupplyCollateral(
+        address user,
+        uint256 positionId,
+        bytes32 marketId,
+        address tokenIn,
+        uint256 amountIn,
+        SwapData calldata swapData,
+        uint256 minTokenOut
+    ) external payable {
+        _swap(msg.sender, tokenIn, amountIn, swapData, 0);
+
+        MarketParams memory market = i_morpho.idToMarketParams(
+            Id.wrap(marketId)
+        );
+
+        uint256 amountCollateral = _selfBalance(market.collateralToken);
+        require(
+            amountCollateral >= minTokenOut,
+            FLRError.FlashLeverageRouter__MinTokenOutNotMet()
+        );
+
+        _forceApprove(
+            market.collateralToken,
+            address(i_flashLeverage),
+            amountCollateral
+        );
+        i_flashLeverage.supplyCollateral(user, positionId, amountCollateral);
+
+        // Refund unconsumed tokenIn and any leftover ETH
+        _transferOut(tokenIn, msg.sender, _selfBalance(tokenIn));
+        if (tokenIn != NATIVE) {
+            _transferOut(NATIVE, msg.sender, _selfBalance(NATIVE));
+        }
+    }
+
+    function swapAndRepay(
+        address user,
+        uint256 positionId,
+        bytes32 marketId,
+        address tokenIn,
+        uint256 amountIn,
+        SwapData calldata swapData,
+        uint256 minTokenOut,
+        uint256 borrowShares
+    ) external payable {
+        _swap(msg.sender, tokenIn, amountIn, swapData, 0);
+
+        MarketParams memory market = i_morpho.idToMarketParams(
+            Id.wrap(marketId)
+        );
+
+        uint256 amountRepay = _selfBalance(market.loanToken);
+        require(
+            amountRepay >= minTokenOut,
+            FLRError.FlashLeverageRouter__MinTokenOutNotMet()
+        );
+
+        _forceApprove(market.loanToken, address(i_flashLeverage), amountRepay);
+        i_flashLeverage.repay(user, positionId, amountRepay, borrowShares);
+
+        // Refund excess loan token returned by repay (when swapped > debt) and any unconsumed tokenIn
+        _transferOut(
+            market.loanToken,
+            msg.sender,
+            _selfBalance(market.loanToken)
+        );
+        _transferOut(tokenIn, msg.sender, _selfBalance(tokenIn));
+        if (tokenIn != NATIVE) {
+            _transferOut(NATIVE, msg.sender, _selfBalance(NATIVE));
+        }
+    }
+
     // ─── Internal ───
 
     function _reallocate(
@@ -152,35 +237,7 @@ contract FlashLeverageRouter is TokenHelper {
         LeverageParams memory leverageParams,
         uint256 reallocateFees
     ) internal {
-        require(
-            amountIn > 0,
-            FLRError.FlashLeverageRouter__AmountInCannotBeZero()
-        );
-        require(
-            i_flashLeverage.isValidSwapRouter(swapData.extRouter),
-            FLRError.FlashLeverageRouter__InvalidSwapRouter()
-        );
-
-        bool success;
-        if (tokenIn == NATIVE) {
-            // msg.value must cover both reallocation fees and swap amount
-            require(
-                msg.value == amountIn + reallocateFees,
-                FLRError.FlashLeverageRouter__InvalidMsgValue()
-            );
-            (success, ) = swapData.extRouter.call{value: amountIn}(
-                swapData.extCalldata
-            );
-        } else {
-            require(
-                msg.value == reallocateFees,
-                FLRError.FlashLeverageRouter__InvalidMsgValue()
-            );
-            _transferIn(tokenIn, user, amountIn);
-            _forceApprove(tokenIn, address(swapData.extRouter), amountIn);
-            (success, ) = swapData.extRouter.call(swapData.extCalldata);
-        }
-        require(success, FLRError.FlashLeverageRouter__SwapRouterCallFailed());
+        _swap(user, tokenIn, amountIn, swapData, reallocateFees);
 
         MarketParams memory market = i_morpho.idToMarketParams(
             Id.wrap(leverageParams.marketId)
@@ -205,6 +262,44 @@ contract FlashLeverageRouter is TokenHelper {
         if (tokenIn != NATIVE) {
             _transferOut(NATIVE, user, _selfBalance(NATIVE));
         }
+    }
+
+    function _swap(
+        address funder,
+        address tokenIn,
+        uint256 amountIn,
+        SwapData calldata swapData,
+        uint256 reallocateFees
+    ) internal {
+        require(
+            amountIn > 0,
+            FLRError.FlashLeverageRouter__AmountInCannotBeZero()
+        );
+        require(
+            i_flashLeverage.isValidSwapRouter(swapData.extRouter),
+            FLRError.FlashLeverageRouter__InvalidSwapRouter()
+        );
+
+        bool success;
+        if (tokenIn == NATIVE) {
+            // msg.value must cover both reallocation fees and swap amount
+            require(
+                msg.value == amountIn + reallocateFees,
+                FLRError.FlashLeverageRouter__InvalidMsgValue()
+            );
+            (success, ) = swapData.extRouter.call{value: amountIn}(
+                swapData.extCalldata
+            );
+        } else {
+            require(
+                msg.value == reallocateFees,
+                FLRError.FlashLeverageRouter__InvalidMsgValue()
+            );
+            _transferIn(tokenIn, funder, amountIn);
+            _forceApprove(tokenIn, address(swapData.extRouter), amountIn);
+            (success, ) = swapData.extRouter.call(swapData.extCalldata);
+        }
+        require(success, FLRError.FlashLeverageRouter__SwapRouterCallFailed());
     }
 
     receive() external payable {}
