@@ -61,11 +61,13 @@ contract DeleverageTest is TestBase {
             "Alice should receive recorded return amount"
         );
 
-        // amountDepositedInLoanToken unchanged
-        assertEq(
+        // On a full close, amountDepositedInLoanToken is drawn down by the
+        // amount returned to the user (clamped to 0). For a break-even close it
+        // collapses to ~0 — it does NOT stay at the pre-close deposited value.
+        assertLt(
             posAfter.amountDepositedInLoanToken,
             depositedBefore,
-            "Deposited should not change on deleverage"
+            "Deposited should be drawn down on full deleverage"
         );
 
         // No tokens left in contract
@@ -106,6 +108,9 @@ contract DeleverageTest is TestBase {
     // ─── Yield fee verification ───
 
     function test_deleverage_correlated_yieldFeeAccuracy() external {
+        // Enable yield fee (defaults to 0) so the fee path is exercised.
+        fl.updateYieldFee(5e16);
+
         uint256 posId = _openCorrelatedPosition(
             alice,
             INITIAL_COLLATERAL,

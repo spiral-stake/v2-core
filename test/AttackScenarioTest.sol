@@ -225,6 +225,10 @@ contract AttackScenarioTest is TestBase {
     /// @notice Extract yield via many small withdrawals (each within yield portion)
     ///         then deleverage — does user pay less total fee?
     function test_attack_smallWithdrawalsReduceTotalFee() external {
+        // Enable yield fee (defaults to 0) — this fee-bypass check is only
+        // meaningful with a non-zero fee.
+        fl.updateYieldFee(5e16);
+
         // Position A: deleverage directly (baseline fee)
         uint256 posA = _openCorrelatedPosition(
             alice,
@@ -349,6 +353,10 @@ contract AttackScenarioTest is TestBase {
     /// @notice Supply at P1, oracle goes up, withdraw at P2.
     ///         Deposited inflates but attacker pays MORE total fee, not less.
     function test_attack_supplyWithdrawCycle_cannotReduceTotalFee() external {
+        // Enable yield fee (defaults to 0) — this fee-bypass check is only
+        // meaningful with a non-zero fee.
+        fl.updateYieldFee(5e16);
+
         // Baseline: alice opens and deleverages after 10% yield
         uint256 posBaseline = _openCorrelatedPosition(
             alice,

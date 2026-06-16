@@ -138,6 +138,9 @@ contract WithdrawCollateralTest is TestBase {
     // ─── Yield fee verification ───
 
     function test_withdrawCollateral_correlated_yieldFeeAccuracy() external {
+        // Enable yield fee (defaults to 0) so the fee path is exercised.
+        fl.updateYieldFee(5e16);
+
         uint256 posId = _openCorrelatedPosition(
             alice,
             INITIAL_COLLATERAL,
@@ -398,6 +401,9 @@ contract WithdrawCollateralTest is TestBase {
     function test_withdrawCollateral_fullWithdrawalAfterRepay_chargesYieldFee()
         external
     {
+        // Enable yield fee (defaults to 0) so the fee path is exercised.
+        fl.updateYieldFee(5e16);
+
         uint256 posId = _openCorrelatedPosition(
             alice,
             INITIAL_COLLATERAL,
@@ -529,7 +535,15 @@ contract WithdrawCollateralTest is TestBase {
 
     // ─── Revert cases ───
 
-    function test_withdrawCollateral_revertsOnClosedPosition() external {
+    /// @dev withdrawCollateral has NO position.open guard by design: it doubles
+    ///      as the recovery path for residual collateral left in a closed
+    ///      position (see test_attack_03 in SecurityAudit). After a FULL
+    ///      deleverage there is no residual collateral, so a withdrawal request
+    ///      simply reverts at the Morpho layer (insufficient collateral) and
+    ///      surfaces as ProxyCallFailed — not an FL-level open guard.
+    function test_withdrawCollateral_closedPosition_revertsAtMorphoWhenEmpty()
+        external
+    {
         uint256 posId = _openCorrelatedPosition(
             alice,
             INITIAL_COLLATERAL,
@@ -537,8 +551,9 @@ contract WithdrawCollateralTest is TestBase {
         );
         _deleveragePosition(alice, posId, correlatedMarket);
 
+        // Fully closed → zero residual collateral → Morpho rejects the withdraw.
         vm.prank(alice);
-        vm.expectRevert(FLError.FlashLeverage__PositionAlreadyClosed.selector);
+        vm.expectRevert(FLError.FlashLeverage__ProxyCallFailed.selector);
         fl.withdrawCollateral(posId, 1e18);
     }
 

@@ -16,14 +16,14 @@ contract FuzzAdmin is FuzzTestBase {
     // ─── updateYieldFee ────────────────────────────────────────────────────────
 
     function testFuzz_updateYieldFee_validRange(uint256 fee) external {
-        fee = bound(fee, 1, MAX_YIELD_FEE);
+        fee = bound(fee, 0, MAX_YIELD_FEE);
         fl.updateYieldFee(fee);
         assertEq(fl.s_yieldFee(), fee);
     }
 
-    function testFuzz_updateYieldFee_zeroReverts() external {
-        vm.expectRevert(FLError.FlashLeverage__InvalidYieldFee.selector);
+    function testFuzz_updateYieldFee_zeroIsAllowed() external {
         fl.updateYieldFee(0);
+        assertEq(fl.s_yieldFee(), 0);
     }
 
     function testFuzz_updateYieldFee_tooHighReverts(uint256 fee) external {

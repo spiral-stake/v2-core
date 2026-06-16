@@ -38,7 +38,7 @@ contract WriteAddresses is Script {
 
         uint256 marketsLength = marketConfigs.length;
         for (uint256 i; i < marketsLength; ++i) {
-            string memory marketObj = "marketObj";
+            string memory marketObj = string.concat("marketObj", vm.toString(i));
 
             bytes32 marketId = marketConfigs[i].marketId;
 
@@ -48,7 +48,7 @@ contract WriteAddresses is Script {
             IERC20Metadata token = IERC20Metadata(market.collateralToken);
 
             // Create collateral token metadata object
-            string memory tokenObj = "tokenObj";
+            string memory tokenObj = string.concat("tokenObj", vm.toString(i));
             vm.serializeAddress(tokenObj, "address", address(token));
             vm.serializeString(tokenObj, "name", token.name());
             string memory symbol = token.symbol();
@@ -60,7 +60,7 @@ contract WriteAddresses is Script {
                     IPT(address(token)).expiry()
                 );
 
-                string memory underlyingObj = "underlyingObj";
+                string memory underlyingObj = string.concat("underlyingObj", vm.toString(i));
 
                 (
                     address underlying,
@@ -85,7 +85,7 @@ contract WriteAddresses is Script {
             // Create loan token metadata object
             address loanTokenAddress = market.loanToken;
             IERC20Metadata loanToken = IERC20Metadata(loanTokenAddress);
-            string memory loanTokenObj = "loanTokenObj";
+            string memory loanTokenObj = string.concat("loanTokenObj", vm.toString(i));
             vm.serializeAddress(loanTokenObj, "address", loanTokenAddress);
             vm.serializeString(loanTokenObj, "name", loanToken.name());
             vm.serializeString(loanTokenObj, "symbol", loanToken.symbol());

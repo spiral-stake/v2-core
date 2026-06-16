@@ -215,9 +215,9 @@ contract AdminTest is TestBase {
         assertEq(fl.s_yieldFee(), 5e16);
     }
 
-    function test_updateYieldFee_revertsOnZero() external {
-        vm.expectRevert(FLError.FlashLeverage__InvalidYieldFee.selector);
+    function test_updateYieldFee_zeroIsAllowed() external {
         fl.updateYieldFee(0);
+        assertEq(fl.s_yieldFee(), 0);
     }
 
     function test_updateYieldFee_revertsAboveMax() external {
@@ -363,6 +363,9 @@ contract AdminTest is TestBase {
     }
 
     function test_updateTreasury_takesEffectOnNextFee() external {
+        // Enable yield fee (defaults to 0) so a fee is generated on deleverage.
+        fl.updateYieldFee(5e16);
+
         address newTreasury = makeAddr("newTreasury");
 
         uint256 posId = _openCorrelatedPosition(

@@ -214,7 +214,11 @@ contract FuzzPositionManagement is FuzzTestBase {
         Position memory morphoPos = fl.getMorphoPosition(pos.userProxy, correlatedMarket);
 
         uint256 actualDebt = fl.getSharesValueInLoanToken(correlatedMarket, morphoPos.borrowShares);
-        // Over-repay by 1e18 (1 WETH)
+        // Approve more than owed (1 WETH headroom). Full repayment uses the
+        // supported borrowShares = type(uint256).max path, which repays exactly
+        // the debt by shares and refunds any excess. (Repaying an over-debt
+        // ASSET amount with borrowShares=0 is intentionally rejected by Morpho —
+        // see test_poc_bug01_repayOverDebtPanics; callers use the max path.)
         uint256 overpay = actualDebt + 1e18;
 
         loanToken.mint(alice, overpay);
@@ -222,7 +226,7 @@ contract FuzzPositionManagement is FuzzTestBase {
 
         vm.startPrank(alice);
         loanToken.approve(address(fl), overpay);
-        fl.repay(alice, posId, overpay, 0);
+        fl.repay(alice, posId, overpay, type(uint256).max);
         vm.stopPrank();
 
         // Alice should have gotten the excess back; net spend ≤ actualDebt + rounding

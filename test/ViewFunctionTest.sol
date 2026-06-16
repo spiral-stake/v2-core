@@ -339,8 +339,10 @@ contract ViewFunctionTest is TestBase {
     }
 
     function test_defaultFees() external view {
-        assertEq(fl.s_yieldFee(), 10e16, "Default yield fee 10%");
-        assertEq(fl.s_depositFee(), 1e16, "Default deposit fee 1%");
+        // Yield fee defaults to 0 (zero fees enabled in commit "allow zero yield fee").
+        // Owner enables fees post-deploy via updateYieldFee/updateDepositFee.
+        assertEq(fl.s_yieldFee(), 0, "Default yield fee 0%");
+        assertEq(fl.s_depositFee(), 0, "Default deposit fee 0%");
     }
 
     function test_treasury() external view {

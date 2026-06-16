@@ -6,6 +6,7 @@ import {FLError} from "src/core/libraries/Error.sol";
 import {UserProxy} from "src/core/FlashLeverage/UserProxy.sol";
 import {LeveragePosition} from "src/core/structs/LeveragePosition.sol";
 import {MockERC20} from "test/mocks/MockERC20.sol";
+import {Position} from "@morpho/interfaces/IMorpho.sol";
 
 /// @notice Fuzz tests for UserProxy access control and state transitions.
 contract FuzzUserProxy is FuzzTestBase {
@@ -76,6 +77,64 @@ contract FuzzUserProxy is FuzzTestBase {
         vm.prank(address(fl));
         vm.expectRevert(FLError.FlashLeverage__ManualModeEnabled.selector);
         proxy.execute(hex"");
+    }
+
+    // ─── executeExternal ────────────────────────────────────────────────────────
+
+    // Only s_user (alice) may call executeExternal, for any target/calldata
+    function testFuzz_executeExternal_onlyUser(
+        address caller,
+        address target,
+        bytes calldata data
+    ) external {
+        UserProxy proxy = _getAliceProxy();
+        vm.assume(caller != alice);
+
+        vm.prank(caller);
+        vm.expectRevert(FLError.FlashLeverage__Unauthorised.selector);
+        proxy.executeExternal(target, data);
+    }
+
+    // Morpho can never be the target — for any calldata (position-safety linchpin)
+    function testFuzz_executeExternal_morphoAlwaysBlocked(bytes calldata data) external {
+        UserProxy proxy = _getAliceProxy();
+
+        vm.prank(alice);
+        vm.expectRevert(FLError.FlashLeverage__CannotBeMorpho.selector);
+        proxy.executeExternal(address(morpho), data);
+    }
+
+    // FlashLeverage can never be the target — for any calldata
+    function testFuzz_executeExternal_flashLeverageAlwaysBlocked(bytes calldata data) external {
+        UserProxy proxy = _getAliceProxy();
+
+        vm.prank(alice);
+        vm.expectRevert(FLError.FlashLeverage__Unauthorised.selector);
+        proxy.executeExternal(address(fl), data);
+    }
+
+    // executeExternal by the user can never reduce the Morpho position, regardless
+    // of which (non-Morpho, non-FL) target or calldata is used.
+    function testFuzz_executeExternal_cannotReducePosition(
+        address target,
+        bytes calldata data
+    ) external {
+        UserProxy proxy = _getAliceProxy();
+        vm.assume(target != address(morpho) && target != address(fl));
+        vm.assume(target != address(vm)); // avoid cheatcode address
+
+        Position memory before = fl.getMorphoPosition(address(proxy), correlatedMarket);
+
+        vm.prank(alice);
+        try proxy.executeExternal(target, data) {} catch {}
+
+        Position memory afterPos = fl.getMorphoPosition(address(proxy), correlatedMarket);
+        assertEq(afterPos.collateral, before.collateral, "collateral changed");
+        assertEq(afterPos.borrowShares, before.borrowShares, "borrow changed");
+        assertFalse(
+            morpho.isAuthorized(address(proxy), target),
+            "target became authorized"
+        );
     }
 
     // ─── enableManualMode ─────────────────────────────────────────────────────

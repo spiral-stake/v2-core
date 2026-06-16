@@ -143,6 +143,63 @@ contract SymUserProxy is Test {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    // executeExternal
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// PROPERTY: Any caller that is NOT s_user is rejected — for ALL targets
+    ///           and ALL calldata.
+    /// WHY: executeExternal lets the proxy make an arbitrary external call from
+    ///      its own identity. Only the owner may drive it; a third party doing so
+    ///      could spend the proxy's reward balances or grief integrations.
+    function check_executeExternal_onlyUser(
+        address caller,
+        address target,
+        bytes calldata data
+    ) external {
+        vm.assume(caller != USER);
+        vm.prank(caller);
+        bool reverted;
+        try proxy.executeExternal(target, data) {
+            reverted = false;
+        } catch {
+            reverted = true;
+        }
+        assert(reverted);
+    }
+
+    /// PROPERTY: executeExternal can NEVER call Morpho — for ALL calldata.
+    /// WHY: This is the linchpin of the whole design. The Morpho position can
+    ///      only be reduced (borrow/withdraw) or delegated (setAuthorization) by
+    ///      a call whose msg.sender is the proxy. If executeExternal could reach
+    ///      Morpho, the user could authorize an EOA and drain the entire position.
+    ///      Proven for every possible calldata, not sampled selectors.
+    function check_executeExternal_neverReachesMorpho(bytes calldata data) external {
+        vm.prank(USER);
+        bool reverted;
+        try proxy.executeExternal(MORPHO, data) {
+            reverted = false;
+        } catch {
+            reverted = true;
+        }
+        assert(reverted);
+    }
+
+    /// PROPERTY: executeExternal can NEVER call FlashLeverage — for ALL calldata.
+    /// WHY: FlashLeverage keys positions by msg.sender. A call from the proxy
+    ///      would create/observe positions owned by the proxy address rather than
+    ///      the real user, desyncing protocol accounting. Always blocked.
+    function check_executeExternal_neverReachesFlashLeverage(bytes calldata data) external {
+        vm.prank(USER);
+        bool reverted;
+        try proxy.executeExternal(FL, data) {
+            reverted = false;
+        } catch {
+            reverted = true;
+        }
+        assert(reverted);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     // enableManualMode
     // ═══════════════════════════════════════════════════════════════════════
 
