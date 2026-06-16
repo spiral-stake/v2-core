@@ -20,7 +20,7 @@ library FLError {
 
     // Configuration
     error FlashLeverage__UnsupportedMarket();
-    error FlashLeverage__InvalidYieldFee(); // Fee is 0 or exceeds MAX_YIELD_FEE
+    error FlashLeverage__InvalidYieldFee(); // Fee exceeds MAX_YIELD_FEE
     error FlashLeverage__InvalidDepositFee(); // Fee is 0 or exceed MAX_DEPOSIT_FEE
     error FlashLeverage__MarketAlreadyExists();
 

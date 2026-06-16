@@ -86,6 +86,26 @@ contract UserProxy is TokenHelper {
     }
 
     /**
+     * @notice Executes an arbitrary call to any external contract except Morpho and FlashLeverage.
+     * @dev Allows s_user to interact with external protocols (reward distributors, etc.)
+     *      without requiring contract redeployments.
+     *      Morpho is blocked to prevent bypassing FlashLeverage's LTV invariants.
+     *      FlashLeverage is blocked to prevent creating garbage nested positions
+     *      (FlashLeverage keys state by msg.sender, so calls from this proxy would
+     *      create positions owned by the proxy address, not the real user).
+     * @param target Address of the external contract to call.
+     * @param data Encoded calldata.
+     */
+    function executeExternal(address target, bytes calldata data) external returns (bytes memory) {
+        require(msg.sender == s_user, FLError.FlashLeverage__Unauthorised());
+        require(target != i_morpho, FLError.FlashLeverage__CannotBeMorpho());
+        require(target != i_flashLeverage, FLError.FlashLeverage__Unauthorised());
+        (bool success, bytes memory result) = target.call(data);
+        require(success, FLError.FlashLeverage__ProxyCallFailed());
+        return result;
+    }
+
+    /**
      * @notice Recovers ERC20 tokens accidentally sent to this contract or accumulated as rewards
      * @param token The address of the token to recover
      */

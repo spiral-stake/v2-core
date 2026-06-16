@@ -31,7 +31,7 @@ contract FlashLeverage is
 
     /// @notice Safety buffer subtracted from liquidation LTV to determine max allowed LTV (18 decimals).
     /// @dev Protects positions from immediate liquidation due to price fluctuations after leveraging.
-    uint256 public constant LIQUIDATION_BUFFER = 25e15; // 2.5%
+    uint256 public constant LIQUIDATION_BUFFER = 25e14; // 0.25%
 
     /// @notice Maximum yield fee only on correlated assets (18 decimals, where 1e18 = 100%)
     uint256 private constant MAX_YIELD_FEE = 10e16; // 10%
@@ -160,7 +160,7 @@ contract FlashLeverage is
         UserProxy(i_userProxyImplementation).initialize(address(this));
 
         s_treasury = treasury;
-        s_yieldFee = 5e16; // 5%
+        s_yieldFee = 0; // 0%
         s_depositFee = 0; // 0%
     }
 
@@ -521,31 +521,33 @@ contract FlashLeverage is
                         position.amountDepositedInLoanToken;
                 }
 
-                uint256 yieldFeeInLoanToken;
-                if (amountWithdrawInLoanToken > yieldGeneratedInLoanToken) {
-                    // Withdrawal exceeds yield, fee only on yield portion
-                    yieldFeeInLoanToken = yieldGeneratedInLoanToken.mulDown(
-                        s_yieldFee
-                    );
-                } else {
-                    // Withdrawal is within yield, fee on entire withdrawal
-                    yieldFeeInLoanToken = amountWithdrawInLoanToken.mulDown(
-                        s_yieldFee
-                    );
-                }
+                if (s_yieldFee > 0) {
+                    uint256 yieldFeeInLoanToken;
+                    if (amountWithdrawInLoanToken > yieldGeneratedInLoanToken) {
+                        // Withdrawal exceeds yield, fee only on yield portion
+                        yieldFeeInLoanToken = yieldGeneratedInLoanToken.mulDown(
+                                s_yieldFee
+                            );
+                    } else {
+                        // Withdrawal is within yield, fee on entire withdrawal
+                        yieldFeeInLoanToken = amountWithdrawInLoanToken.mulDown(
+                                s_yieldFee
+                            );
+                    }
 
-                // Convert fee from loanToken terms to collateralToken terms
-                // using the ratio: amountWithdraw / amountWithdrawInLoanToken
-                uint256 feeInCollateral = (yieldFeeInLoanToken *
-                    amountWithdraw) / amountWithdrawInLoanToken;
+                    // Convert fee from loanToken terms to collateralToken terms
+                    // using the ratio: amountWithdraw / amountWithdrawInLoanToken
+                    uint256 feeInCollateral = (yieldFeeInLoanToken *
+                        amountWithdraw) / amountWithdrawInLoanToken;
 
-                if (feeInCollateral > 0) {
-                    _transferOut(
-                        market.collateralToken,
-                        s_treasury,
-                        feeInCollateral
-                    );
-                    amountWithdraw -= feeInCollateral;
+                    if (feeInCollateral > 0) {
+                        _transferOut(
+                            market.collateralToken,
+                            s_treasury,
+                            feeInCollateral
+                        );
+                        amountWithdraw -= feeInCollateral;
+                    }
                 }
             }
         }
@@ -566,6 +568,10 @@ contract FlashLeverage is
         }
 
         _transferOut(market.collateralToken, user, amountWithdraw);
+
+        if (getMorphoPosition(userProxy, market).collateral == 0) {
+            position.open = false;
+        }
 
         emit CollateralWithdrawn(user, positionId, amountWithdraw);
     }
@@ -653,13 +659,13 @@ contract FlashLeverage is
 
     /**
      * @notice Updates the protocol yield fee.
-     * @param newYieldFee The new yield fee percentage (18 decimals, where 1e18 = 100%).
+     * @param newYieldFee The new yield fee percentage (18 decimals, where 1e18 = 100%). Pass 0 to disable.
      * @dev Can only be called by the contract owner.
-     *      Reverts if the new fee is zero or exceeds `MAX_YIELD_FEE`.
+     *      Reverts if the new fee exceeds `MAX_YIELD_FEE`.
      */
     function updateYieldFee(uint256 newYieldFee) external onlyOwner {
         require(
-            newYieldFee != 0 && newYieldFee <= MAX_YIELD_FEE,
+            newYieldFee <= MAX_YIELD_FEE,
             FLError.FlashLeverage__InvalidYieldFee()
         );
 
@@ -891,7 +897,7 @@ contract FlashLeverage is
         }
 
         uint256 amountFee; // Only charge yield fee for correlated assets
-        if (s_isCorrelated[position.marketId]) {
+        if (s_isCorrelated[position.marketId] && s_yieldFee > 0) {
             // All calculation are in loanToken decimals
             uint256 amountDeposited = position.amountDepositedInLoanToken;
 

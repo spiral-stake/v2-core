@@ -26,14 +26,21 @@ broadcast/
 abi/
 
 # addresses
-addresses/
+# addresses/
 
 # Server
 .server.pid
 
-# Reports
-report.md
+
+
+# Internal review / scratch tests
+test/GasFeeComparison.t.sol
+test/SecurityReviewPoC.sol
+test/symbolic/
+SECURITY_REVIEW.md
+AUDIT_PROMPT.md
 
 # Temp
 script/Run.s.sol
+script/tempConfig.sol
 .VSCodeCounter
